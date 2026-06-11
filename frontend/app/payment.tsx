@@ -872,7 +872,7 @@ export default function PaymentScreen() {
       if (match && match[1]) {
         const host = match[1];
         if (host.includes('railway') || host.includes('production')) {
-          return 'https://jalsa20-production.up.railway.app/customer-display';
+          return 'https://demo2026pondy-production.up.railway.app/customer-display';
         }
         return `http://${host}:8081/customer-display`;
       }
