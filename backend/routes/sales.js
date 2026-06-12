@@ -1702,16 +1702,16 @@ router.post("/save", async (req, res) => {
             if (customerType === "MEMBER") {
               isMemberPayment = true;
               await transaction.request()
-                .input("MemberId", memberId)
-                .input("Amount", creditAmount)
+                .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(memberId))
+                .input("Amount", sql.Decimal(18, 2), creditAmount)
                 .query(`UPDATE MemberMaster SET CurrentBalance = CurrentBalance + @Amount WHERE MemberId = @MemberId`);
               
               await transaction.request()
-                .input("MemberId", memberId)
-                .input("SettlementId", settlementId)
-                .input("BillNo", finalBillNo)
-                .input("Amount", creditAmount)
-                .input("CreatedBy", toGuidOrNull(cashierId))
+                .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(memberId))
+                .input("SettlementId", sql.UniqueIdentifier, toGuidOrNull(settlementId))
+                .input("BillNo", sql.NVarChar(50), finalBillNo)
+                .input("Amount", sql.Decimal(18, 2), creditAmount)
+                .input("CreatedBy", sql.UniqueIdentifier, toGuidOrNull(cashierId))
                 .query(`
                   INSERT INTO CustomerCreditTransactions (MemberId, SettlementId, BillNo, TransactionType, BillAmount, PaidAmount, OutstandingAmount, Status, Remarks, CreatedBy, CustomerType)
                   VALUES (@MemberId, @SettlementId, @BillNo, 'CREDIT_SALE', @Amount, 0, @Amount, 'OPEN', 'Split member credit purchase', @CreatedBy, 'MEMBER')
@@ -1719,16 +1719,16 @@ router.post("/save", async (req, res) => {
               console.log(`[SAVE SALE DIAGNOSTIC] Balance update success (MEMBER): memberId=${memberId}, oldBalance=${oldBalance}, newBalance=${newBalance}`);
             } else if (customerType === "CREDIT") {
               await transaction.request()
-                .input("CustomerId", memberId)
-                .input("Amount", creditAmount)
+                .input("CustomerId", sql.UniqueIdentifier, toGuidOrNull(memberId))
+                .input("Amount", sql.Decimal(18, 2), creditAmount)
                 .query(`UPDATE CreditCustomerMaster SET CurrentBalance = CurrentBalance + @Amount WHERE CustomerId = @CustomerId`);
               
               await transaction.request()
-                .input("MemberId", memberId)
-                .input("SettlementId", settlementId)
-                .input("BillNo", finalBillNo)
-                .input("Amount", creditAmount)
-                .input("CreatedBy", toGuidOrNull(cashierId))
+                .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(memberId))
+                .input("SettlementId", sql.UniqueIdentifier, toGuidOrNull(settlementId))
+                .input("BillNo", sql.NVarChar(50), finalBillNo)
+                .input("Amount", sql.Decimal(18, 2), creditAmount)
+                .input("CreatedBy", sql.UniqueIdentifier, toGuidOrNull(cashierId))
                 .query(`
                   INSERT INTO CustomerCreditTransactions (MemberId, SettlementId, BillNo, TransactionType, BillAmount, PaidAmount, OutstandingAmount, Status, Remarks, CreatedBy, CustomerType)
                   VALUES (@MemberId, @SettlementId, @BillNo, 'CREDIT_SALE', @Amount, 0, @Amount, 'OPEN', 'Split credit purchase', @CreatedBy, 'CREDIT')
@@ -1802,16 +1802,16 @@ router.post("/save", async (req, res) => {
           if (customerType === "MEMBER") {
             isMemberPayment = true;
             await transaction.request()
-              .input("MemberId", memberId)
-              .input("Amount", creditAmount)
+              .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(memberId))
+              .input("Amount", sql.Decimal(18, 2), creditAmount)
               .query(`UPDATE MemberMaster SET CurrentBalance = CurrentBalance + @Amount WHERE MemberId = @MemberId`);
 
             await transaction.request()
-              .input("MemberId", memberId)
-              .input("SettlementId", settlementId)
-              .input("BillNo", finalBillNo)
-              .input("Amount", creditAmount)
-              .input("CreatedBy", toGuidOrNull(cashierId))
+              .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(memberId))
+              .input("SettlementId", sql.UniqueIdentifier, toGuidOrNull(settlementId))
+              .input("BillNo", sql.NVarChar(50), finalBillNo)
+              .input("Amount", sql.Decimal(18, 2), creditAmount)
+              .input("CreatedBy", sql.UniqueIdentifier, toGuidOrNull(cashierId))
               .query(`
                 INSERT INTO CustomerCreditTransactions (MemberId, SettlementId, BillNo, TransactionType, BillAmount, PaidAmount, OutstandingAmount, Status, Remarks, CreatedBy, CustomerType)
                 VALUES (@MemberId, @SettlementId, @BillNo, 'CREDIT_SALE', @Amount, 0, @Amount, 'OPEN', 'Member credit purchase', @CreatedBy, 'MEMBER')
@@ -1819,16 +1819,16 @@ router.post("/save", async (req, res) => {
             console.log(`[SAVE SALE DIAGNOSTIC] Balance update success (MEMBER): memberId=${memberId}, oldBalance=${oldBalance}, newBalance=${newBalance}`);
           } else if (customerType === "CREDIT") {
             await transaction.request()
-              .input("CustomerId", memberId)
-              .input("Amount", creditAmount)
+              .input("CustomerId", sql.UniqueIdentifier, toGuidOrNull(memberId))
+              .input("Amount", sql.Decimal(18, 2), creditAmount)
               .query(`UPDATE CreditCustomerMaster SET CurrentBalance = CurrentBalance + @Amount WHERE CustomerId = @CustomerId`);
 
             await transaction.request()
-              .input("MemberId", memberId)
-              .input("SettlementId", settlementId)
-              .input("BillNo", finalBillNo)
-              .input("Amount", creditAmount)
-              .input("CreatedBy", toGuidOrNull(cashierId))
+              .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(memberId))
+              .input("SettlementId", sql.UniqueIdentifier, toGuidOrNull(settlementId))
+              .input("BillNo", sql.NVarChar(50), finalBillNo)
+              .input("Amount", sql.Decimal(18, 2), creditAmount)
+              .input("CreatedBy", sql.UniqueIdentifier, toGuidOrNull(cashierId))
               .query(`
                 INSERT INTO CustomerCreditTransactions (MemberId, SettlementId, BillNo, TransactionType, BillAmount, PaidAmount, OutstandingAmount, Status, Remarks, CreatedBy, CustomerType)
                 VALUES (@MemberId, @SettlementId, @BillNo, 'CREDIT_SALE', @Amount, 0, @Amount, 'OPEN', 'Credit purchase', @CreatedBy, 'CREDIT')
