@@ -192,6 +192,19 @@ export default function PaymentScreen() {
   const [cashInput, setCashInput] = useState("");
   const [collectionAmount, setCollectionAmount] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [checkoutSessionId, setCheckoutSessionId] = useState("");
+
+  useEffect(() => {
+    if (isFocused) {
+      setCheckoutSessionId(
+        'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = Math.random() * 16 | 0;
+          const v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        })
+      );
+    }
+  }, [isFocused]);
 
   useEffect(() => {
     if (isLedgerCollection && collectAmount !== undefined) {
@@ -695,10 +708,11 @@ export default function PaymentScreen() {
         referenceNo: ""
       }];
 
+      const payEndpoint = isMember
+        ? `${API_URL}/api/members/pay`
+        : `${API_URL}/api/credit-customers/pay`;
+
       try {
-        const payEndpoint = isMember
-          ? `${API_URL}/api/members/pay`
-          : `${API_URL}/api/credit-customers/pay`;
         const response = await fetch(payEndpoint, {
           method: "POST",
           headers: {
@@ -711,7 +725,8 @@ export default function PaymentScreen() {
             payments: finalPayments,
             allocations: allocationsParam,
             remarks: remarksParam,
-            userId: user?.userId
+            userId: user?.userId,
+            paymentSessionId: checkoutSessionId
           })
         });
 
@@ -745,6 +760,13 @@ export default function PaymentScreen() {
           showToast({ type: "error", message: "Failed", subtitle: result.error || "Failed to record collection" });
         }
       } catch (e: any) {
+        console.error("❌ [Ledger Payment Network Failure Details]:", {
+          endpoint: payEndpoint,
+          message: e?.message || e,
+          stack: e?.stack,
+          errorObject: e,
+          timestamp: new Date().toISOString()
+        });
         showToast({ type: "error", message: "Error", subtitle: e.message });
       } finally {
         setProcessing(false);
@@ -753,6 +775,7 @@ export default function PaymentScreen() {
     }
     const tableState = context?.tableId ? useTableStatusStore.getState().tableMap[context.tableId.toLowerCase()] : null;
     const saleData = {
+      settlementId: checkoutSessionId,
       orderId: displayOrderId || activeOrder?.orderId,
       orderType: context?.orderType === "DINE_IN" ? "DINE-IN" : context?.orderType || "DINE-IN",
       tableNo: context?.orderType === "TAKEAWAY" ? context?.takeawayNo : context?.tableNo,
@@ -857,6 +880,13 @@ export default function PaymentScreen() {
         showToast({ type: "error", message: "Failed", subtitle: result.error });
       }
     } catch (e: any) {
+      console.error("❌ [Sales Checkout Network Failure Details]:", {
+        endpoint: `${API_URL}/api/sales/save`,
+        message: e?.message || e,
+        stack: e?.stack,
+        errorObject: e,
+        timestamp: new Date().toISOString()
+      });
       showToast({ type: "error", message: "Error", subtitle: e.message });
     } finally {
       setProcessing(false);

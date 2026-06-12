@@ -295,7 +295,17 @@ router.get("/usage/:memberId", async (req, res) => {
 router.post("/pay", async (req, res) => {
   try {
     const pool = await poolPromise;
-    const { memberId, amount, payments, userId } = req.body;
+    const { memberId, amount, payments, userId, paymentSessionId } = req.body;
+
+    if (paymentSessionId) {
+      const checkTx = await pool.request()
+        .input("SessionId", sql.NVarChar(100), paymentSessionId)
+        .query("SELECT TransactionId FROM CustomerCreditTransactions WHERE Remarks LIKE '%' + @SessionId + '%' OR ReferenceNo = @SessionId");
+      if (checkTx.recordset.length > 0) {
+        console.log(`[MEMBER PAY] Duplicate request detected. Session ${paymentSessionId} already exists.`);
+        return res.json({ success: true, message: "Duplicate payment skipped", duplicate: true });
+      }
+    }
 
   if (!memberId) {
     return res.status(400).json({ error: "memberId is required" });
@@ -363,8 +373,8 @@ router.post("/pay", async (req, res) => {
     // 3.5. Write allocation credit rows to CustomerCreditTransactions
     let remainingPayment = numericAmt;
     const payModeName = (payments && payments.length > 0) ? (payments[0].payMode || 'CASH') : 'CASH';
-    const referenceNo = (payments && payments.length > 0) ? (payments[0].referenceNo || '') : '';
-    const mainRemarks = req.body.remarks || `Credit payment collection (${payModeName})`;
+    const referenceNo = (payments && payments.length > 0) ? (payments[0].referenceNo || paymentSessionId || '') : (paymentSessionId || '');
+    const mainRemarks = `${req.body.remarks || `Credit payment collection (${payModeName})`} [Session: ${paymentSessionId || ''}]`;
 
     // 1. Write the primary PAYMENT transaction record
     const payTxResult = await transaction.request()
@@ -372,7 +382,7 @@ router.post("/pay", async (req, res) => {
       .input("Amount", sql.Decimal(18, 2), numericAmt)
       .input("PaymentMethod", sql.NVarChar(50), payModeName)
       .input("ReferenceNo", sql.NVarChar(100), referenceNo)
-      .input("Remarks", sql.NVarChar(500), mainRemarks)
+      .input("Remarks", sql.NVarChar(500), mainRemarks.substring(0, 500))
       .input("CreatedBy", sql.UniqueIdentifier, toGuidOrNull(userId))
       .query(`
         INSERT INTO CustomerCreditTransactions (MemberId, TransactionType, BillAmount, PaidAmount, OutstandingAmount, PaymentMethod, ReferenceNo, Status, Remarks, CreatedBy)

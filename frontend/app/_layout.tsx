@@ -32,6 +32,69 @@ SystemUI.setBackgroundColorAsync(Theme.bgMain);
 SplashScreen.preventAutoHideAsync();
 
 import { useGlobalSocketSync } from "@/hooks/useGlobalSocketSync";
+import { API_URL } from "@/constants/Config";
+
+// 🌐 GLOBAL FETCH RETRY & IDEMPOTENCY ENGINE
+const originalFetch = global.fetch;
+const getUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+global.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const url = typeof input === 'string' ? input : (input instanceof URL ? input.href : (input as any).url);
+
+  if (url && url.includes(API_URL)) {
+    const maxRetries = 2;
+    let delay = 500;
+    let lastError: any = null;
+
+    const options: RequestInit = init ? { ...init } : {};
+    const headers: Record<string, string> = {};
+
+    if (options.headers) {
+      if (options.headers instanceof Headers) {
+        options.headers.forEach((value, key) => {
+          headers[key] = value;
+        });
+      } else if (Array.isArray(options.headers)) {
+        options.headers.forEach(([key, value]) => {
+          headers[key] = value;
+        });
+      } else {
+        Object.assign(headers, options.headers);
+      }
+    }
+
+    const requestId = headers['x-request-id'] || headers['X-Request-ID'] || getUUID();
+    headers['x-request-id'] = requestId;
+    options.headers = headers;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await originalFetch(input, options);
+        if (response.status !== 503 && response.status !== 504) {
+          return response;
+        }
+        lastError = new Error(`Server returned status ${response.status}`);
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`⚠️ [Global Fetch] [Attempt ${attempt}/${maxRetries}] failed: ${err.message || err}`);
+      }
+
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay *= 1.5;
+      }
+    }
+    throw lastError;
+  }
+
+  return originalFetch(input, init);
+};
 
 export default function RootLayout() {
   useGlobalSocketSync();
@@ -39,6 +102,23 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
   const user = useAuthStore((s) => s.user);
+
+  // 🌐 SILENT API WAKE-UP & CONNECTION PRE-WARM
+  useEffect(() => {
+    const warmupAPI = async () => {
+      console.log(`🌐 [App Startup] Warming up connection to ${API_URL}...`);
+      try {
+        const start = Date.now();
+        // Trigger DNS lookup, TCP/SSL handshake, and backend container spin-up
+        const res = await fetch(`${API_URL}/health`);
+        const duration = Date.now() - start;
+        console.log(`🌐 [App Startup] API warmed up successfully in ${duration}ms. Status: ${res.status}`);
+      } catch (err: any) {
+        console.warn(`🌐 [App Startup] API warmup ping failed (expected if backend container is booting up):`, err.message || err);
+      }
+    };
+    warmupAPI();
+  }, []);
 
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,

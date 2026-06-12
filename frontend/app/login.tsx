@@ -133,7 +133,6 @@ export default function LoginScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userName: userName.trim(), password }),
       });
-
       const data = await response.json();
 
       if (data.success && data.user) {
@@ -170,7 +169,14 @@ export default function LoginScreen() {
         setError(data.message || "Login failed. Please try again.");
         shakeError();
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error("❌ [Login Network Failure Details]:", {
+        endpoint: `${API_URL}/api/auth/login`,
+        message: err?.message || err,
+        stack: err?.stack,
+        errorObject: err,
+        timestamp: new Date().toISOString()
+      });
       setError("Cannot connect to server. Check your network.");
       shakeError();
     } finally {

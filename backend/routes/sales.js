@@ -1173,6 +1173,7 @@ router.post("/save", async (req, res) => {
   try {
     const pool = await poolPromise;
     const {
+      settlementId: clientSettlementId,
       totalAmount, paymentMethod, items, subTotal, taxAmount,
       discountAmount, discountType, roundOff, orderId, orderType, tableNo, section, memberId, cashierId, tableId,
       serverId, serverName, isSplit,
@@ -1184,6 +1185,37 @@ router.post("/save", async (req, res) => {
       console.warn(`[SAVE SALE] Validation failed: ${validationError}`);
       return res.status(400).json({ error: validationError });
     }
+
+    // 1. Idempotency Check: Verify if this settlement already exists
+    if (clientSettlementId) {
+      const existingCheck = await pool.request()
+        .input("Sid", sql.UniqueIdentifier, clientSettlementId)
+        .query("SELECT SettlementID, BillNo FROM SettlementHeader WHERE SettlementID = @Sid");
+      if (existingCheck.recordset.length > 0) {
+        const existing = existingCheck.recordset[0];
+        console.log(`[SAVE SALE] Duplicate request detected. Settlement ${clientSettlementId} already exists.`);
+        return res.json({ success: true, settlementId: existing.SettlementID, billNo: existing.BillNo, orderId: existing.BillNo });
+      }
+    }
+
+    // 2. Fallback check for non-split payments using orderId
+    if (orderId && !isSplit) {
+      const existingCheck = await pool.request()
+        .input("OrderId", sql.NVarChar(100), orderId)
+        .query(`
+          SELECT SettlementID, BillNo FROM SettlementHeader 
+          WHERE BillNo = @OrderId 
+             OR OrderId = @OrderId
+             OR OrderId = (SELECT TOP 1 OrderId FROM RestaurantOrder WHERE OrderNumber = @OrderId)
+             OR OrderId = (SELECT TOP 1 OrderId FROM RestaurantOrderCur WHERE OrderNumber = @OrderId)
+        `);
+      if (existingCheck.recordset.length > 0) {
+        const existing = existingCheck.recordset[0];
+        console.log(`[SAVE SALE] Duplicate check matched by OrderId! Settlement already exists for order ${orderId}. BillNo: ${existing.BillNo}`);
+        return res.json({ success: true, settlementId: existing.SettlementID, billNo: existing.BillNo, orderId: orderId });
+      }
+    }
+
     let isMemberPayment = false;
     let settlementId;
     let displayOrderId = null;
@@ -1193,8 +1225,12 @@ router.post("/save", async (req, res) => {
     let customerRecord = null;
 
     await runInTransaction(async (transaction) => {
-      const settlementIdResult = await transaction.request().query(`SELECT NEWID() AS id`);
-      settlementId = settlementIdResult.recordset[0].id;
+      if (clientSettlementId) {
+        settlementId = clientSettlementId;
+      } else {
+        const settlementIdResult = await transaction.request().query(`SELECT NEWID() AS id`);
+        settlementId = settlementIdResult.recordset[0].id;
+      }
       let billNo = ""; // Will be set to displayOrderId later
 
       const paymodesRes = await transaction.request().query("SELECT Position, PayMode FROM [dbo].[Paymode] WHERE Active = 1");

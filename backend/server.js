@@ -30,6 +30,7 @@ require("dotenv").config({ path: envPath });
 const { poolPromise } = require("./config/db");
 const { initDB, syncKitchensToPrintMaster } = require("./config/init");
 const dbCheck = require("./middleware/dbCheck");
+const idempotencyMiddleware = require("./middleware/idempotency");
 const { getHoldOvertimeMinutes } = require("./utils/settingsCache");
 const { rollbackAllActive } = require("./utils/transactionHelper");
 
@@ -216,6 +217,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
 
 // 🔄 Database Connection Check (for all API routes)
 app.use("/api", dbCheck);
+app.use("/api", idempotencyMiddleware);
 
 /* ================= ROUTES ================= */
 app.use("/api/auth", authRoutes);
