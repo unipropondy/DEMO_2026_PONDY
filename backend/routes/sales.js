@@ -1435,7 +1435,7 @@ router.post("/save", async (req, res) => {
       .input("ServiceCharge", sql.Money, req.body.serviceCharge || 0)
       .input("PayModeCode", sql.Int, payModeCode)
       .input("DailySeq", sql.Int, dailySequence || 0)
-      .input("OrderId", sql.UniqueIdentifier, guidOrderId)
+      .input("InvoiceOrderId", sql.UniqueIdentifier, guidOrderId)
       .input("DiscountId", sql.UniqueIdentifier, toGuidOrNull(discountId))
       .input("DiscountPercentage", sql.Decimal(18, 2), discountPercentage || null)
       .input("DiscountRemarks", sql.NVarChar(1000), discountRemarks || null)
@@ -1467,7 +1467,7 @@ router.post("/save", async (req, res) => {
           PaymentTermCode, DiscountId, DiscountPercentage, DiscountRemarks, TotalDiscountAmount,
           TotalLineItemDiscountAmount, MergeCount, SplitCount, Pax
         ) VALUES (
-          @BusinessUnitId, @SettlementID, @OrderId, @BillNo, GETDATE(), GETDATE(),
+          @BusinessUnitId, @SettlementID, @InvoiceOrderId, @BillNo, GETDATE(), GETDATE(),
           @SubTotal, @TotalTax, @DiscountAmount, @SysAmount, 5,
           @CreatedBy, GETDATE(), CAST(GETDATE() AS DATE), @ServiceCharge, @RoundedBy, @SubTotal,
           @PayModeCode, @DiscountId, @DiscountPercentage, @DiscountRemarks, @TotalDiscountAmount,
@@ -1482,7 +1482,7 @@ router.post("/save", async (req, res) => {
           PaymentTermCode, DiscountId, DiscountPercentage, DiscountRemarks, TotalDiscountAmount,
           TotalLineItemDiscountAmount, MergeCount, SplitCount, Pax
         ) VALUES (
-          @BusinessUnitId, @SettlementID, @OrderId, @BillNo, GETDATE(), GETDATE(),
+          @BusinessUnitId, @SettlementID, @InvoiceOrderId, @BillNo, GETDATE(), GETDATE(),
           @SubTotal, @TotalTax, @DiscountAmount, @SysAmount, 5,
           @CreatedBy, GETDATE(), CAST(GETDATE() AS DATE), @ServiceCharge, @RoundedBy, @SubTotal,
           @PayModeCode, @DiscountId, @DiscountPercentage, @DiscountRemarks, @TotalDiscountAmount,
@@ -1752,7 +1752,7 @@ router.post("/save", async (req, res) => {
           const payResult = await transaction.request()
             .input("PaymentId", sql.UniqueIdentifier, settlementId)
             .input("RestaurantBillId", sql.UniqueIdentifier, settlementId)
-            .input("OrderId", sql.UniqueIdentifier, guidOrderId)
+            .input("PaymentOrderId", sql.UniqueIdentifier, guidOrderId)
             .input("BilledFor", sql.Int, 1)
             .input("PaymentType", sql.Int, 1)
             .input("Paymode", sql.Int, paymodePosition)
@@ -1775,7 +1775,7 @@ router.post("/save", async (req, res) => {
                 PaymentType, Paymode, Amount, ReferenceNumber, Remarks, BusinessUnitId, 
                 CreatedBy, CreatedOn, ModifiedBy, ModifiedOn, isSettlement
               ) VALUES (
-                @PaymentId, @RestaurantBillId, @RestaurantBillId, @RestaurantBillId, @OrderId, @BilledFor, GETDATE(), 
+                @PaymentId, @RestaurantBillId, @RestaurantBillId, @RestaurantBillId, @PaymentOrderId, @BilledFor, GETDATE(), 
                 @PaymentType, @Paymode, @Amount, @ReferenceNumber, @Remarks, @BusinessUnitId, 
                 @CreatedBy, GETDATE(), @ModifiedBy, GETDATE(), 1
               );
