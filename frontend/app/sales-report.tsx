@@ -2037,27 +2037,6 @@ export default function SalesReport() {
             Item Sales Report
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => handleReportPress("ARTIST_TARGET")}
-          style={[
-            styles.reportSwitchBtn,
-            detailReportType === "ARTIST_TARGET" && styles.activeReportSwitchBtn,
-          ]}
-        >
-          <Ionicons
-            name="ribbon-outline"
-            size={16}
-            color={detailReportType === "ARTIST_TARGET" ? "#fff" : Theme.primary}
-          />
-          <Text
-            style={[
-              styles.reportSwitchText,
-              detailReportType === "ARTIST_TARGET" && styles.activeReportSwitchText,
-            ]}
-          >
-            Artist Target
-          </Text>
-        </TouchableOpacity>
       </View>
 
       {renderDetailReport()}

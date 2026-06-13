@@ -1474,38 +1474,6 @@ const loadDishes = async () => {
                 <Text style={{ fontFamily: Fonts.black, fontSize: isTablet ? 22 : 16, color: '#B91C1C', marginTop: 5 }} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(totalCashOut)}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.card,
-                  {
-                    flex: isTablet ? 1 : undefined,
-                    minWidth: isTablet ? 0 : '48%',
-                    flexGrow: 1,
-                    padding: isTablet ? 15 : 10,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#F3F4F6",
-                    borderColor: "#D1D5DB",
-                    borderWidth: 1,
-                  },
-                ]}
-                onPress={() => setShowCashBoxModal(true)}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Ionicons name="cube-outline" size={isTablet ? 16 : 14} color="#374151" />
-                  <Text
-                    style={{
-                      fontFamily: Fonts.bold,
-                      color: "#7f97be",
-                      fontSize: isTablet ? 12 : 11,
-                    }}
-                  >
-                    Cash Box
-                  </Text>
-                </View>
-                <Text style={{ fontFamily: Fonts.black, fontSize: isTablet ? 22 : 16, color: '#374151', marginTop: 5 }} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(cashBoxTotal)}</Text>
-              </TouchableOpacity>
-
               <View style={[styles.card, { flex: isTablet ? 1 : undefined, minWidth: isTablet ? 0 : '48%', flexGrow: 1, padding: isTablet ? 15 : 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: 1 }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Ionicons name="trending-up-outline" size={isTablet ? 16 : 14} color="#10B981" />
@@ -1951,88 +1919,7 @@ const loadDishes = async () => {
           </View>
         </View>
       </Modal>
-      <Modal
-  visible={showCashBoxModal}
-  transparent
-  animationType="fade"
-  onRequestClose={() => setShowCashBoxModal(false)}
->
-  <View style={styles.modalOverlay}>
-    <TouchableOpacity
-      style={StyleSheet.absoluteFill}
-      activeOpacity={1}
-      onPress={() => setShowCashBoxModal(false)}
-    />
 
-    <View style={[styles.modalContent, { maxWidth: 600, width: "90%" }]}>
-      <View style={styles.modalHeader}>
-        <Text style={styles.modalTitle}>Cash Box</Text>
-
-        <TouchableOpacity
-          onPress={() => setShowCashBoxModal(false)}
-          style={styles.modalCloseBtn}
-        >
-          <Ionicons name="close" size={20} color={Theme.textPrimary} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.modalDivider} />
-
-      <View style={{ marginBottom: 16 }}>
-        <Text
-          style={{
-            fontFamily: Fonts.bold,
-            fontSize: 13,
-            marginBottom: 6,
-            color: Theme.textSecondary,
-          }}
-        >
-          Artist Name *
-        </Text>
-        <TouchableOpacity
-          style={[styles.premiumInput, { justifyContent: 'center' }]}
-          onPress={() => setShowDishLov(true)}
-        >
-          <Text style={{ fontFamily: Fonts.medium, color: cashBoxForm.ArtistName ? Theme.textPrimary : Theme.textMuted }}>
-            {cashBoxForm.ArtistName || "Select Artist"}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={{ flexDirection: "row", gap: 15, marginBottom: 16 }}>
-        <View style={{ flex: 1 }}>
-          <Text
-            style={{
-              fontFamily: Fonts.bold,
-              fontSize: 13,
-              marginBottom: 6,
-              color: Theme.textSecondary,
-            }}
-          >
-            Amount *
-          </Text>
-
-          <TextInput
-            style={[styles.premiumInput, { textAlign: "right", fontSize: 18 }]}
-            keyboardType="numeric"
-            value={cashBoxForm.Amount}
-            onChangeText={(v) =>
-              setCashBoxForm({ ...cashBoxForm, Amount: v })
-            }
-            placeholder="0.00"
-          />
-        </View>
-      </View>
-
-      <TouchableOpacity
-        style={styles.confirmBtn}
-        onPress={handleSaveCashBox}
-      >
-        <Text style={styles.confirmBtnText}>Save</Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-</Modal>
 
 <Modal
   visible={showDishLov}
