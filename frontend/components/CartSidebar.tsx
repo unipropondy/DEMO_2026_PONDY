@@ -46,12 +46,7 @@ import { useTableStatusStore } from "../stores/tableStatusStore";
 
 const EMPTY_ARRAY: any[] = [];
 
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+
 
 const formatSectionGlobal = (sec: string) => {
   if (!sec) return "";
