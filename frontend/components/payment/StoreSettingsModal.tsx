@@ -109,6 +109,17 @@ const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Fetch current settings first to avoid overwriting general settings with defaults
+      let currentData: any = {};
+      try {
+        const getRes = await fetch(`${API_URL}/api/settings`);
+        if (getRes.ok) {
+          currentData = await getRes.json();
+        }
+      } catch (err) {
+        console.warn("Failed to fetch current settings for merge:", err);
+      }
+
       const response = await fetch(`${API_URL}/api/settings/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -116,6 +127,13 @@ const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
           upiId: upiId.trim(),
           shopName: shopName.trim(),
           qrCodeUrl: qrCodeUrl,
+          enableKOT: currentData.EnableKOT !== undefined ? currentData.EnableKOT : 1,
+          enableKDS: currentData.EnableKDS !== undefined ? currentData.EnableKDS : 1,
+          enableCheckoutBill: currentData.EnableCheckoutBill !== undefined ? currentData.EnableCheckoutBill : 1,
+          enableCheckoutFlow: currentData.EnableCheckoutFlow !== undefined ? currentData.EnableCheckoutFlow : 1,
+          enableDirectProcessToPay: currentData.EnableDirectProcessToPay !== undefined ? currentData.EnableDirectProcessToPay : 0,
+          customerSideDisplay: currentData.CustomerSideDisplay !== undefined ? currentData.CustomerSideDisplay : 1,
+          enableGuestDetailsPopup: currentData.EnableGuestDetailsPopup !== undefined ? currentData.EnableGuestDetailsPopup : 1,
         }),
       });
 
