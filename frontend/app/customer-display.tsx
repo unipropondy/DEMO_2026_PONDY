@@ -10,7 +10,7 @@ import {
   Text,
   TouchableOpacity,
   useWindowDimensions,
-  View
+  View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { API_URL } from "../constants/Config";
@@ -1184,7 +1184,7 @@ const styles = StyleSheet.create({
   },
   floatingBackBtn: {
     position: "absolute",
-    top: 15,
+    top: 10,
     left: 20,
     zIndex: 9999,
     flexDirection: "row",
