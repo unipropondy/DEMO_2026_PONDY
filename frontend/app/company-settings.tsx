@@ -24,9 +24,11 @@ import BillPDFGenerator from '../components/BillPDFGenerator';
 import { useToast } from '../components/Toast';
 import { API_URL } from '@/constants/Config';
 import { useCompanySettingsStore } from '../stores/companySettingsStore';
+import { useAuthStore } from '../stores/authStore';
 
 export default function CompanySettingsScreen() {
   const { settings, loading, fetchSettings, updateSettings } = useCompanySettingsStore();
+  const { user } = useAuthStore();
   const [userId, setUserId] = useState('1');
   const [saving, setSaving] = useState(false);
   const [kitchenPrinters, setKitchenPrinters] = useState<any[]>([]);
@@ -39,8 +41,39 @@ export default function CompanySettingsScreen() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [pin, setPin] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  
+  const [password, setPassword] = useState("");
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+
   const router = useRouter();
   const { showToast } = useToast();
+
+  const handleUnlock = async () => {
+    if (!user?.userName) return;
+    setVerifying(true);
+    try {
+      const response = await fetch(`${API_URL}/api/auth/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userName: user.userName,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setIsUnlocked(true);
+      } else {
+        Alert.alert("Access Denied", "Incorrect Password");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Could not verify password. Check connection.");
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -276,6 +309,56 @@ export default function CompanySettingsScreen() {
           Loading Shop Settings...
         </Text>
       </View>
+    );
+  }
+
+  if (!isUnlocked) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={styles.passwordCard}>
+          <Ionicons name="lock-closed" size={48} color={Theme.primary} style={{ alignSelf: 'center', marginBottom: 15 }} />
+          <Text style={styles.passwordTitle}>🔐 Admin Verification</Text>
+          <Text style={styles.passwordSubtitle}>
+            Enter admin password to access Shop Settings
+          </Text>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Enter Password"
+            placeholderTextColor="#A0AEC0"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            onSubmitEditing={handleUnlock}
+            returnKeyType="done"
+            autoFocus
+          />
+          <View style={styles.passwordActions}>
+            <TouchableOpacity
+              style={[styles.passwordBtn, styles.cancelBtn]}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/(tabs)/category' as any);
+                }
+              }}
+            >
+              <Text style={styles.cancelBtnText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.passwordBtn, styles.confirmBtn]}
+              onPress={handleUnlock}
+              disabled={verifying}
+            >
+              {verifying ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.confirmBtnText}>Verify</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -712,6 +795,51 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: Theme.bgMain, // 🟢 Force correct background
+  },
+  passwordCard: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 28,
+    width: '88%',
+    maxWidth: 400,
+    ...Theme.shadowLg,
+  },
+  passwordTitle: {
+    fontSize: 22,
+    fontFamily: Fonts.black,
+    color: Theme.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  passwordSubtitle: {
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+    color: Theme.textSecondary,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  passwordInput: {
+    backgroundColor: Theme.bgNav,
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+    fontSize: 16,
+    fontFamily: Fonts.medium,
+    color: Theme.textPrimary,
+    borderWidth: 1,
+    borderColor: Theme.border,
+    marginBottom: 16,
+  },
+  passwordActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  passwordBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
