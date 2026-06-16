@@ -1,24 +1,24 @@
-import React, { useEffect, useState, useRef } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  ScrollView,
-  useWindowDimensions,
   Animated,
+  Image,
   Platform,
-  ActivityIndicator,
-  FlatList,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
 } from "react-native";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
-import { Theme } from "../constants/theme";
+import { API_URL } from "../constants/Config";
 import { Fonts } from "../constants/Fonts";
 import { socket } from "../constants/socket";
+import { Theme } from "../constants/theme";
 import { useCompanySettingsStore } from "../stores/companySettingsStore";
 import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
-import { API_URL } from "../constants/Config";
 
 interface DisplayState {
   active: boolean;
@@ -56,9 +56,9 @@ const DEFAULT_STATE: DisplayState = {
 
 const getLogoUri = (logo: string) => {
   if (!logo) return "";
-  if (logo.startsWith('data:image')) return logo;
-  if (logo.startsWith('http')) return logo;
-  return `${API_URL}${logo.startsWith('/') ? '' : '/'}${logo}`;
+  if (logo.startsWith("data:image")) return logo;
+  if (logo.startsWith("http")) return logo;
+  return `${API_URL}${logo.startsWith("/") ? "" : "/"}${logo}`;
 };
 
 export default function CustomerDisplayScreen() {
@@ -67,10 +67,30 @@ export default function CustomerDisplayScreen() {
 
   const companySettings = useCompanySettingsStore((s) => s.settings);
   const paymentSettings = usePaymentSettingsStore((s) => s.settings);
+  const router = useRouter();
+
+  const renderBackButton = () => (
+    <TouchableOpacity
+      style={styles.floatingBackBtn}
+      onPress={() => {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace("/(tabs)/category");
+        }
+      }}
+      activeOpacity={0.7}
+    >
+      <Ionicons name="arrow-back" size={18} color="#ef4444" />
+      <Text style={{ color: "#ef4444", fontFamily: Fonts.bold, fontSize: 13 }}>
+        Back
+      </Text>
+    </TouchableOpacity>
+  );
 
   const [displayState, setDisplayState] = useState<DisplayState>(DEFAULT_STATE);
   const [floatingFoods, setFloatingFoods] = useState<any[]>([]);
-  
+
   // Animation value for success screen fade/scale
   const successScale = useRef(new Animated.Value(0)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
@@ -81,7 +101,10 @@ export default function CustomerDisplayScreen() {
     useCompanySettingsStore.getState().fetchSettings("1");
 
     const handleSync = (data: any) => {
-      console.log("🖥️ [CustomerDisplay] Received sync event:", data.paymentSuccess ? "SUCCESS" : (data.active ? "CART" : "IDLE"));
+      console.log(
+        "🖥️ [CustomerDisplay] Received sync event:",
+        data.paymentSuccess ? "SUCCESS" : data.active ? "CART" : "IDLE",
+      );
       setDisplayState(data);
     };
 
@@ -135,8 +158,8 @@ export default function CustomerDisplayScreen() {
       const id = Math.random().toString();
       const icon = icons[Math.floor(Math.random() * icons.length)];
       // Spawn coordinates (percentage of screen viewport)
-      const x = Math.random() * 80 + 10; 
-      const y = Math.random() * 70 + 15; 
+      const x = Math.random() * 80 + 10;
+      const y = Math.random() * 70 + 15;
 
       const scale = new Animated.Value(0);
       const translateY = new Animated.Value(0);
@@ -167,7 +190,6 @@ export default function CustomerDisplayScreen() {
         // Clean up from state once finished
         setFloatingFoods((prev) => prev.filter((item) => item.id !== id));
       });
-
     }, 900);
 
     return () => clearInterval(interval);
@@ -187,6 +209,7 @@ export default function CustomerDisplayScreen() {
   if (displayState.paymentSuccess && paymentSettings.customerSideDisplay) {
     return (
       <View style={styles.successContainer}>
+        {renderBackButton()}
         <View style={styles.successMainContent}>
           <Animated.View
             style={[
@@ -198,7 +221,11 @@ export default function CustomerDisplayScreen() {
             ]}
           >
             <View style={styles.successIconWrapper}>
-              <Ionicons name="checkmark-circle" size={100} color={Theme.success} />
+              <Ionicons
+                name="checkmark-circle"
+                size={100}
+                color={Theme.success}
+              />
             </View>
             <Text style={styles.successTitle}>Payment Successful</Text>
             <Text style={styles.successOrderText}>
@@ -210,19 +237,24 @@ export default function CustomerDisplayScreen() {
             <View style={styles.successDetails}>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Settlement Mode</Text>
-                <Text style={styles.detailValue}>{displayState.paymentMethod || "CARD/UPI"}</Text>
+                <Text style={styles.detailValue}>
+                  {displayState.paymentMethod || "CARD/UPI"}
+                </Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Amount Paid</Text>
                 <Text style={[styles.detailValue, { color: Theme.primary }]}>
-                  {companySettings.currencySymbol || "$"}{displayState.paid?.toFixed(2) || (displayState.netTotal || 0).toFixed(2)}
+                  {companySettings.currencySymbol || "$"}
+                  {displayState.paid?.toFixed(2) ||
+                    (displayState.netTotal || 0).toFixed(2)}
                 </Text>
               </View>
               {displayState.change && displayState.change > 0 ? (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Change Given</Text>
                   <Text style={styles.detailValue}>
-                    {companySettings.currencySymbol || "$"}{(displayState.change || 0).toFixed(2)}
+                    {companySettings.currencySymbol || "$"}
+                    {(displayState.change || 0).toFixed(2)}
                   </Text>
                 </View>
               ) : null}
@@ -246,32 +278,45 @@ export default function CustomerDisplayScreen() {
 
   // Active checkout view
   if (displayState.active && paymentSettings.customerSideDisplay) {
-    const isUPI = /UPI|GPAY|PHONE|PAYTM/i.test(displayState.paymentMethod || "") || (displayState.paymentMethod === undefined && paymentSettings.upiId);
-    const isPayNow = /PAYNOW|QR|PAY-NOW/i.test(displayState.paymentMethod || "") || (displayState.paymentMethod === undefined && paymentSettings.payNowQrUrl);
+    const isUPI =
+      /UPI|GPAY|PHONE|PAYTM/i.test(displayState.paymentMethod || "") ||
+      (displayState.paymentMethod === undefined && paymentSettings.upiId);
+    const isPayNow =
+      /PAYNOW|QR|PAY-NOW/i.test(displayState.paymentMethod || "") ||
+      (displayState.paymentMethod === undefined && paymentSettings.payNowQrUrl);
 
     return (
       <View style={styles.checkoutContainer}>
+        {renderBackButton()}
         {/* Top Header Banner */}
         <View style={styles.topHeaderBanner}>
           <Text style={styles.topHeaderText} numberOfLines={1}>
-            {paymentSettings.shopName || companySettings.name || "INDIAN SUPERMARKET PTE LTD"}
+            {companySettings.name || paymentSettings.shopName || ""}
           </Text>
-          {(displayState.section || displayState.tableNo) ? (
+          {displayState.section || displayState.tableNo ? (
             <View style={styles.headerInfoContainer}>
               {displayState.section ? (
-                <Text style={styles.headerSectionText}>{displayState.section}</Text>
+                <Text style={styles.headerSectionText}>
+                  {displayState.section}
+                </Text>
               ) : null}
               {displayState.tableNo ? (
                 <View style={styles.headerTableBadge}>
-                  <Text style={styles.headerTableText}>{displayState.tableNo}</Text>
+                  <Text style={styles.headerTableText}>
+                    {displayState.tableNo}
+                  </Text>
                 </View>
               ) : null}
             </View>
           ) : null}
         </View>
 
-        <View style={[styles.checkoutLayout, isLandscape && styles.checkoutLayoutLandscape]}>
-          
+        <View
+          style={[
+            styles.checkoutLayout,
+            isLandscape && styles.checkoutLayoutLandscape,
+          ]}
+        >
           {/* Left Pane: Payment QR / Restaurant Logo & Branding Footer */}
           <View style={styles.leftPane}>
             <View style={styles.leftMainContent}>
@@ -288,12 +333,21 @@ export default function CustomerDisplayScreen() {
                         resizeMode="contain"
                       />
                     ) : (
-                      <QRCode value={upiUrl} size={200} color="#000" backgroundColor="#fff" />
+                      <QRCode
+                        value={upiUrl}
+                        size={200}
+                        color="#000"
+                        backgroundColor="#fff"
+                      />
                     )}
                   </View>
-                  <Text style={styles.qrSubtitle}>GPay, PhonePe, Paytm, BHIM</Text>
+                  <Text style={styles.qrSubtitle}>
+                    GPay, PhonePe, Paytm, BHIM
+                  </Text>
                 </View>
-              ) : displayState.paymentMethod && isPayNow && paymentSettings.payNowQrUrl ? (
+              ) : displayState.paymentMethod &&
+                isPayNow &&
+                paymentSettings.payNowQrUrl ? (
                 <View style={styles.qrCard}>
                   <Text style={styles.qrTitle}>Scan to Pay via PayNow</Text>
                   <View style={styles.qrImageContainer}>
@@ -307,14 +361,18 @@ export default function CustomerDisplayScreen() {
                       resizeMode="contain"
                     />
                   </View>
-                  <Text style={styles.qrSubtitle}>Scan QR code with your mobile banking app</Text>
+                  <Text style={styles.qrSubtitle}>
+                    Scan QR code with your mobile banking app
+                  </Text>
                 </View>
               ) : (
                 <View style={styles.logoCard}>
                   {companySettings.companyLogo ? (
                     <View style={styles.logoCircle}>
                       <Image
-                        source={{ uri: getLogoUri(companySettings.companyLogo) }}
+                        source={{
+                          uri: getLogoUri(companySettings.companyLogo),
+                        }}
                         style={styles.largeRestaurantLogo}
                         resizeMode="contain"
                       />
@@ -325,7 +383,7 @@ export default function CustomerDisplayScreen() {
                     </View>
                   )}
                   <Text style={styles.logoShopName}>
-                    {paymentSettings.shopName || companySettings.name || "Smart Cafe"}
+                    {companySettings.name || paymentSettings.shopName || ""}
                   </Text>
                 </View>
               )}
@@ -345,44 +403,83 @@ export default function CustomerDisplayScreen() {
           <View style={styles.rightPane}>
             {/* Table Header */}
             <View style={styles.tableHeaderRow}>
-              <Text style={[styles.tableHeaderCell, styles.cellDesc]}>Description</Text>
+              <Text style={[styles.tableHeaderCell, styles.cellDesc]}>
+                Description
+              </Text>
               <Text style={[styles.tableHeaderCell, styles.cellQty]}>Qty</Text>
-              <Text style={[styles.tableHeaderCell, styles.tableHeaderCellTotal]}>Total</Text>
+              <Text
+                style={[styles.tableHeaderCell, styles.tableHeaderCellTotal]}
+              >
+                Total
+              </Text>
             </View>
 
             {/* Itemized List */}
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.receiptItemsScroll}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.receiptItemsScroll}
+            >
               {displayState.items.map((item, idx) => (
-                <View key={`${item.lineItemId}-${idx}`} style={[styles.receiptItemRow, item.isVoided && styles.voidedRow]}>
+                <View
+                  key={`${item.lineItemId}-${idx}`}
+                  style={[
+                    styles.receiptItemRow,
+                    item.isVoided && styles.voidedRow,
+                  ]}
+                >
                   <View style={styles.cellDesc}>
-                    <Text style={[styles.receiptItemName, item.isVoided && styles.voidedText]}>
+                    <Text
+                      style={[
+                        styles.receiptItemName,
+                        item.isVoided && styles.voidedText,
+                      ]}
+                    >
                       {item.name}
                       {item.isVoided && " (VOIDED)"}
                     </Text>
                     {item.discountAmount > 0 && !item.isVoided ? (
                       <Text style={styles.receiptItemDiscount}>
-                        🏷️ Discount: -{companySettings.currencySymbol || "$"}{item.discountAmount.toFixed(2)}
-                        {item.discountPercent > 0 ? ` (${item.discountPercent}%)` : ""}
+                        🏷️ Discount: -{companySettings.currencySymbol || "$"}
+                        {item.discountAmount.toFixed(2)}
+                        {item.discountPercent > 0
+                          ? ` (${item.discountPercent}%)`
+                          : ""}
                       </Text>
                     ) : null}
-                    {item.note ? <Text style={styles.receiptItemNote}>📝 {item.note}</Text> : null}
-                    {item.modifiers && item.modifiers.map((m: any, mIdx: number) => (
-                      <Text key={mIdx} style={styles.receiptItemModifier}>
-                        + {m.ModifierName}
-                      </Text>
-                    ))}
+                    {item.note ? (
+                      <Text style={styles.receiptItemNote}>📝 {item.note}</Text>
+                    ) : null}
+                    {item.modifiers &&
+                      item.modifiers.map((m: any, mIdx: number) => (
+                        <Text key={mIdx} style={styles.receiptItemModifier}>
+                          + {m.ModifierName}
+                        </Text>
+                      ))}
                   </View>
-                  <Text style={[styles.receiptItemQty, styles.cellQty, item.isVoided && styles.voidedText]}>
+                  <Text
+                    style={[
+                      styles.receiptItemQty,
+                      styles.cellQty,
+                      item.isVoided && styles.voidedText,
+                    ]}
+                  >
                     {(item.qty || 0).toFixed(2)}
                   </Text>
                   <View style={styles.cellTotal}>
                     {item.discountAmount > 0 && !item.isVoided ? (
                       <Text style={styles.receiptItemOriginalPrice}>
-                        {companySettings.currencySymbol || "$"}{(item.originalPrice || 0).toFixed(2)}
+                        {companySettings.currencySymbol || "$"}
+                        {(item.originalPrice || 0).toFixed(2)}
                       </Text>
                     ) : null}
-                    <Text style={[styles.receiptItemTotal, item.isVoided && styles.voidedText]}>
-                      {companySettings.currencySymbol || "$"}{(item.finalPrice || 0).toFixed(2)}
+                    <Text
+                      style={[
+                        styles.receiptItemTotal,
+                        item.isVoided && styles.voidedText,
+                      ]}
+                    >
+                      {companySettings.currencySymbol || "$"}
+                      {(item.finalPrice || 0).toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -395,15 +492,28 @@ export default function CustomerDisplayScreen() {
                 <View style={styles.breakdownItem}>
                   <Text style={styles.breakdownLabel}>Sub Total</Text>
                   <Text style={styles.breakdownValue}>
-                    {companySettings.currencySymbol || "$"}{(displayState.subTotal || 0).toFixed(2)}
+                    {companySettings.currencySymbol || "$"}
+                    {(displayState.subTotal || 0).toFixed(2)}
                   </Text>
                 </View>
 
-                {((displayState.itemDiscounts || 0) + (displayState.orderDiscountAmount || 0)) > 0 ? (
+                {(displayState.itemDiscounts || 0) +
+                  (displayState.orderDiscountAmount || 0) >
+                0 ? (
                   <View style={styles.breakdownItem}>
-                    <Text style={[styles.breakdownLabel, { color: Theme.danger }]}>Discount</Text>
-                    <Text style={[styles.breakdownValue, { color: Theme.danger }]}>
-                      {companySettings.currencySymbol || "$"}{((displayState.itemDiscounts || 0) + (displayState.orderDiscountAmount || 0)).toFixed(2)}
+                    <Text
+                      style={[styles.breakdownLabel, { color: Theme.danger }]}
+                    >
+                      Discount
+                    </Text>
+                    <Text
+                      style={[styles.breakdownValue, { color: Theme.danger }]}
+                    >
+                      {companySettings.currencySymbol || "$"}
+                      {(
+                        (displayState.itemDiscounts || 0) +
+                        (displayState.orderDiscountAmount || 0)
+                      ).toFixed(2)}
                     </Text>
                   </View>
                 ) : null}
@@ -412,7 +522,8 @@ export default function CustomerDisplayScreen() {
                   <View style={styles.breakdownItem}>
                     <Text style={styles.breakdownLabel}>Tax</Text>
                     <Text style={styles.breakdownValue}>
-                      {companySettings.currencySymbol || "$"}{(displayState.gstAmount || 0).toFixed(2)}
+                      {companySettings.currencySymbol || "$"}
+                      {(displayState.gstAmount || 0).toFixed(2)}
                     </Text>
                   </View>
                 ) : null}
@@ -421,7 +532,9 @@ export default function CustomerDisplayScreen() {
                   <View style={styles.breakdownItem}>
                     <Text style={styles.breakdownLabel}>RoundOff</Text>
                     <Text style={styles.breakdownValue}>
-                      {displayState.roundOff > 0 ? "+" : ""}{companySettings.currencySymbol || "$"}{(displayState.roundOff || 0).toFixed(2)}
+                      {displayState.roundOff > 0 ? "+" : ""}
+                      {companySettings.currencySymbol || "$"}
+                      {(displayState.roundOff || 0).toFixed(2)}
                     </Text>
                   </View>
                 ) : null}
@@ -431,15 +544,22 @@ export default function CustomerDisplayScreen() {
               <View style={styles.netTotalHighlightBox}>
                 <Text style={styles.netTotalLabel}>Net Total</Text>
                 <Text style={styles.netTotalValue}>
-                  {companySettings.currencySymbol || "$"}{(displayState.netTotal || 0).toFixed(2)}
+                  {companySettings.currencySymbol || "$"}
+                  {(displayState.netTotal || 0).toFixed(2)}
                 </Text>
               </View>
             </View>
 
             {displayState.waiterName ? (
               <View style={styles.waiterFooter}>
-                <Ionicons name="person-circle-outline" size={16} color={Theme.textSecondary} />
-                <Text style={styles.waiterText}>Served by: {displayState.waiterName}</Text>
+                <Ionicons
+                  name="person-circle-outline"
+                  size={16}
+                  color={Theme.textSecondary}
+                />
+                <Text style={styles.waiterText}>
+                  Served by: {displayState.waiterName}
+                </Text>
               </View>
             ) : null}
           </View>
@@ -451,6 +571,7 @@ export default function CustomerDisplayScreen() {
   // Idle attract loop view
   return (
     <View style={styles.idleContainer}>
+      {renderBackButton()}
       {/* Floating popping food animations */}
       {floatingFoods.map((item) => (
         <Animated.View
@@ -605,7 +726,8 @@ const styles = StyleSheet.create({
   topHeaderBanner: {
     backgroundColor: "#FEF9E7",
     paddingVertical: 10,
-    paddingHorizontal: 24,
+    paddingLeft: 110,
+    paddingRight: 24,
     borderBottomWidth: 1.5,
     borderBottomColor: "#F5CBA7",
     flexDirection: "row",
@@ -1059,5 +1181,20 @@ const styles = StyleSheet.create({
     color: Theme.textSecondary,
     marginTop: 10,
     textAlign: "center",
+  },
+  floatingBackBtn: {
+    position: "absolute",
+    top: 15,
+    left: 20,
+    zIndex: 9999,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.3)",
   },
 });

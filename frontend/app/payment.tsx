@@ -1813,25 +1813,6 @@ export default function PaymentScreen() {
               />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.backBtn, { borderColor: Theme.primaryBorder }]}
-              onPress={openCustomerDisplay}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="open-outline" size={20} color={Theme.primary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.backBtn, { borderColor: Theme.primaryBorder }]}
-              onPress={() => setIsTestModalVisible(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="desktop-outline"
-                size={20}
-                color={Theme.primary}
-              />
-            </TouchableOpacity>
           </View>
         </View>
 

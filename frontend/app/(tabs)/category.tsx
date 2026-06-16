@@ -1,3 +1,7 @@
+import { Skeleton } from "@/components/ui/Skeleton";
+import { API_URL } from "@/constants/Config";
+import { Fonts } from "@/constants/Fonts";
+import { Theme } from "@/constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -15,18 +19,13 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import QRCode from "react-native-qrcode-svg";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { Skeleton } from "@/components/ui/Skeleton";
-import { API_URL } from "@/constants/Config";
-import { Fonts } from "@/constants/Fonts";
-import { Theme } from "@/constants/theme";
 import { useToast } from "../../components/Toast";
-import { useShallow } from 'zustand/react/shallow';
 import { formatToSingaporeTime } from "../../utils/timezoneHelper";
-import QRCode from 'react-native-qrcode-svg';
 
 import StoreSettingsModal from "@/components/payment/StoreSettingsModal";
 import GeneralSettingsModal from "@/components/settings/GeneralSettingsModal";
@@ -39,6 +38,7 @@ import {
   setCurrentContext,
   useCartStore,
 } from "@/stores/cartStore";
+import { useGeneralSettingsStore } from "@/stores/generalSettingsStore";
 import { getHeldOrders } from "@/stores/heldOrdersStore";
 import { OrderContext, setOrderContext } from "@/stores/orderContextStore";
 import { usePaymentSettingsStore } from "@/stores/paymentSettingsStore";
@@ -46,8 +46,6 @@ import {
   TableStatusType,
   useTableStatusStore,
 } from "../../stores/tableStatusStore";
-import { useMenuStore } from "@/stores/menuStore";
-import { useGeneralSettingsStore } from "@/stores/generalSettingsStore";
 
 // --- MOBILE SOLID COLORS ---
 const SOLID_LIGHT_GREEN = "#F0FDF4";
@@ -104,19 +102,38 @@ const TableItemComponent = React.memo(
     isTabletPortrait?: boolean;
   }) => {
     // 🚀 O(1) Store Subscription: Only re-renders when THIS table changes
-    const tableData = useTableStatusStore(
-      state => state.tableMap[tableId]
-    );
+    const tableData = useTableStatusStore((state) => state.tableMap[tableId]);
 
     // 🚀 SYNC-FIRST: Prioritize real-time data from the global store
     const status = tableData
-      ? (tableData.status === 'SENT' ? 1 : tableData.status === 'BILL_REQUESTED' ? 2 : tableData.status === 'HOLD' ? 3 : tableData.status === 'LOCKED' ? 5 : 0)
+      ? tableData.status === "SENT"
+        ? 1
+        : tableData.status === "BILL_REQUESTED"
+          ? 2
+          : tableData.status === "HOLD"
+            ? 3
+            : tableData.status === "LOCKED"
+              ? 5
+              : 0
       : Number(item.Status);
 
-    const billAmount = tableData?.totalAmount !== undefined ? tableData.totalAmount : (Number(item.totalAmount) || 0);
-    const rawStartTime = tableData?.startTime || (item.StartTime ? (typeof item.StartTime === 'string' ? new Date(item.StartTime).getTime() : item.StartTime) : 0);
-    const isOvertime = status !== 0 && (tableData?.isHoldOvertime || Number(item.isOvertime) === 1 || Number(item.isHoldOvertime) === 1);
-    
+    const billAmount =
+      tableData?.totalAmount !== undefined
+        ? tableData.totalAmount
+        : Number(item.totalAmount) || 0;
+    const rawStartTime =
+      tableData?.startTime ||
+      (item.StartTime
+        ? typeof item.StartTime === "string"
+          ? new Date(item.StartTime).getTime()
+          : item.StartTime
+        : 0);
+    const isOvertime =
+      status !== 0 &&
+      (tableData?.isHoldOvertime ||
+        Number(item.isOvertime) === 1 ||
+        Number(item.isHoldOvertime) === 1);
+
     let ui = getStatusUI(status);
 
     // Dynamic Overtime: If occupied (Dining/Hold) and flagged as overtime, override UI
@@ -166,8 +183,19 @@ const TableItemComponent = React.memo(
 
           {status !== 0 && (
             <View style={styles.tableInfo}>
-              <View style={[styles.statusChip, { backgroundColor: bgColor, borderColor: ui.color }]}>
-                <Text style={[styles.statusChipText, { color: ui.color, fontSize: smallFont }]} numberOfLines={1}>
+              <View
+                style={[
+                  styles.statusChip,
+                  { backgroundColor: bgColor, borderColor: ui.color },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusChipText,
+                    { color: ui.color, fontSize: smallFont },
+                  ]}
+                  numberOfLines={1}
+                >
                   {tableData?.customerName ? tableData.customerName : ui.text}
                 </Text>
               </View>
@@ -244,16 +272,27 @@ const TableItemComponent = React.memo(
           {/* 🚀 HOLD OVERTIME INDICATOR (H) */}
           {status === 3 && !!tableData?.isHoldOvertime && (
             <View style={styles.holdOvertimeBadge}>
-               <MaterialCommunityIcons name="alpha-h-circle" size={Math.max(14, itemSize * 0.18)} color={Theme.primary} />
+              <MaterialCommunityIcons
+                name="alpha-h-circle"
+                size={Math.max(14, itemSize * 0.18)}
+                color={Theme.primary}
+              />
             </View>
           )}
 
           {/* 🚀 QR ORDER INDICATOR (QR badge) */}
-          {((tableData?.entryStatus !== undefined ? tableData.entryStatus : item.entryStatus) === 'q') && status !== 0 && (
-            <View style={styles.qrBadge}>
-               <Ionicons name="qr-code" size={Math.max(14, itemSize * 0.18)} color={ui.color} />
-            </View>
-          )}
+          {(tableData?.entryStatus !== undefined
+            ? tableData.entryStatus
+            : item.entryStatus) === "q" &&
+            status !== 0 && (
+              <View style={styles.qrBadge}>
+                <Ionicons
+                  name="qr-code"
+                  size={Math.max(14, itemSize * 0.18)}
+                  color={ui.color}
+                />
+              </View>
+            )}
         </View>
       </TouchableOpacity>
     );
@@ -330,11 +369,14 @@ const SECTION_ICONS: Record<string, string> = {
   TAKEAWAY: "bag-handle-outline",
 };
 
-import { socket } from "../../constants/socket";
 
 // Track the last table that was opened with guest details.
 // If the user exits the menu without sending items, we clean this guest data.
-let lastGuestOpenedTable: { tableId: string; customerName: string | null; pax: number | null } | null = null;
+let lastGuestOpenedTable: {
+  tableId: string;
+  customerName: string | null;
+  pax: number | null;
+} | null = null;
 
 export default function Category() {
   const { width, height } = useWindowDimensions();
@@ -347,7 +389,8 @@ export default function Category() {
   const [loading, setLoading] = useState(true);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
-  const [isGeneralSettingsVisible, setIsGeneralSettingsVisible] = useState(false);
+  const [isGeneralSettingsVisible, setIsGeneralSettingsVisible] =
+    useState(false);
   const [isSettingsExpanded, setIsSettingsExpanded] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -356,7 +399,9 @@ export default function Category() {
 
   // Customer guest name + pax modal states
   const [guestModalVisible, setGuestModalVisible] = useState(false);
-  const [pendingGuestItem, setPendingGuestItem] = useState<TableItem | null>(null);
+  const [pendingGuestItem, setPendingGuestItem] = useState<TableItem | null>(
+    null,
+  );
   const [guestNameInput, setGuestNameInput] = useState("");
   const [guestPaxInput, setGuestPaxInput] = useState("");
   const [isSavingGuest, setIsSavingGuest] = useState(false);
@@ -368,41 +413,45 @@ export default function Category() {
   const isTablet = Math.min(width, height) >= 500;
   const isLandscape = width > height;
 
-  const { itemSize, numberFont, smallFont, columns, GAP, PADDING } = useMemo(() => {
-    const insetsValue = insets; // Access insets from outside closure
+  const { itemSize, numberFont, smallFont, columns, GAP, PADDING } =
+    useMemo(() => {
+      const insetsValue = insets; // Access insets from outside closure
 
-    const gapVal = !isTablet && isLandscape ? 8 : 10;
-    const paddingVal = isTablet ? 24 : isLandscape ? 12 : 16;
-    const availableGridWidth = width - paddingVal * 2 - insetsValue.left - insetsValue.right - 2;
+      const gapVal = !isTablet && isLandscape ? 8 : 10;
+      const paddingVal = isTablet ? 24 : isLandscape ? 12 : 16;
+      const availableGridWidth =
+        width - paddingVal * 2 - insetsValue.left - insetsValue.right - 2;
 
-    let cols = 3;
-    if (isTablet) {
-      if (width < 768) cols = 4;
-      else if (width < 1024) cols = 6;
-      else if (width < 1280) cols = 8;
-      else if (width < 1920) cols = 10;
-      else cols = 12;
-    } else {
-      if (isLandscape) {
-        cols = Math.max(5, Math.floor(availableGridWidth / 115));
+      let cols = 3;
+      if (isTablet) {
+        if (width < 768) cols = 4;
+        else if (width < 1024) cols = 6;
+        else if (width < 1280) cols = 8;
+        else if (width < 1920) cols = 10;
+        else cols = 12;
       } else {
-        cols = 3;
+        if (isLandscape) {
+          cols = Math.max(5, Math.floor(availableGridWidth / 115));
+        } else {
+          cols = 3;
+        }
       }
-    }
 
-    const size = Math.floor((availableGridWidth - gapVal * (cols - 1)) / cols);
-    const nFont = Math.max(12, Math.min(isTablet ? 24 : 20, size * 0.32));
-    const sFont = Math.max(8, Math.min(isTablet ? 14 : 11, size * 0.18));
+      const size = Math.floor(
+        (availableGridWidth - gapVal * (cols - 1)) / cols,
+      );
+      const nFont = Math.max(12, Math.min(isTablet ? 24 : 20, size * 0.32));
+      const sFont = Math.max(8, Math.min(isTablet ? 14 : 11, size * 0.18));
 
-    return { 
-      itemSize: size, 
-      numberFont: nFont, 
-      smallFont: sFont, 
-      columns: cols, 
-      GAP: gapVal, 
-      PADDING: paddingVal 
-    };
-  }, [width, height, insets]);
+      return {
+        itemSize: size,
+        numberFont: nFont,
+        smallFont: sFont,
+        columns: cols,
+        GAP: gapVal,
+        PADDING: paddingVal,
+      };
+    }, [width, height, insets]);
 
   const user = useAuthStore((s: any) => s.user);
   const logout = useAuthStore((s: any) => s.logout);
@@ -412,11 +461,19 @@ export default function Category() {
   const canAccessLockTables = useAuthStore((s: any) => s.canAccessLockTables);
   const canAccessKDS = useAuthStore((s: any) => s.canAccessKDS);
   const canAccessDayEnd = useAuthStore((s: any) => s.canAccessDayEnd);
-  const canAccessStoreSettings = useAuthStore((s: any) => s.canAccessStoreSettings);
-  const canAccessReceiptSettings = useAuthStore((s: any) => s.canAccessReceiptSettings);
+  const canAccessStoreSettings = useAuthStore(
+    (s: any) => s.canAccessStoreSettings,
+  );
+  const canAccessReceiptSettings = useAuthStore(
+    (s: any) => s.canAccessReceiptSettings,
+  );
   const isWaiter = useAuthStore((s: any) => s.isWaiter);
   const enableKDS = useGeneralSettingsStore((s: any) => s.settings.enableKDS);
-  const enableGuestDetailsPopup = useGeneralSettingsStore((s: any) => s.settings.enableGuestDetailsPopup !== undefined ? s.settings.enableGuestDetailsPopup : true);
+  const enableGuestDetailsPopup = useGeneralSettingsStore((s: any) =>
+    s.settings.enableGuestDetailsPopup !== undefined
+      ? s.settings.enableGuestDetailsPopup
+      : true,
+  );
 
   // 🔔 Real-time sync now handled globally via useGlobalSocketSync
 
@@ -447,11 +504,15 @@ export default function Category() {
   useEffect(() => {
     // Initial load
     fetchTables();
-    
+
     // Only fetch settings if not already loaded
     usePaymentSettingsStore.getState().fetchSettings();
-    import("@/stores/generalSettingsStore").then(m => m.useGeneralSettingsStore.getState().fetchSettings());
-    import("@/stores/companySettingsStore").then(m => m.useCompanySettingsStore.getState().fetchSettings("1"));
+    import("@/stores/generalSettingsStore").then((m) =>
+      m.useGeneralSettingsStore.getState().fetchSettings(),
+    );
+    import("@/stores/companySettingsStore").then((m) =>
+      m.useCompanySettingsStore.getState().fetchSettings("1"),
+    );
   }, []);
 
   useFocusEffect(
@@ -463,12 +524,22 @@ export default function Category() {
         const store = useTableStatusStore.getState();
         const tableData = store.tableMap[tableId];
         const status = tableData
-          ? (tableData.status === 'SENT' ? 1 : tableData.status === 'BILL_REQUESTED' ? 2 : tableData.status === 'HOLD' ? 3 : tableData.status === 'LOCKED' ? 5 : 0)
+          ? tableData.status === "SENT"
+            ? 1
+            : tableData.status === "BILL_REQUESTED"
+              ? 2
+              : tableData.status === "HOLD"
+                ? 3
+                : tableData.status === "LOCKED"
+                  ? 5
+                  : 0
           : 0;
 
         if (status === 0) {
-          console.log(`[Category] Table ${tableId} exited without adding items. Clearing guest data...`);
-          
+          console.log(
+            `[Category] Table ${tableId} exited without adding items. Clearing guest data...`,
+          );
+
           // Clear guest details in the database
           fetch(`${API_URL}/api/tables/save-guest`, {
             method: "POST",
@@ -479,13 +550,15 @@ export default function Category() {
               pax: null,
               userId: useAuthStore.getState().user?.userId,
             }),
-          }).catch(err => console.warn("Failed to clear guest details on exit:", err));
+          }).catch((err) =>
+            console.warn("Failed to clear guest details on exit:", err),
+          );
 
           // Optimistically clear in the local state store
-          const targetTable = store.tables.find(t => t.tableId === tableId);
+          const targetTable = store.tables.find((t) => t.tableId === tableId);
           const section = targetTable ? targetTable.section : "SECTION_1";
           const label = targetTable ? targetTable.tableNo : "";
-          
+
           store.updateTableStatus(
             tableId,
             section,
@@ -500,16 +573,17 @@ export default function Category() {
             undefined,
             undefined,
             null as any, // clear customerName
-            null as any  // clear pax
+            null as any, // clear pax
           );
         }
-        
+
         // Clear the tracker
         lastGuestOpenedTable = null;
       }
 
       // Re-fetch only if data is likely stale (older than 30s)
-      const lastUpdate = useTableStatusStore.getState().tables[0]?.startTime || 0;
+      const lastUpdate =
+        useTableStatusStore.getState().tables[0]?.startTime || 0;
       if (Date.now() - lastUpdate > 30000) {
         fetchTables();
       }
@@ -520,13 +594,11 @@ export default function Category() {
   useEffect(() => {
     const interval = setInterval(() => {
       fetchTables();
-    }, 120000); 
+    }, 120000);
     return () => clearInterval(interval);
-  }, []); 
+  }, []);
 
   // fetchLockedTables consolidated into fetchTables
-
-
 
   const fetchTables = async () => {
     try {
@@ -549,36 +621,42 @@ export default function Category() {
         tablesArray = data.recordset;
 
       if (tablesArray.length > 0) {
-        const convertedData: TableItem[] = tablesArray
-          .map((item: any) => ({
-            id: String(item.TableId || item.id || "").replace(/^\{|\}$/g, "").trim().toLowerCase(),
-            label: item.TableNumber || item.label,
-            DiningSection: Number(item.DiningSection) || 1,
-            Status: Number(item.Status) || 0,
-            StartTime: item.StartTime,
-            lockedByName: item.lockedByName,
-            totalAmount: Number(item.totalAmount) || 0,
-            currentOrderId: item.currentOrderId,
-            isOvertime: Number(item.isOvertime) || 0,
-            isHoldOvertime: Number(item.isHoldOvertime) || 0,
-            lastModified: item.ModifiedOn,
-            entryStatus: item.entryStatus || item.entry_status,
-            customerName: item.customerName || item.CustomerName || null,
-            pax: item.pax || item.Pax || null,
-          }))
-        
-        const uniqueTables = convertedData.filter((item, index, self) =>
-          index === self.findIndex(t => t.id === item.id)
+        const convertedData: TableItem[] = tablesArray.map((item: any) => ({
+          id: String(item.TableId || item.id || "")
+            .replace(/^\{|\}$/g, "")
+            .trim()
+            .toLowerCase(),
+          label: item.TableNumber || item.label,
+          DiningSection: Number(item.DiningSection) || 1,
+          Status: Number(item.Status) || 0,
+          StartTime: item.StartTime,
+          lockedByName: item.lockedByName,
+          totalAmount: Number(item.totalAmount) || 0,
+          currentOrderId: item.currentOrderId,
+          isOvertime: Number(item.isOvertime) || 0,
+          isHoldOvertime: Number(item.isHoldOvertime) || 0,
+          lastModified: item.ModifiedOn,
+          entryStatus: item.entryStatus || item.entry_status,
+          customerName: item.customerName || item.CustomerName || null,
+          pax: item.pax || item.Pax || null,
+        }));
+
+        const uniqueTables = convertedData.filter(
+          (item, index, self) =>
+            index === self.findIndex((t) => t.id === item.id),
         );
 
-        setAllTables(prev => {
+        setAllTables((prev) => {
           if (prev.length !== uniqueTables.length) return uniqueTables;
-          const isSame = prev.every((t, i) => t.id === uniqueTables[i].id && t.label === uniqueTables[i].label);
+          const isSame = prev.every(
+            (t, i) =>
+              t.id === uniqueTables[i].id && t.label === uniqueTables[i].label,
+          );
           return isSame ? prev : uniqueTables;
         });
 
         // 🚀 BATCH SYNC to global store (MUCH FASTER)
-        const updates = uniqueTables.map(t => {
+        const updates = uniqueTables.map((t) => {
           let finalStartTime = 0;
           if (t.StartTime) {
             const parsed = new Date(t.StartTime).getTime();
@@ -590,17 +668,22 @@ export default function Category() {
             section: getSectionFromDiningSection(t.DiningSection),
             tableNo: t.label,
             orderId: (t as any).currentOrderId || "EMPTY",
-            status: (t.Status === 5 ? "LOCKED" : 
-                    t.Status === 1 ? "SENT" : 
-                    t.Status === 2 ? "BILL_REQUESTED" : 
-                    t.Status === 3 ? "HOLD" : "EMPTY") as TableStatusType,
+            status: (t.Status === 5
+              ? "LOCKED"
+              : t.Status === 1
+                ? "SENT"
+                : t.Status === 2
+                  ? "BILL_REQUESTED"
+                  : t.Status === 3
+                    ? "HOLD"
+                    : "EMPTY") as TableStatusType,
             startTime: finalStartTime,
             lockedByName: t.lockedByName,
             totalAmount: t.totalAmount,
             isHoldOvertime: t.isHoldOvertime === 1 || !!t.isHoldOvertime,
             lastModified: (t as any).lastModified,
             customerName: t.customerName ?? undefined,
-            pax: t.pax ?? undefined
+            pax: t.pax ?? undefined,
           };
         });
 
@@ -644,20 +727,24 @@ export default function Category() {
                 // Optimistic store update
                 const targetTable = allTables.find((t) => t.id === tableId);
                 if (targetTable) {
-                  const section = getSectionFromDiningSection(targetTable.DiningSection);
-                  useTableStatusStore.getState().updateTableStatus(
-                    tableId,
-                    section,
-                    tableLabel,
-                    "SYNC",
-                    "EMPTY",
-                    undefined,
-                    undefined,
-                    0
+                  const section = getSectionFromDiningSection(
+                    targetTable.DiningSection,
                   );
+                  useTableStatusStore
+                    .getState()
+                    .updateTableStatus(
+                      tableId,
+                      section,
+                      tableLabel,
+                      "SYNC",
+                      "EMPTY",
+                      undefined,
+                      undefined,
+                      0,
+                    );
                 }
-                 fetchTables();
-                 Alert.alert("Success", `Table ${tableLabel} unlocked.`);
+                fetchTables();
+                Alert.alert("Success", `Table ${tableLabel} unlocked.`);
               } else {
                 Alert.alert("Error", data.error || "Failed to unlock");
               }
@@ -676,16 +763,12 @@ export default function Category() {
     }
   }, [urlSection]);
 
-
-
   useEffect(() => {
     const index = SECTIONS.indexOf(activeTab);
     if (index !== -1 && sectionScrollRef.current) {
       sectionScrollRef.current.scrollTo({ x: index * 120, animated: true });
     }
   }, [activeTab]);
-
-
 
   // 🚀 PERFORMANCE FIX: Removed direct dependency on 'tables' array to prevent full screen re-renders.
   // Individual TableItemComponents now subscribe to their own status.
@@ -705,13 +788,19 @@ export default function Category() {
       if (aLocked && !bLocked) return -1;
       if (!aLocked && bLocked) return 1;
 
-      return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" });
+      return a.label.localeCompare(b.label, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
     });
   }, [allTables, activeTab]);
 
   // 🚀 Optimized Occupied Count: Only re-renders when the count changes
-  const occupiedCount = useTableStatusStore(state => 
-    Object.values(state.tableMap).filter(t => t.status !== 'EMPTY' && t.status !== 0).length
+  const occupiedCount = useTableStatusStore(
+    (state) =>
+      Object.values(state.tableMap).filter(
+        (t) => t.status !== "EMPTY" && t.status !== 0,
+      ).length,
   );
 
   // ———— STATUS HANDLERS (OPTIMISTIC) ————
@@ -757,13 +846,18 @@ export default function Category() {
       const res = await fetch(`${API_URL}/api/tables/status`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tableId, status, lockedByName, userId: user?.userId }),
+        body: JSON.stringify({
+          tableId,
+          status,
+          lockedByName,
+          userId: user?.userId,
+        }),
       });
       if (!res.ok) throw new Error("Failed to update status");
 
-       // Successfully updated backend
-       fetchTables(); // 🔥 refresh after update
-       return true;
+      // Successfully updated backend
+      fetchTables(); // 🔥 refresh after update
+      return true;
     } catch (err) {
       console.error("Status update failed:", err);
       Alert.alert(
@@ -787,11 +881,18 @@ export default function Category() {
     if (isCheckingOut) return;
 
     const tableStatus = useTableStatusStore.getState().tableMap[id];
-    const effectiveStatus = tableStatus ? (tableStatus.status === 'SENT' ? 1 : tableStatus.status === 'BILL_REQUESTED' ? 2 : 1) : 0;
-    
+    const effectiveStatus = tableStatus
+      ? tableStatus.status === "SENT"
+        ? 1
+        : tableStatus.status === "BILL_REQUESTED"
+          ? 2
+          : 1
+      : 0;
+
     if (effectiveStatus === 0) return;
 
-    const checkoutFlowEnabled = useGeneralSettingsStore.getState().settings.enableCheckoutFlow !== false;
+    const checkoutFlowEnabled =
+      useGeneralSettingsStore.getState().settings.enableCheckoutFlow !== false;
 
     setIsCheckingOut(true);
     try {
@@ -799,10 +900,17 @@ export default function Category() {
       if (res && res.success) {
         // Rely on socket sync for status updates
         // fetchTables();
-        const targetTable = allTables.find(t => t.id === id);
+        const targetTable = allTables.find((t) => t.id === id);
         if (targetTable) {
-          const section = getSectionFromDiningSection(targetTable.DiningSection);
-          setOrderContext({ orderType: "DINE_IN", section: section, tableNo: targetTable.label, tableId: id });
+          const section = getSectionFromDiningSection(
+            targetTable.DiningSection,
+          );
+          setOrderContext({
+            orderType: "DINE_IN",
+            section: section,
+            tableNo: targetTable.label,
+            tableId: id,
+          });
           if (checkoutFlowEnabled) {
             router.push("/summary");
           } else {
@@ -821,9 +929,18 @@ export default function Category() {
     if (isCompleting) return;
 
     const tableData = useTableStatusStore.getState().tableMap[id];
-    const effectiveStatus = (tableData && tableData.status !== 'EMPTY') 
-      ? (tableData.status === 'SENT' ? 1 : tableData.status === 'BILL_REQUESTED' ? 2 : tableData.status === 'HOLD' ? 3 : tableData.status === 'LOCKED' ? 5 : 1)
-      : 0;
+    const effectiveStatus =
+      tableData && tableData.status !== "EMPTY"
+        ? tableData.status === "SENT"
+          ? 1
+          : tableData.status === "BILL_REQUESTED"
+            ? 2
+            : tableData.status === "HOLD"
+              ? 3
+              : tableData.status === "LOCKED"
+                ? 5
+                : 1
+        : 0;
 
     if (effectiveStatus !== 2) return;
 
@@ -834,7 +951,11 @@ export default function Category() {
         // Rely on socket sync for status updates
         // fetchTables();
         useActiveOrdersStore.getState().fetchActiveKitchenOrders();
-        showToast({ type: "success", message: "Completed", subtitle: "Table is now available." });
+        showToast({
+          type: "success",
+          message: "Completed",
+          subtitle: "Table is now available.",
+        });
       }
     } catch (err) {
       console.error("Complete flow error:", err);
@@ -843,7 +964,6 @@ export default function Category() {
     }
   };
 
-
   const handleHold = (id: string) => updateTableStatus(id, 3); // Hold
   const handleReserved = (id: string, name: string) =>
     updateTableStatus(id, 5, name); // Reserved (Use 5 for red locked/reserved state)
@@ -851,9 +971,18 @@ export default function Category() {
 
   const handleTablePress = React.useCallback(
     async (item: TableItem, tableData: any, isCheckoutAction?: boolean) => {
-      const effectiveStatus = (tableData && tableData.status !== 'EMPTY') 
-        ? (tableData.status === 'SENT' ? 1 : tableData.status === 'BILL_REQUESTED' ? 2 : tableData.status === 'HOLD' ? 3 : tableData.status === 'LOCKED' ? 5 : 1)
-        : Number(item.Status);
+      const effectiveStatus =
+        tableData && tableData.status !== "EMPTY"
+          ? tableData.status === "SENT"
+            ? 1
+            : tableData.status === "BILL_REQUESTED"
+              ? 2
+              : tableData.status === "HOLD"
+                ? 3
+                : tableData.status === "LOCKED"
+                  ? 5
+                  : 1
+          : Number(item.Status);
 
       if (isCheckoutAction) {
         if (effectiveStatus !== 2) {
@@ -933,52 +1062,61 @@ export default function Category() {
   );
 
   const proceedWithTable = async (item: TableItem, tableData: any) => {
-      const effectiveStatus = (tableData && tableData.status !== 'EMPTY') 
-        ? (tableData.status === 'SENT' ? 1 : tableData.status === 'BILL_REQUESTED' ? 2 : tableData.status === 'HOLD' ? 3 : tableData.status === 'LOCKED' ? 5 : 1)
+    const effectiveStatus =
+      tableData && tableData.status !== "EMPTY"
+        ? tableData.status === "SENT"
+          ? 1
+          : tableData.status === "BILL_REQUESTED"
+            ? 2
+            : tableData.status === "HOLD"
+              ? 3
+              : tableData.status === "LOCKED"
+                ? 5
+                : 1
         : Number(item.Status);
-      const status = effectiveStatus;
+    const status = effectiveStatus;
 
-      let newContext: any;
-      if (activeTab !== "TAKEAWAY") {
-        newContext = {
-          orderType: "DINE_IN" as const,
-          section: activeTab,
-          tableNo: item.label,
-          tableId: item.id,
-        };
-      } else {
-        newContext = { 
-          orderType: "TAKEAWAY" as const, 
-          takeawayNo: item.label,
-          tableId: item.id 
-        };
+    let newContext: any;
+    if (activeTab !== "TAKEAWAY") {
+      newContext = {
+        orderType: "DINE_IN" as const,
+        section: activeTab,
+        tableNo: item.label,
+        tableId: item.id,
+      };
+    } else {
+      newContext = {
+        orderType: "TAKEAWAY" as const,
+        takeawayNo: item.label,
+        tableId: item.id,
+      };
+    }
+
+    setOrderContext(newContext);
+    const contextId = getContextId(newContext);
+    if (contextId) {
+      setCurrentContext(contextId);
+      // 🚀 BUG FIX: If table is empty, clear local cart immediately to prevent "popping" stale data
+      if (status === 0) {
+        setCartItemsGlobal(contextId, [], true); // skipSync=true to avoid double sync
       }
+    }
 
-      setOrderContext(newContext);
-      const contextId = getContextId(newContext);
-      if (contextId) {
-        setCurrentContext(contextId);
-        // 🚀 BUG FIX: If table is empty, clear local cart immediately to prevent "popping" stale data
-        if (status === 0) {
-          setCartItemsGlobal(contextId, [], true); // skipSync=true to avoid double sync
-        }
+    if (newContext.tableId) {
+      try {
+        await fetchCartFromDBGlobal(newContext.tableId);
+      } catch (err) {
+        console.error("❌ [Category] Failed to fetch shared cart:", err);
       }
-
-      if (newContext.tableId) {
-        try {
-          await fetchCartFromDBGlobal(newContext.tableId);
-        } catch (err) {
-          console.error("❌ [Category] Failed to fetch shared cart:", err);
-        }
-      } else if (tableData && tableData.status === "HOLD") {
-        const helds = getHeldOrders();
-        const held = helds.find((h: any) => h.orderId === tableData.orderId);
-        if (held && contextId) {
-          setCartItemsGlobal(contextId, held.cart);
-        }
+    } else if (tableData && tableData.status === "HOLD") {
+      const helds = getHeldOrders();
+      const held = helds.find((h: any) => h.orderId === tableData.orderId);
+      if (held && contextId) {
+        setCartItemsGlobal(contextId, held.cart);
       }
+    }
 
-      router.push("/menu/thai_kitchen");
+    router.push("/menu/thai_kitchen");
   };
 
   const handleGuestSubmit = async () => {
@@ -986,13 +1124,15 @@ export default function Category() {
     setIsSavingGuest(true);
     try {
       const cleanName = guestNameInput.trim().substring(0, 9);
-      const cleanPax = guestPaxInput.trim() ? parseInt(guestPaxInput.trim()) : null;
+      const cleanPax = guestPaxInput.trim()
+        ? parseInt(guestPaxInput.trim())
+        : null;
 
       // Track this table for potential cleanup if user exits without adding items
       lastGuestOpenedTable = {
         tableId: pendingGuestItem.id,
         customerName: cleanName || null,
-        pax: cleanPax || null
+        pax: cleanPax || null,
       };
 
       const res = await fetch(`${API_URL}/api/tables/save-guest`, {
@@ -1008,23 +1148,27 @@ export default function Category() {
 
       if (res.ok) {
         // Optimistically update table status store
-        const section = getSectionFromDiningSection(pendingGuestItem.DiningSection);
-        useTableStatusStore.getState().updateTableStatus(
-          pendingGuestItem.id,
-          section,
-          pendingGuestItem.label,
-          "EMPTY",
-          "EMPTY",
-          undefined,
-          undefined,
-          0,
-          false,
-          false,
-          undefined,
-          undefined,
-          cleanName || undefined,
-          cleanPax || undefined
+        const section = getSectionFromDiningSection(
+          pendingGuestItem.DiningSection,
         );
+        useTableStatusStore
+          .getState()
+          .updateTableStatus(
+            pendingGuestItem.id,
+            section,
+            pendingGuestItem.label,
+            "EMPTY",
+            "EMPTY",
+            undefined,
+            undefined,
+            0,
+            false,
+            false,
+            undefined,
+            undefined,
+            cleanName || undefined,
+            cleanPax || undefined,
+          );
         fetchTables();
       } else {
         const errData = await res.json();
@@ -1041,7 +1185,6 @@ export default function Category() {
       proceedWithTable(itemToOpen, null);
     }
   };
-
 
   // 🚀 Memoized Render Function for Table Grid
 
@@ -1061,10 +1204,16 @@ export default function Category() {
         />
       );
     },
-    [itemSize, activeTab, handleTablePress, numberFont, smallFont, width, height],
+    [
+      itemSize,
+      activeTab,
+      handleTablePress,
+      numberFont,
+      smallFont,
+      width,
+      height,
+    ],
   );
-
-
 
   if (loading) {
     return (
@@ -1230,8 +1379,6 @@ export default function Category() {
             </TouchableOpacity>
           )}
 
-
-
           {/* NEW CONSOLIDATED MENU BUTTON */}
           <TouchableOpacity
             style={[
@@ -1282,13 +1429,29 @@ export default function Category() {
               },
             ]}
           >
-            <Text style={{ fontSize: 22, fontWeight: "bold", color: Theme.textPrimary, marginBottom: 8 }}>
+            <Text
+              style={{
+                fontSize: 22,
+                fontWeight: "bold",
+                color: Theme.textPrimary,
+                marginBottom: 8,
+              }}
+            >
               QR Order
             </Text>
-            <Text style={{ fontSize: 14, color: Theme.textSecondary, marginBottom: 24, textAlign: 'center' }}>
+            <Text
+              style={{
+                fontSize: 14,
+                color: Theme.textSecondary,
+                marginBottom: 24,
+                textAlign: "center",
+              }}
+            >
               Scan this code to view the menu and place orders.
             </Text>
-            <View style={{ padding: 16, backgroundColor: '#fff', borderRadius: 8 }}>
+            <View
+              style={{ padding: 16, backgroundColor: "#fff", borderRadius: 8 }}
+            >
               <QRCode
                 value="https://example.com/menu"
                 size={200}
@@ -1303,12 +1466,14 @@ export default function Category() {
                 paddingHorizontal: 24,
                 backgroundColor: Theme.primary,
                 borderRadius: Theme.radiusMd,
-                width: '100%',
-                alignItems: 'center'
+                width: "100%",
+                alignItems: "center",
               }}
               onPress={() => setIsQRModalVisible(false)}
             >
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Close</Text>
+              <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}>
+                Close
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -1491,6 +1656,28 @@ export default function Category() {
                   <Text style={styles.menuItemText}>Sales Report</Text>
                 </TouchableOpacity>
               )}
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuVisible(false);
+                  router.push("/customer-display" as any);
+                }}
+              >
+                <View
+                  style={[
+                    styles.menuIconContainer,
+                    { backgroundColor: Theme.primary + "10" },
+                  ]}
+                >
+                  <Ionicons
+                    name="desktop-outline"
+                    size={18}
+                    color={Theme.primary}
+                  />
+                </View>
+                <Text style={styles.menuItemText}>Customer Display</Text>
+              </TouchableOpacity>
               {canAccessDayEnd() && (
                 <TouchableOpacity
                   style={styles.menuItem}
@@ -1558,9 +1745,13 @@ export default function Category() {
                         color={Theme.textSecondary}
                       />
                     </View>
-                    <Text style={[styles.menuItemText, { flex: 1 }]}>Settings</Text>
+                    <Text style={[styles.menuItemText, { flex: 1 }]}>
+                      Settings
+                    </Text>
                     <Ionicons
-                      name={isSettingsExpanded ? "chevron-down" : "chevron-forward"}
+                      name={
+                        isSettingsExpanded ? "chevron-down" : "chevron-forward"
+                      }
                       size={18}
                       color={Theme.textSecondary}
                     />
@@ -1588,7 +1779,9 @@ export default function Category() {
                               color={Theme.textSecondary}
                             />
                           </View>
-                          <Text style={styles.subMenuItemText}>Store Settings</Text>
+                          <Text style={styles.subMenuItemText}>
+                            Store Settings
+                          </Text>
                         </TouchableOpacity>
                       )}
 
@@ -1612,7 +1805,9 @@ export default function Category() {
                               color={Theme.primary}
                             />
                           </View>
-                          <Text style={styles.subMenuItemText}>General Settings</Text>
+                          <Text style={styles.subMenuItemText}>
+                            General Settings
+                          </Text>
                         </TouchableOpacity>
                       )}
 
@@ -1636,14 +1831,15 @@ export default function Category() {
                               color={Theme.primary}
                             />
                           </View>
-                          <Text style={styles.subMenuItemText}>Receipt Settings</Text>
+                          <Text style={styles.subMenuItemText}>
+                            Receipt Settings
+                          </Text>
                         </TouchableOpacity>
                       )}
                     </View>
                   )}
                 </>
               )}
-
 
               {/* Legend in Menu for Mobile */}
               {!isTablet && (
@@ -1802,7 +1998,7 @@ export default function Category() {
           offset: (itemSize + GAP) * Math.floor(index / columns),
           index,
         })}
-        removeClippedSubviews={Platform.OS !== 'web'}
+        removeClippedSubviews={Platform.OS !== "web"}
         maxToRenderPerBatch={isTablet ? 20 : 10}
         windowSize={3}
         initialNumToRender={isTablet ? 30 : 15}
@@ -1861,11 +2057,25 @@ export default function Category() {
               shadowRadius: 12,
             }}
           >
-            <Text style={{ fontSize: 18, fontFamily: Fonts.bold, color: Theme.textPrimary, marginBottom: 16 }}>
+            <Text
+              style={{
+                fontSize: 18,
+                fontFamily: Fonts.bold,
+                color: Theme.textPrimary,
+                marginBottom: 16,
+              }}
+            >
               Table {pendingGuestItem?.label} details
             </Text>
 
-            <Text style={{ fontSize: 13, fontFamily: Fonts.semiBold, color: Theme.textSecondary, marginBottom: 6 }}>
+            <Text
+              style={{
+                fontSize: 13,
+                fontFamily: Fonts.semiBold,
+                color: Theme.textSecondary,
+                marginBottom: 6,
+              }}
+            >
               Enter Name (Optional - Max 9 chars)
             </Text>
             <TextInput
@@ -1887,7 +2097,14 @@ export default function Category() {
               maxLength={9}
             />
 
-            <Text style={{ fontSize: 13, fontFamily: Fonts.semiBold, color: Theme.textSecondary, marginBottom: 6 }}>
+            <Text
+              style={{
+                fontSize: 13,
+                fontFamily: Fonts.semiBold,
+                color: Theme.textSecondary,
+                marginBottom: 6,
+              }}
+            >
               Pax / Persons (Optional)
             </Text>
             <TextInput
@@ -1905,11 +2122,19 @@ export default function Category() {
               placeholder="Number of persons"
               placeholderTextColor={Theme.textMuted}
               value={guestPaxInput}
-              onChangeText={(text) => setGuestPaxInput(text.replace(/[^0-9]/g, ''))}
+              onChangeText={(text) =>
+                setGuestPaxInput(text.replace(/[^0-9]/g, ""))
+              }
               keyboardType="numeric"
             />
 
-            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 12 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "flex-end",
+                gap: 12,
+              }}
+            >
               <TouchableOpacity
                 style={{
                   paddingVertical: 10,
@@ -1928,7 +2153,13 @@ export default function Category() {
                   }
                 }}
               >
-                <Text style={{ color: Theme.textSecondary, fontFamily: Fonts.semiBold, fontSize: 14 }}>
+                <Text
+                  style={{
+                    color: Theme.textSecondary,
+                    fontFamily: Fonts.semiBold,
+                    fontSize: 14,
+                  }}
+                >
                   Skip
                 </Text>
               </TouchableOpacity>
@@ -1945,7 +2176,13 @@ export default function Category() {
                 disabled={isSavingGuest}
                 onPress={handleGuestSubmit}
               >
-                <Text style={{ color: "#FFF", fontFamily: Fonts.bold, fontSize: 14 }}>
+                <Text
+                  style={{
+                    color: "#FFF",
+                    fontFamily: Fonts.bold,
+                    fontSize: 14,
+                  }}
+                >
                   {isSavingGuest ? "Saving..." : "Enter"}
                 </Text>
               </TouchableOpacity>
