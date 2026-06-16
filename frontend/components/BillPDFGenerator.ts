@@ -212,47 +212,18 @@ static async loadSettings(userId?: string | number): Promise<CompanySettings> {
         // ✅ Add timestamp to prevent caching
         const timestamp = Date.now();
         
-        // ✅ STEP 1: DELETE old settings first (to ensure clean slate)
-        try {
-            await API.delete(`/company-settings/${targetId}?_t=${timestamp}`);
-            console.log('✅ Old settings deleted');
-        } catch (deleteError: any) {
-            // 404 is fine (no existing settings)
-            if (deleteError.response?.status !== 404) {
-                console.log('⚠️ Delete failed:', deleteError.message);
-            } else {
-                console.log('ℹ️ No existing settings to delete');
-            }
-        }
-        
-        // ✅ Small delay to ensure delete completes
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // ✅ STEP 2: POST new settings
+        // ✅ STEP 1: POST settings (Upsert)
         const response = await API.post(`/company-settings/${targetId}?_t=${timestamp}`, dbSettings);
         
         console.log('✅ SAVE RESPONSE:', response.data);
         
-        // ✅ STEP 3: VERIFY immediately (to confirm save worked)
-        const verifyResponse = await API.get(`/company-settings/${targetId}?_t=${timestamp + 1}`);
-        const savedSettings = verifyResponse.data?.settings;
-        
-        console.log('🔍 VERIFY AFTER SAVE:', {
-            ShowCompanyLogo: savedSettings?.ShowCompanyLogo,
-            expected: dbSettings.ShowCompanyLogo,
-            match: !!savedSettings?.ShowCompanyLogo === !!dbSettings.ShowCompanyLogo
-        });
-        
-        // ✅ STEP 4: Double check with boolean conversion
-        if (!!savedSettings?.ShowCompanyLogo !== !!dbSettings.ShowCompanyLogo) {
-            console.log('⚠️ WARNING: Save verification failed! Trying one last time...');
-            await API.post(`/company-settings/${targetId}?_t=${timestamp + 2}`, dbSettings);
+        if (response.data && response.data.success) {
+            // Invalidate settings cache
+            delete this.settingsCache[targetId];
+            return true;
         }
         
-        // Invalidate settings cache
-        delete this.settingsCache[targetId];
-        
-        return true;
+        return false;
         
     } catch (error: any) {
         console.log('❌ Error saving settings:', error);

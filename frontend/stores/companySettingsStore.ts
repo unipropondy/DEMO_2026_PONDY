@@ -106,6 +106,11 @@ export const useCompanySettingsStore = create<CompanySettingsState>()(
         // Update local state first for immediate UI response
         set({ settings: updated });
 
+        // Only persist to the backend database if userId is explicitly provided
+        if (!userId) {
+          return true;
+        }
+
         try {
           // Map frontend names back to backend DB names
           const payload = {
