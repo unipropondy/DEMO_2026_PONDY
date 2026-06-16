@@ -1056,6 +1056,7 @@ class UniversalPrinter {
     text += `[C]<B>${(company.name || "YOUR STORE").toUpperCase()}</B>\n`;
     if (company.address) text += `[C]${company.address}\n`;
     if (company.phone) text += `[C]Tel: ${company.phone}\n`;
+    if (company.email) text += `[C]Email: ${company.email}\n`;
     text += "[C]------------------------------------------------\n";
 
     const saleDate = saleData.originalDate ? new Date(saleData.originalDate) : 
