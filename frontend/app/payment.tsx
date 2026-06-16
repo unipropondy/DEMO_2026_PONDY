@@ -2213,6 +2213,134 @@ export default function PaymentScreen() {
                       </View>
                     )}
 
+                    {/* On mobile, show Ledger Collection Details inside left pane */}
+                    {!showOrderPanel && isLedgerCollection && (
+                      <View style={styles.creditMemberSection}>
+                        <View style={styles.sectionHeader}>
+                          <Text style={styles.sectionTitle}>
+                            Ledger Collection Details
+                          </Text>
+                        </View>
+                        <View style={styles.selectedCreditCard}>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              justifyContent: "space-between",
+                              marginBottom: 8,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontFamily: Fonts.bold,
+                                color: Theme.textSecondary,
+                                fontSize: 13,
+                              }}
+                            >
+                              Customer Name
+                            </Text>
+                            <Text
+                              style={{
+                                fontFamily: Fonts.black,
+                                color: Theme.textPrimary,
+                                fontSize: 13,
+                              }}
+                            >
+                              {memberName}
+                            </Text>
+                          </View>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              justifyContent: "space-between",
+                              marginBottom: 8,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontFamily: Fonts.bold,
+                                color: Theme.textSecondary,
+                                fontSize: 13,
+                              }}
+                            >
+                              Phone Number
+                            </Text>
+                            <Text
+                              style={{
+                                fontFamily: Fonts.black,
+                                color: Theme.textPrimary,
+                                fontSize: 13,
+                              }}
+                            >
+                              {memberPhone}
+                            </Text>
+                          </View>
+                          <View
+                            style={{
+                              height: 1,
+                              backgroundColor: Theme.border,
+                              marginVertical: 8,
+                            }}
+                          />
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontFamily: Fonts.bold,
+                                color: Theme.textSecondary,
+                                fontSize: 13,
+                              }}
+                            >
+                              Amount to Collect
+                            </Text>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                backgroundColor: Theme.bgCard,
+                                borderWidth: 1,
+                                borderColor: Theme.border,
+                                borderRadius: 8,
+                                paddingHorizontal: 10,
+                                height: 40,
+                                width: 140,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontFamily: Fonts.black,
+                                  color: Theme.textPrimary,
+                                  marginRight: 2,
+                                }}
+                              >
+                                {currencySymbol}
+                              </Text>
+                              <TextInput
+                                style={{
+                                  flex: 1,
+                                  fontFamily: Fonts.black,
+                                  color: Theme.primary,
+                                  fontSize: 16,
+                                  padding: 0,
+                                  ...Platform.select({
+                                    web: { outlineStyle: "none" } as any,
+                                  }),
+                                }}
+                                value={collectionAmount}
+                                onChangeText={handleAmountChange}
+                                keyboardType="numeric"
+                                placeholder="0.00"
+                              />
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    )}
+
                     <View style={{ marginTop: 15 }}>
                       <TouchableOpacity
                         style={[
@@ -2483,20 +2611,26 @@ export default function PaymentScreen() {
                           style={{
                             flexDirection: "row",
                             justifyContent: "space-between",
+                            alignItems: "center",
                           }}
                         >
                           <Text
                             style={{
                               fontFamily: Fonts.bold,
                               color: Theme.textSecondary,
+                              marginRight: 10,
                             }}
                           >
                             Customer Name
                           </Text>
                           <Text
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
                             style={{
                               fontFamily: Fonts.black,
                               color: Theme.textPrimary,
+                              flexShrink: 1,
+                              textAlign: "right",
                             }}
                           >
                             {memberName}
@@ -2506,20 +2640,26 @@ export default function PaymentScreen() {
                           style={{
                             flexDirection: "row",
                             justifyContent: "space-between",
+                            alignItems: "center",
                           }}
                         >
                           <Text
                             style={{
                               fontFamily: Fonts.bold,
                               color: Theme.textSecondary,
+                              marginRight: 10,
                             }}
                           >
                             Phone Number
                           </Text>
                           <Text
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
                             style={{
                               fontFamily: Fonts.black,
                               color: Theme.textPrimary,
+                              flexShrink: 1,
+                              textAlign: "right",
                             }}
                           >
                             {memberPhone}
@@ -3281,6 +3421,8 @@ const styles = StyleSheet.create({
   orderBadgeRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
+    justifyContent: "center",
     gap: 6,
     marginTop: 2,
   },
