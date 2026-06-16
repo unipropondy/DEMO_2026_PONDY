@@ -655,49 +655,152 @@ export default function ReceivablesScreen() {
           )}
 
           {/* --- Navigation Tabs --- */}
-          <View style={styles.tabsWrapper}>
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === "DASHBOARD" && styles.activeTabBtn]}
-              onPress={() => setActiveTab("DASHBOARD")}
+          {/* --- Navigation Tabs --- */}
+          {isMobile ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 8, paddingBottom: 5 }}
             >
-              <Ionicons
-                name="people"
-                size={16}
-                color={activeTab === "DASHBOARD" ? "#FFF" : Theme.textSecondary}
-              />
-              <Text style={[styles.tabText, activeTab === "DASHBOARD" && styles.activeTabText]}>
-                Credit Accounts
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.tabBtnMobile,
+                  activeTab === "DASHBOARD" && styles.activeTabBtn,
+                ]}
+                onPress={() => setActiveTab("DASHBOARD")}
+              >
+                <Ionicons
+                  name="people"
+                  size={14}
+                  color={
+                    activeTab === "DASHBOARD" ? "#FFF" : Theme.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.tabTextMobile,
+                    activeTab === "DASHBOARD" && styles.activeTabText,
+                  ]}
+                >
+                  Credit Accounts
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === "AGING" && styles.activeTabBtn]}
-              onPress={() => setActiveTab("AGING")}
-            >
-              <Ionicons
-                name="hourglass-outline"
-                size={16}
-                color={activeTab === "AGING" ? "#FFF" : Theme.textSecondary}
-              />
-              <Text style={[styles.tabText, activeTab === "AGING" && styles.activeTabText]}>
-                Aging Analysis
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.tabBtnMobile,
+                  activeTab === "AGING" && styles.activeTabBtn,
+                ]}
+                onPress={() => setActiveTab("AGING")}
+              >
+                <Ionicons
+                  name="hourglass-outline"
+                  size={14}
+                  color={activeTab === "AGING" ? "#FFF" : Theme.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.tabTextMobile,
+                    activeTab === "AGING" && styles.activeTabText,
+                  ]}
+                >
+                  Aging Analysis
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === "REPORTS" && styles.activeTabBtn]}
-              onPress={() => setActiveTab("REPORTS")}
-            >
-              <Ionicons
-                name="document-text-outline"
-                size={16}
-                color={activeTab === "REPORTS" ? "#FFF" : Theme.textSecondary}
-              />
-              <Text style={[styles.tabText, activeTab === "REPORTS" && styles.activeTabText]}>
-                Reports
-              </Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={[
+                  styles.tabBtnMobile,
+                  activeTab === "REPORTS" && styles.activeTabBtn,
+                ]}
+                onPress={() => setActiveTab("REPORTS")}
+              >
+                <Ionicons
+                  name="document-text-outline"
+                  size={14}
+                  color={activeTab === "REPORTS" ? "#FFF" : Theme.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.tabTextMobile,
+                    activeTab === "REPORTS" && styles.activeTabText,
+                  ]}
+                >
+                  Reports
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          ) : (
+            <View style={styles.tabsWrapper}>
+              <TouchableOpacity
+                style={[
+                  styles.tabBtn,
+                  activeTab === "DASHBOARD" && styles.activeTabBtn,
+                ]}
+                onPress={() => setActiveTab("DASHBOARD")}
+              >
+                <Ionicons
+                  name="people"
+                  size={16}
+                  color={
+                    activeTab === "DASHBOARD" ? "#FFF" : Theme.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === "DASHBOARD" && styles.activeTabText,
+                  ]}
+                >
+                  Credit Accounts
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.tabBtn,
+                  activeTab === "AGING" && styles.activeTabBtn,
+                ]}
+                onPress={() => setActiveTab("AGING")}
+              >
+                <Ionicons
+                  name="hourglass-outline"
+                  size={16}
+                  color={activeTab === "AGING" ? "#FFF" : Theme.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === "AGING" && styles.activeTabText,
+                  ]}
+                >
+                  Aging Analysis
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.tabBtn,
+                  activeTab === "REPORTS" && styles.activeTabBtn,
+                ]}
+                onPress={() => setActiveTab("REPORTS")}
+              >
+                <Ionicons
+                  name="document-text-outline"
+                  size={16}
+                  color={activeTab === "REPORTS" ? "#FFF" : Theme.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === "REPORTS" && styles.activeTabText,
+                  ]}
+                >
+                  Reports
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* --- Search Bar --- */}
           <View style={styles.searchWrapper}>
@@ -1392,6 +1495,23 @@ const styles = StyleSheet.create({
   activeTabBtn: { backgroundColor: Theme.primary, borderColor: Theme.primary },
   tabText: { fontFamily: Fonts.bold, color: Theme.textSecondary, fontSize: 13 },
   activeTabText: { color: "#FFF" },
+  tabBtnMobile: {
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: Theme.bgCard,
+    borderWidth: 1,
+    borderColor: Theme.border,
+  },
+  tabTextMobile: {
+    fontFamily: Fonts.bold,
+    color: Theme.textSecondary,
+    fontSize: 12,
+  },
 
   // Search Bar
   searchWrapper: { marginHorizontal: 20, marginBottom: 15 },
