@@ -586,14 +586,14 @@ export default function MenuScreen() {
         : (width > 1200 ? 7 : 5)
       : showCart
         ? 2
-        : 3
+        : 4 // At least 4 columns for tablet portrait when cart is off
     : isLandscape
       ? showCart
-        ? 2
-        : 3
+        ? 3
+        : 4 // 4 per row for mobile landscape when cart is off
       : showCart
         ? 1
-        : 2;
+        : 3; // 3 columns for mobile portrait when cart is off
 
   const gap = isPhone ? (isLandscape ? 12 : 8) : 12;
   // Increase internal padding subtraction (24 -> 32) to ensure cards don't touch edges or sidebar

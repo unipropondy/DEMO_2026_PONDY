@@ -24,6 +24,11 @@ import { useAuthStore } from "@/stores/authStore";
 import { useRouter, useSegments, Slot } from "expo-router";
 import * as SystemUI from "expo-system-ui";
 import { Theme } from "@/constants/theme";
+import { LogBox } from "react-native";
+
+LogBox.ignoreLogs([
+  "setLayoutAnimationEnabledExperimental is currently a no-op",
+]);
 
 // Set root background immediately to match theme
 SystemUI.setBackgroundColorAsync(Theme.bgMain);
@@ -48,7 +53,7 @@ global.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Pr
   const url = typeof input === 'string' ? input : (input instanceof URL ? input.href : (input as any).url);
 
   if (url && url.includes(API_URL)) {
-    const maxRetries = 2;
+    const maxRetries = 4;
     let delay = 500;
     let lastError: any = null;
 
@@ -87,7 +92,7 @@ global.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Pr
 
       if (attempt < maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, delay));
-        delay *= 1.5;
+        delay *= 2.0; // Stronger backoff: 500ms -> 1000ms -> 2000ms -> 4000ms
       }
     }
     throw lastError;
