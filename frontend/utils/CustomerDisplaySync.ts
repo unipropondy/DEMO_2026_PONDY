@@ -1,4 +1,5 @@
 import { socket } from "../constants/socket";
+import { useGeneralSettingsStore } from "../stores/generalSettingsStore";
 
 export interface SyncCartParams {
   orderContext: {
@@ -37,6 +38,9 @@ export const CustomerDisplaySync = {
 
   syncCart: (params: SyncCartParams) => {
     try {
+      const isDisplayOn = useGeneralSettingsStore.getState().settings.customerSideDisplay;
+      if (!isDisplayOn) return;
+
       const { orderContext, cart, discountInfo, gstPercentage, roundOff, active, orderId, paymentMethod } = params;
       
       const currencySymbol = "$";
@@ -143,6 +147,9 @@ export const CustomerDisplaySync = {
 
   syncIdle: () => {
     try {
+      const isDisplayOn = useGeneralSettingsStore.getState().settings.customerSideDisplay;
+      if (!isDisplayOn) return;
+
       if (CustomerDisplaySync.isPaymentActive) {
         console.log("🖥️ [CustomerDisplaySync] syncIdle blocked because payment is active");
         return;
@@ -159,6 +166,9 @@ export const CustomerDisplaySync = {
 
   syncPaymentSuccess: (params: PaymentSuccessParams) => {
     try {
+      const isDisplayOn = useGeneralSettingsStore.getState().settings.customerSideDisplay;
+      if (!isDisplayOn) return;
+
       console.log("🖥️ [CustomerDisplaySync] Emitting payment success:", params.orderId);
       socket.emit("customer_display_sync", {
         active: true,
