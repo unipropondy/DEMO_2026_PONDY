@@ -166,16 +166,27 @@ router.post("/verify", async (req, res) => {
         )
     `;
 
-    if (role) {
-      query += ` AND (UPPER(g.UserGroupCode) = @role OR UPPER(g.UserGroupName) = @role)`;
-    }
-
     const request = pool.request()
       .input("password", sql.VarChar, password)
       .input("base64Password", sql.VarChar, base64Password);
 
     if (role) {
-      request.input("role", sql.VarChar, role.toUpperCase());
+      let roleList = [];
+      if (Array.isArray(role)) {
+        roleList = role.map(r => String(r).toUpperCase().trim());
+      } else if (typeof role === 'string') {
+        roleList = role.split(',').map(r => r.toUpperCase().trim());
+      }
+
+      if (roleList.length > 0) {
+        const conditions = [];
+        roleList.forEach((r, idx) => {
+          const paramName = `role_${idx}`;
+          request.input(paramName, sql.VarChar, r);
+          conditions.push(`UPPER(g.UserGroupCode) = @${paramName} OR UPPER(g.UserGroupName) = @${paramName}`);
+        });
+        query += ` AND (${conditions.join(' OR ')})`;
+      }
     }
 
     const result = await request.query(query);

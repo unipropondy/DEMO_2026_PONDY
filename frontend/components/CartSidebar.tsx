@@ -2503,12 +2503,12 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
           const verifyRes = await fetch(`${API_URL}/api/auth/verify`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ password, role: "Void" }),
+            body: JSON.stringify({ password, role: "Void,ADMIN" }),
           });
           const verifyData = await verifyRes.json();
 
           if (!verifyData.success) {
-            showToast({ type: "error", message: "Incorrect Void Password" });
+            showToast({ type: "error", message: "Incorrect Password" });
             return;
           }
 
