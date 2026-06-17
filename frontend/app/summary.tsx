@@ -329,12 +329,13 @@ export default function SummaryScreen() {
   };
 
   const handleCancelOrder = async (reason: string, password: string) => {
-    // Securely verify password with backend - checks for any Admin/Manager password
+    // Securely verify password with backend - checks for Void group password
     const verifyRes = await fetch(`${API_URL}/api/auth/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         password: password,
+        role: "Void",
       }),
     });
     const verifyData = await verifyRes.json();
@@ -342,8 +343,8 @@ export default function SummaryScreen() {
     if (!verifyData.success) {
       showToast({
         type: "error",
-        message: "Incorrect Password",
-        subtitle: "Admin password required to cancel order",
+        message: "Incorrect Void Password",
+        subtitle: "Void password required to cancel order",
       });
       return;
     }
@@ -1485,7 +1486,7 @@ export default function SummaryScreen() {
           const verifyRes = await fetch(`${API_URL}/api/auth/verify`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ password }),
+            body: JSON.stringify({ password, role: "Void" }),
           });
           const verifyData = await verifyRes.json();
 
@@ -1525,8 +1526,8 @@ export default function SummaryScreen() {
           } else {
             showToast({
               type: "error",
-              message: "Incorrect Password",
-              subtitle: "Admin password required",
+              message: "Incorrect Void Password",
+              subtitle: "Void password required",
             });
           }
         }}

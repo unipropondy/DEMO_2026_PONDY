@@ -36,7 +36,7 @@ const VoidItemModal = ({
 
           <TextInput
             style={styles.passwordInput}
-            placeholder="Admin Password"
+            placeholder="Void Password"
             placeholderTextColor={Theme.textMuted}
             value={password}
             onChangeText={setPassword}

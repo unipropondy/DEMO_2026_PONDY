@@ -143,7 +143,7 @@ router.post("/login", async (req, res) => {
 /* ================= AUTH - VERIFY PASSWORD (ROLE-BASED) ================= */
 router.post("/verify", async (req, res) => {
   try {
-    const { password } = req.body;
+    const { password, role } = req.body;
 
     if (!password) {
       return res.status(400).json({ success: false, message: "Missing password" });
@@ -152,23 +152,33 @@ router.post("/verify", async (req, res) => {
     const pool = await poolPromise;
     const base64Password = Buffer.from(password).toString("base64");
 
-    // Perform database-level search to avoid pulling all credentials into Express memory
-    const result = await pool.request()
+    let query = `
+      SELECT TOP 1 u.UserId 
+      FROM [dbo].[UserMaster] u
+      INNER JOIN [dbo].[UserGroupMaster] g ON u.UserGroupid = g.UserGroupId
+      WHERE (u.IsDisabled IS NULL OR u.IsDisabled = 0)
+        AND g.isActive = 1
+        AND (
+          u.UserPassword = @password
+          OR u.UserPassword = @base64Password
+          OR u.UserPassword LIKE @password + '-%'
+          OR u.UserPassword LIKE @base64Password + '-%'
+        )
+    `;
+
+    if (role) {
+      query += ` AND (UPPER(g.UserGroupCode) = @role OR UPPER(g.UserGroupName) = @role)`;
+    }
+
+    const request = pool.request()
       .input("password", sql.VarChar, password)
-      .input("base64Password", sql.VarChar, base64Password)
-      .query(`
-        SELECT TOP 1 u.UserId 
-        FROM [dbo].[UserMaster] u
-        INNER JOIN [dbo].[UserGroupMaster] g ON u.UserGroupid = g.UserGroupId
-        WHERE (u.IsDisabled IS NULL OR u.IsDisabled = 0)
-          AND g.isActive = 1
-          AND (
-            u.UserPassword = @password
-            OR u.UserPassword = @base64Password
-            OR u.UserPassword LIKE @password + '-%'
-            OR u.UserPassword LIKE @base64Password + '-%'
-          )
-      `);
+      .input("base64Password", sql.VarChar, base64Password);
+
+    if (role) {
+      request.input("role", sql.VarChar, role.toUpperCase());
+    }
+
+    const result = await request.query(query);
 
     const isValid = result.recordset.length > 0;
     return res.json({ success: isValid });

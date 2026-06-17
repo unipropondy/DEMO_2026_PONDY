@@ -217,12 +217,12 @@ const CancelOrderModal = ({
                   { marginBottom: 10, fontWeight: "bold", color: Theme.textPrimary, textAlign: 'left' },
                 ]}
               >
-                Enter Admin Password
+                Enter Void Password
               </Text>
               <TextInput
                 ref={passwordInputRef}
                 style={[styles.customReasonInput, { minHeight: 50, marginTop: 0 }]}
-                placeholder="Admin Password"
+                placeholder="Void Password"
                 placeholderTextColor={Theme.textMuted}
                 value={password}
                 onChangeText={setPassword}
