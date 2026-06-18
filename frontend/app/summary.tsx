@@ -381,31 +381,6 @@ export default function SummaryScreen() {
         throw new Error(cancelData.error || "Failed to cancel order in backend");
       }
 
-      // Local State cleanup
-      if (context && activeOrder) {
-        closeActiveOrder(activeOrder.orderId);
-        // Clear both unsent and sent items locally for this context
-        if (context.tableId) {
-          useCartStore.getState().setCartItems(context.tableId, [], true);
-        }
-        clearCart(); // This clears unsent items for the current context
-        useOrderContextStore.getState().clearOrderContext(); // Clear context
-        
-        if (
-          context.orderType === "DINE_IN" &&
-          context.section &&
-          context.tableNo
-        ) {
-          updateTableStatus(
-            context.tableId || "",
-            context.section,
-            context.tableNo,
-            "",
-            "EMPTY",
-          );
-        }
-      }
-
       showToast({
         type: "success",
         message: "Order Cancelled Successfully",
@@ -418,6 +393,30 @@ export default function SummaryScreen() {
       setCancelPassword("");
 
       setTimeout(() => {
+        // Local State cleanup
+        if (context && activeOrder) {
+          closeActiveOrder(activeOrder.orderId);
+          // Clear both unsent and sent items locally for this context
+          if (context.tableId) {
+            useCartStore.getState().setCartItems(context.tableId, [], true);
+          }
+          clearCart(); // This clears unsent items for the current context
+          useOrderContextStore.getState().clearOrderContext(); // Clear context
+          
+          if (
+            context.orderType === "DINE_IN" &&
+            context.section &&
+            context.tableNo
+          ) {
+            updateTableStatus(
+              context.tableId || "",
+              context.section,
+              context.tableNo,
+              "",
+              "EMPTY",
+            );
+          }
+        }
         router.replace("/(tabs)/category");
       }, 500);
     } catch (error: any) {
