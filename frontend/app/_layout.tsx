@@ -197,6 +197,8 @@ export default function RootLayout() {
           <Stack.Screen name="payment" />
           <Stack.Screen name="payment_success" />
           <Stack.Screen name="cart" />
+          <Stack.Screen name="cash-drawer" />
+          <Stack.Screen name="cash-drawer-report" />
           <Stack.Screen name="TimeEntry" />
         </Stack>
         <StatusBar style="light" />

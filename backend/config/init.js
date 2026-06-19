@@ -506,6 +506,51 @@ async function initDB(pool) {
     // 19. dishOrderItemShare updates
     await runQuery("dishOrderItemShare - TargetAmount", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[dishOrderItemShare]') AND name = 'TargetAmount') ALTER TABLE [dbo].[dishOrderItemShare] ADD TargetAmount DECIMAL(18, 2) DEFAULT 0");
 
+    // 20. Create CashDrawerRemarks table
+    await runQuery("Create CashDrawerRemarks table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerRemarks]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[CashDrawerRemarks](
+              [Id] [int] IDENTITY(1,1) NOT NULL PRIMARY KEY,
+              [Description] [nvarchar](100) NOT NULL
+          )
+      END
+    `);
+
+    // 21. Seed default CashDrawerRemarks
+    await runQuery("Seed default CashDrawerRemarks", `
+      IF NOT EXISTS (SELECT TOP 1 1 FROM [dbo].[CashDrawerRemarks])
+      BEGIN
+          INSERT INTO [dbo].[CashDrawerRemarks] (Description) VALUES
+          ('Cash In'), ('Cash Out'), ('Opening Float'),
+          ('Drawer Check'), ('Other')
+      END
+    `);
+
+    // 22. Create CashDrawerLog table
+    await runQuery("Create CashDrawerLog table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[CashDrawerLog](
+              [LogId] [uniqueidentifier] NOT NULL PRIMARY KEY DEFAULT NEWID(),
+              [OutletId] [int] NOT NULL DEFAULT 1,
+              [TerminalCode] [nvarchar](50) NULL,
+              [ActionType] [nvarchar](30) NULL,
+              [Amount] [decimal](18, 2) NULL,
+              [TenderedAmount] [decimal](18, 2) NULL,
+              [ChangeAmount] [decimal](18, 2) NULL,
+              [OrderId] [nvarchar](100) NULL,
+              [Reason] [nvarchar](100) NULL,
+              [Remark] [nvarchar](500) NULL,
+              [OpenedByUserId] [nvarchar](100) NULL,
+              [ApprovedByUserId] [nvarchar](100) NULL,
+              [OpenSource] [nvarchar](20) NOT NULL,
+              [IsSuccess] [bit] NOT NULL DEFAULT 1,
+              [CreatedOn] [datetime] DEFAULT GETDATE()
+          )
+      END
+    `);
+
     console.log("✅ Database schema and performance indexes are up to date.");
 
     // 🔄 Auto-sync kitchens to PrintMaster on every startup

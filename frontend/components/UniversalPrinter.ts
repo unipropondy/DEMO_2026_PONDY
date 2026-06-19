@@ -70,11 +70,15 @@ class UniversalPrinter {
     }
   }
 
-  static async openCashDrawer(): Promise<boolean> {
-    // Currently disabled to prevent crashes with uninstalled native modules
-    // Use sunmi-printer-expo for this if supported in future
-    console.log("Cash drawer opening requested");
-    return false;
+  static async openCashDrawer(printerIpOverride?: string): Promise<boolean> {
+    try {
+      const { default: CashDrawerService } = await import('../services/CashDrawerService');
+      const ip = printerIpOverride || await CashDrawerService.getCashierPrinterIp();
+      return await CashDrawerService.openCashDrawer(ip);
+    } catch (e) {
+      console.warn('[UniversalPrinter] Cash drawer open failed:', e);
+      return false;
+    }
   }
 
   private static getPrintWidth(printer: PrinterInfo): number {

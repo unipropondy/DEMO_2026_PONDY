@@ -16,6 +16,7 @@ import UniversalPrinter from "../components/UniversalPrinter";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCompanySettingsStore } from "../stores/companySettingsStore";
 import { CustomerDisplaySync } from "../utils/CustomerDisplaySync";
+import CashDrawerService from "../services/CashDrawerService";
 
 const formatSection = (sec: string) => {
   if (!sec) return "";
@@ -96,6 +97,32 @@ export default function PaymentSuccess() {
     }
   };
 
+  const openDrawerForCash = async () => {
+    const isCash = /^(CAS|CASH)$/i.test(method.trim()) || 
+                   (payments && payments.some((p: any) => /^(CAS|CASH)$/i.test((p.payMode || p.payModeName || '').trim())));
+    if (!isCash) return;
+
+    try {
+      const userIdVal = await AsyncStorage.getItem("userId") || "1";
+      const terminalCodeVal = await AsyncStorage.getItem("terminalCode") || "T1";
+      
+      await CashDrawerService.openAndLog({
+        outletId: 1,
+        terminalCode: terminalCodeVal,
+        actionType: 'SALE',
+        amount: parseFloat(total) || 0,
+        tenderedAmount: parseFloat(paid) || 0,
+        changeAmount: parseFloat(change) || 0,
+        orderId: orderId || null,
+        reason: 'Cash Sale Checkout',
+        openedByUserId: userIdVal,
+        openSource: 'SALE',
+      });
+    } catch (err) {
+      console.warn("Auto open cash drawer failed:", err);
+    }
+  };
+
   const handlePrint = async () => {
     setPromptVisible(false);
     try {
@@ -130,6 +157,7 @@ export default function PaymentSuccess() {
       };
 
       await UniversalPrinter.smartPrint(saleData, userId, {}, discountInfo);
+      await openDrawerForCash();
     } catch (error) {
       console.error("Print error:", error);
     }
@@ -197,8 +225,14 @@ export default function PaymentSuccess() {
 
       <BillPrompt
         visible={promptVisible}
-        onClose={() => setPromptVisible(false)}
-        onSkip={() => setPromptVisible(false)}
+        onClose={async () => {
+          setPromptVisible(false);
+          await openDrawerForCash();
+        }}
+        onSkip={async () => {
+          setPromptVisible(false);
+          await openDrawerForCash();
+        }}
         onPrintBill={handlePrint}
         theme={Theme}
         t={{

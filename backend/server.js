@@ -240,6 +240,8 @@ app.use("/api/credit-customers", creditCustomerRoutes);
 app.use("/api/settlement", settlementRoutes);
 app.use("/api/settlement", settlementLegacyRoutes);
 app.use('/api/yeahpay', yeahpayRoutes);
+const cashDrawerRouter = require("./routes/cashDrawer");
+app.use("/api/cash-drawer", cashDrawerRouter);
 // AI Chat Integration
 const aiRouter = require("./ai-service-src/routes/ai.routes");
 const rateLimit = require("express-rate-limit");

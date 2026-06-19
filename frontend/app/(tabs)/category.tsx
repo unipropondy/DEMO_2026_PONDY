@@ -1702,6 +1702,29 @@ export default function Category() {
                 </TouchableOpacity>
               )}
 
+              {/* Cash Drawer — visible to all roles, PIN gate is inside the screen */}
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuVisible(false);
+                  router.push("/cash-drawer" as any);
+                }}
+              >
+                <View
+                  style={[
+                    styles.menuIconContainer,
+                    { backgroundColor: "#16A34A10" },
+                  ]}
+                >
+                  <Ionicons
+                    name="cash-outline"
+                    size={18}
+                    color="#16A34A"
+                  />
+                </View>
+                <Text style={styles.menuItemText}>Cash Drawer</Text>
+              </TouchableOpacity>
+
               {canAccessDayEnd() && (
                 <TouchableOpacity
                   style={styles.menuItem}
