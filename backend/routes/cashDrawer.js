@@ -62,7 +62,27 @@ router.post('/log', authenticateToken, async (req, res) => {
 
     // 2. Settlement Integration (if trigger succeeded)
     if (isSuccess !== false) {
-      if (actionType === 'CASH_OUT' && amount > 0) {
+      if (actionType === 'CASH_IN' && amount > 0) {
+        // Generate cash in number
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const randId = Math.floor(1000 + Math.random() * 9000);
+        const cashInNo = `CI-${dateStr}-${randId}`;
+
+        const cashInReq = new sql.Request(transaction);
+        await cashInReq
+          .input('CashInNo', sql.VarChar(50), cashInNo)
+          .input('Amount', sql.Decimal(18, 2), amount)
+          .input('Reason', sql.VarChar(255), reason || 'Cash Drawer Deposit')
+          .input('Remarks', sql.VarChar(sql.MAX), remark || '')
+          .input('PaymentMode', sql.VarChar(50), 'Cash')
+          .input('ReferenceNo', orderId || '')
+          .input('TerminalCode', sql.VarChar(50), finalTerminalCode)
+          .input('CreatedBy', sql.VarChar(100), cashierName)
+          .query(`
+            INSERT INTO CashInEntry (CashInNo, CashInDate, Amount, Reason, Remarks, PaymentMode, ReferenceNo, TerminalCode, CreatedBy, CreatedOn)
+            VALUES (@CashInNo, CAST(GETDATE() AS DATE), @Amount, @Reason, @Remarks, @PaymentMode, @ReferenceNo, @TerminalCode, @CreatedBy, GETDATE())
+          `);
+      } else if (actionType === 'CASH_OUT' && amount > 0) {
         // Generate payout number
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         const randId = Math.floor(1000 + Math.random() * 9000);

@@ -477,6 +477,135 @@ router.get('/cash-out/:terminal', authenticateToken, async (req, res) => {
   }
 });
 
+// GET Cash In entries for today
+router.get('/cash-in/:terminal', authenticateToken, async (req, res) => {
+  try {
+    const { terminal } = req.params;
+    const { fromDate, toDate } = req.query;
+    const pool = getPool();
+    const request = pool.request();
+
+    let dateFilter = "CAST(CashInDate as DATE) = CAST(GETDATE() as DATE)";
+    if (fromDate && toDate) {
+      request.input("fromDate", sql.Date, new Date(fromDate));
+      request.input("toDate", sql.Date, new Date(toDate));
+      dateFilter = "CAST(CashInDate as DATE) BETWEEN @fromDate AND @toDate";
+    }
+
+    let query = `
+      SELECT CashInId, CashInNo, CashInDate, Amount, Reason, Remarks, PaymentMode, ReferenceNo, TerminalCode, CreatedBy, CreatedOn 
+      FROM CashInEntry 
+      WHERE ${dateFilter}
+    `;
+
+    if (terminal !== 'ALL') {
+      query += ` AND TerminalCode = @TerminalCode`;
+      request.input('TerminalCode', sql.VarChar, terminal);
+    }
+
+    query += ` ORDER BY CreatedOn DESC`;
+
+    const result = await request.query(query);
+    res.json({ success: true, data: result.recordset });
+  } catch (err) {
+    console.error('Error fetching cash in entries:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST new Cash In entry
+router.post('/cash-in', authenticateToken, async (req, res) => {
+  try {
+    const { amount, reason, remarks, paymentMode, referenceNo, terminalCode, date } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: 'Valid amount is required' });
+    }
+
+    const createdBy = req.user?.userName || req.user?.username || 'Admin';
+    const pool = getPool();
+
+    const targetDate = date ? new Date(date) : new Date();
+    const dateStr = targetDate.toISOString().slice(0, 10).replace(/-/g, '');
+    const randId = Math.floor(1000 + Math.random() * 9000);
+    const cashInNo = `CI-${dateStr}-${randId}`;
+
+    const result = await pool.request()
+      .input('CashInNo', sql.VarChar, cashInNo)
+      .input('Amount', sql.Decimal(18, 2), amount)
+      .input('Reason', sql.VarChar, reason || '')
+      .input('Remarks', sql.VarChar, remarks || '')
+      .input('PaymentMode', sql.VarChar, paymentMode || 'Cash')
+      .input('ReferenceNo', referenceNo || '')
+      .input('TerminalCode', sql.VarChar, terminalCode || '')
+      .input('CreatedBy', sql.VarChar, createdBy)
+      .input('targetDate', sql.Date, targetDate)
+      .query(`
+        INSERT INTO CashInEntry (CashInNo, CashInDate, Amount, Reason, Remarks, PaymentMode, ReferenceNo, TerminalCode, CreatedBy, CreatedOn)
+        OUTPUT inserted.*
+        VALUES (@CashInNo, @targetDate, @Amount, @Reason, @Remarks, @PaymentMode, @ReferenceNo, @TerminalCode, @CreatedBy, @targetDate)
+      `);
+
+    res.json({ success: true, data: result.recordset[0] });
+  } catch (err) {
+    console.error('Error creating cash in entry:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE Cash In entry
+router.delete('/cash-in/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pool = getPool();
+    await pool.request()
+      .input('CashInId', sql.UniqueIdentifier, id)
+      .query('DELETE FROM CashInEntry WHERE CashInId = @CashInId');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting cash in entry:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT update Cash In entry
+router.put('/cash-in/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount, reason, remarks, paymentMode, referenceNo, terminalCode } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: 'Valid amount is required' });
+    }
+
+    const pool = getPool();
+    const result = await pool.request()
+      .input('CashInId', sql.UniqueIdentifier, id)
+      .input('Amount', sql.Decimal(18, 2), amount)
+      .input('Reason', sql.VarChar, reason || '')
+      .input('Remarks', sql.VarChar, remarks || '')
+      .input('PaymentMode', sql.VarChar, paymentMode || 'Cash')
+      .input('ReferenceNo', referenceNo || '')
+      .input('TerminalCode', sql.VarChar, terminalCode || '')
+      .query(`
+        UPDATE CashInEntry
+        SET Amount = @Amount, Reason = @Reason, Remarks = @Remarks, PaymentMode = @PaymentMode, 
+            ReferenceNo = @ReferenceNo, TerminalCode = @TerminalCode
+        OUTPUT inserted.*
+        WHERE CashInId = @CashInId
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: 'Cash in entry not found' });
+    }
+
+    res.json({ success: true, data: result.recordset[0] });
+  } catch (err) {
+    console.error('Error updating cash in entry:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST new Cash Out entry
 router.post('/cash-out', authenticateToken, async (req, res) => {
   try {

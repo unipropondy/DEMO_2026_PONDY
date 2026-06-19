@@ -504,6 +504,26 @@ async function initDB(pool) {
       END
     `);
 
+    // 18.1 Create CashInEntry table (for manual Cash-In tracking)
+    await runQuery("Create CashInEntry table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[CashInEntry]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[CashInEntry](
+              [CashInId] [uniqueidentifier] NOT NULL PRIMARY KEY DEFAULT NEWID(),
+              [CashInNo] [nvarchar](50) NULL,
+              [CashInDate] [date] NULL DEFAULT CAST(GETDATE() AS DATE),
+              [Amount] [decimal](18, 2) NULL,
+              [Reason] [nvarchar](255) NULL,
+              [Remarks] [nvarchar](max) NULL,
+              [PaymentMode] [nvarchar](50) NULL,
+              [ReferenceNo] [nvarchar](100) NULL,
+              [TerminalCode] [nvarchar](50) NULL,
+              [CreatedBy] [nvarchar](100) NULL,
+              [CreatedOn] [datetime] NULL
+          )
+      END
+    `);
+
     // 19. dishOrderItemShare updates
     await runQuery("dishOrderItemShare - TargetAmount", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[dishOrderItemShare]') AND name = 'TargetAmount') ALTER TABLE [dbo].[dishOrderItemShare] ADD TargetAmount DECIMAL(18, 2) DEFAULT 0");
 
