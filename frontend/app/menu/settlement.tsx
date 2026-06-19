@@ -2,6 +2,7 @@ import { API_URL } from "@/constants/Config";
 import { Fonts } from "@/constants/Fonts";
 import { Theme } from "@/constants/theme";
 import { useAuthStore } from "@/stores/authStore";
+import { useGeneralSettingsStore } from "../../stores/generalSettingsStore";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import * as Print from "expo-print";
@@ -545,6 +546,7 @@ export default function SettlementScreen() {
   const { user, token } = useAuthStore();
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
+  const enableCashDrawer = useGeneralSettingsStore(state => state.settings.enableCashDrawer);
 
   const [loading, setLoading] = useState(false);
   const [terminals, setTerminals] = useState<any[]>([]);
@@ -562,6 +564,18 @@ export default function SettlementScreen() {
   const [showCashBoxModal, setShowCashBoxModal] = useState(false);
   const [cashOutForm, setCashOutForm] = useState({
     CashOutId: '',
+    Amount: '',
+    Reason: '',
+    Remarks: '',
+    PaymentMode: 'Cash',
+    ReferenceNo: ''
+  });
+
+  // Cash In State
+  const [cashInEntries, setCashInEntries] = useState<any[]>([]);
+  const [showCashInModal, setShowCashInModal] = useState(false);
+  const [cashInForm, setCashInForm] = useState({
+    CashInId: '',
     Amount: '',
     Reason: '',
     Remarks: '',
@@ -643,6 +657,7 @@ const [artistSearch, setArtistSearch] = useState("");
   useEffect(() => {
     loadTerminals();
     loadDishes();
+    useGeneralSettingsStore.getState().fetchSettings();
   }, []);
 
   const loadTerminals = async () => {
@@ -705,12 +720,14 @@ const loadDishes = async () => {
       const denomsRes = await axios.get(`${API_URL}/api/settlement/denominations?type=OPEN&date=${dateStr}&screenType=CB`, { headers: { Authorization: `Bearer ${useAuthStore.getState().token}` } }).catch(() => ({ data: null }));
       const closeDenomsRes = await axios.get(`${API_URL}/api/settlement/denominations?type=CLOSE&date=${dateStr}&screenType=CB`, { headers: { Authorization: `Bearer ${useAuthStore.getState().token}` } }).catch(() => ({ data: null }));
       const cashOutRes = await axios.get(`${API_URL}/api/settlement/cash-out/${selectedTerminal}?fromDate=${fromStr}&toDate=${toStr}`, { headers: { Authorization: `Bearer ${useAuthStore.getState().token}` } }).catch(() => ({ data: null }));
+      const cashInRes = await axios.get(`${API_URL}/api/settlement/cash-in/${selectedTerminal}?fromDate=${fromStr}&toDate=${toStr}`, { headers: { Authorization: `Bearer ${useAuthStore.getState().token}` } }).catch(() => ({ data: null }));
 
       setTotalSales(totalRes.data || {});
       setPayments(payRes.data || []);
       setTransactions(transRes.data || []);
       setSales(salesRes.data || []);
       setCashOutEntries(cashOutRes.data?.data || []);
+      setCashInEntries(cashInRes.data?.data || []);
 
       if (openRes.data?.data?.total) {
         setOpeningCash(openRes.data.data.total.toString());
@@ -765,6 +782,7 @@ const loadDishes = async () => {
   const paymentsTotal = payments.reduce((sum, p) => sum + (parseFloat(p.Amount) || 0), 0);
   const displayOpeningAmount = totalOpening > 0 ? totalOpening : (parseFloat(openingCash) || 0);
   const totalCashOut = cashOutEntries.reduce((sum, entry) => sum + (parseFloat(entry.Amount) || 0), 0);
+  const totalCashInEntries = cashInEntries.reduce((sum, entry) => sum + (parseFloat(entry.Amount) || 0), 0);
   const cashBoxTotal = payments
     .filter(p => p.PaymodeName?.toUpperCase().includes("CASH BOX") || p.PaymodeName?.toUpperCase().includes("CASHBOX"))
     .reduce((sum, p) => sum + (parseFloat(p.Amount) || 0), 0);
@@ -774,12 +792,12 @@ const loadDishes = async () => {
     return sum + (t.TransactionType === "IN" ? amt : -amt);
   }, 0);
 
-  const transactionsTotal = baseTransactionsTotal + displayOpeningAmount - totalCashOut;
+  const transactionsTotal = baseTransactionsTotal + displayOpeningAmount - totalCashOut + totalCashInEntries;
   const salesCash = parseFloat(payments.find(p => p.PaymodeName?.toUpperCase() === 'CASH')?.Amount) || 0;
 
   const sysCash = salesCash + transactionsTotal;
 
-  const totalCashIn = salesCash + displayOpeningAmount + transactions.filter(t => t.TransactionType === "IN").reduce((sum, t) => sum + (parseFloat(t.Amount) || 0), 0);
+  const totalCashIn = salesCash + displayOpeningAmount + totalCashInEntries + transactions.filter(t => t.TransactionType === "IN").reduce((sum, t) => sum + (parseFloat(t.Amount) || 0), 0);
   const totalCashOutSum = totalCashOut + transactions.filter(t => t.TransactionType === "OUT").reduce((sum, t) => sum + (parseFloat(t.Amount) || 0), 0);
 
   const handleFinalize = async () => {
@@ -917,6 +935,50 @@ const loadDishes = async () => {
     }
   };
 
+  const handleSaveCashIn = async () => {
+    if (!cashInForm.Amount || parseFloat(cashInForm.Amount) <= 0) {
+      Alert.alert("Validation", "Please enter a valid amount");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const payload = {
+        amount: parseFloat(cashInForm.Amount),
+        reason: cashInForm.Reason,
+        remarks: cashInForm.Remarks,
+        paymentMode: cashInForm.PaymentMode,
+        referenceNo: cashInForm.ReferenceNo,
+        terminalCode: selectedTerminal === "ALL" ? "" : selectedTerminal,
+        date: getLocalDateStr(fromDate)
+      };
+
+      let res;
+      if (cashInForm.CashInId) {
+        res = await axios.put(`${API_URL}/api/settlement/cash-in/${cashInForm.CashInId}`, payload, {
+          headers: { Authorization: `Bearer ${useAuthStore.getState().token}` }
+        });
+      } else {
+        res = await axios.post(`${API_URL}/api/settlement/cash-in`, payload, {
+          headers: { Authorization: `Bearer ${useAuthStore.getState().token}` }
+        });
+      }
+
+      if (res.data.success) {
+        setCashInForm({ CashInId: '', Amount: '', Reason: '', Remarks: '', PaymentMode: 'Cash', ReferenceNo: '' });
+        setShowCashInModal(false);
+        setToDate(new Date());
+        fetchData();
+        Alert.alert("Success", "Cash In entry saved");
+      }
+    } catch (err: any) {
+      console.error("❌ SAVE CASH IN ERROR", err);
+      Alert.alert("Error", err.response?.data?.error || "Failed to save cash in entry");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveCashBox = async () => {
   try {
 
@@ -982,6 +1044,40 @@ const loadDishes = async () => {
     }
   };
 
+  const executeDeleteCashIn = async (id: string) => {
+    try {
+      setLoading(true);
+      const res = await axios.delete(`${API_URL}/api/settlement/cash-in/${id}`, {
+        headers: { Authorization: `Bearer ${useAuthStore.getState().token}` }
+      });
+      if (res.data.success) {
+        fetchData();
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.response?.data?.error || "Failed to delete entry");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCashIn = async (id: string) => {
+    if (!id) {
+      Alert.alert("Error", "Invalid entry ID");
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      if (window.confirm("Are you sure you want to delete this cash in entry?")) {
+        executeDeleteCashIn(id);
+      }
+    } else {
+      Alert.alert("Confirm", "Are you sure you want to delete this cash in entry?", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: () => executeDeleteCashIn(id) }
+      ]);
+    }
+  };
+
    const handlePrintReport = async () => {
     try {
       // 1. Fetch Cashier Printer IP from settings
@@ -1023,8 +1119,9 @@ const loadDishes = async () => {
 
       const fromDateStr = formatDateTime(fromDate);
       const toDateStr = formatDateTime(toDate);
+      const cashInTotalSum = totalCashInEntries + transactions.filter(t => t.TransactionType === "IN").reduce((sum, t) => sum + (parseFloat(t.Amount) || 0), 0);
 
-      // 2. Format HTML aligned to 80mm width
+      // 2. Format HTML aligned to 80mm width with centered print-out look
       const html = `
         <html>
           <head>
@@ -1033,130 +1130,149 @@ const loadDishes = async () => {
               * { box-sizing: border-box; }
               body { 
                 font-family: 'Courier New', Courier, monospace; 
-                width: 80mm; 
-                padding: 4mm; 
+                width: 100%; 
                 margin: 0; 
+                padding: 0; 
                 color: #000; 
-                background-color: #fff; 
+                background-color: #f3f4f6; 
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
                 -webkit-print-color-adjust: exact; print-color-adjust: exact;
-                font-size: 13px;
-                line-height: 1.2;
               }
-              .title { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
-              .divider { border-bottom: 1px dashed #000; margin: 10px 0; }
-              .double-divider { border-bottom: 2px double #000; margin: 10px 0; }
-              .info-line { margin-bottom: 3px; }
-              table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-              td { padding: 4px 0; font-size: 13px; vertical-align: top; }
+              .report-wrapper {
+                width: 80mm;
+                padding: 6mm;
+                margin: 20px auto;
+                background-color: #fff;
+                box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+                font-size: 13px;
+                line-height: 1.3;
+              }
+              @media print {
+                body {
+                  background-color: #fff;
+                }
+                .report-wrapper {
+                  margin: 0 auto;
+                  box-shadow: none;
+                  padding: 4mm;
+                }
+              }
+              .title { text-align: center; font-size: 16px; font-weight: bold; margin: 5px 0; text-transform: uppercase; }
+              .section-title { text-align: center; font-size: 14px; font-weight: bold; text-transform: uppercase; margin: 5px 0; }
+              .divider { text-align: center; font-weight: bold; margin: 2px 0; }
+              .info-block { margin: 15px 0; font-size: 13px; }
+              .info-row { margin-bottom: 2px; }
+              table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+              td { padding: 3px 0; font-size: 13px; vertical-align: top; }
               .right { text-align: right; }
               .center { text-align: center; }
               .bold { font-weight: bold; }
-              .header-row td { font-weight: bold; text-transform: uppercase; border-bottom: 1px dashed #000; padding-bottom: 5px; }
-              .section-row td { font-weight: bold; padding-top: 10px; padding-bottom: 5px; text-decoration: underline; }
+              .line-divider { border-bottom: 1px dashed #000; margin: 5px 0; }
             </style>
           </head>
           <body>
-            <div class="title">Settlement Report</div>
-            <div class="double-divider"></div>
-            <div class="info-line">Period: ${fromDateStr} to ${toDateStr}</div>
-            ${selectedTerminal !== "ALL" ? `<div class="info-line">Terminal: ${selectedTerminal}</div>` : ""}
-            <div class="info-line">Generated: ${new Date().toLocaleTimeString()}</div>
-            <div class="double-divider"></div>
-
-            <table>
-              <tr class="header-row">
-                <td>Particulars</td>
-                <td class="center" style="width: 15%;">Qty</td>
-                <td class="right" style="width: 35%;">Amount</td>
-              </tr>
+            <div class="report-wrapper">
+              <div class="divider">========================================</div>
+              <div class="title">SETTLEMENT REPORT</div>
+              <div class="divider">========================================</div>
               
-              <tr class="section-row">
-                <td colspan="3">Revenue Summary</td>
-              </tr>
-              <tr>
-                <td>Gross Sales</td>
-                <td class="center">${totalSales.InvoiceCount || '-'}</td>
-                <td class="right">${formatCurrency(totalSales.SubTotal)}</td>
-              </tr>
-              <tr>
-                <td>Total Discount</td>
-                <td class="center">-</td>
-                <td class="right">-${formatCurrency(totalSales.DiscountAmount)}</td>
-              </tr>
-              <tr>
-                <td>Service Charge</td>
-                <td class="center">-</td>
-                <td class="right">${formatCurrency(totalSales.ServiceCharge)}</td>
-              </tr>
-              <tr>
-                <td>Tax Collected (GST)</td>
-                <td class="center">-</td>
-                <td class="right">${formatCurrency(totalSales.TotalTax)}</td>
-              </tr>
-              <tr>
-                <td>Rounding & Excess</td>
-                <td class="center">-</td>
-                <td class="right">${formatCurrency(totalSales.RoundedBy)}</td>
-              </tr>
-              <tr>
-                <td>Tips</td>
-                <td class="center">-</td>
-                <td class="right">${formatCurrency(totalSales.Tips)}</td>
-              </tr>
-              <tr class="bold">
-                <td>Net Sales</td>
-                <td class="center">${totalSales.InvoiceCount || '-'}</td>
-                <td class="right">${formatCurrency(netSales)}</td>
-              </tr>
+              <div class="info-block">
+                <div class="bold">Period:</div>
+                <div class="info-row">${fromDateStr}</div>
+                <div class="info-row">to</div>
+                <div class="info-row">${toDateStr}</div>
+                <br/>
+                <div class="bold">Generated:</div>
+                <div class="info-row">${formatDateTime(new Date())}</div>
+              </div>
 
-              <tr class="section-row">
-                <td colspan="3">Payment Breakdown</td>
-              </tr>
-              <tr>
-                <td>Opening Balance</td>
-                <td class="center">-</td>
-                <td class="right">${formatCurrency(displayOpeningAmount)}</td>
-              </tr>
-              ${payments.map(p => `
+              <div class="divider">========================================</div>
+              <div class="section-title">SALES SUMMARY</div>
+              <div class="divider">========================================</div>
+              <table>
                 <tr>
-                   <td>${p.PaymodeName}</td>
-                   <td class="center">-</td>
-                   <td class="right">${formatCurrency(p.Amount)}</td>
+                  <td>Gross Sales</td>
+                  <td class="right">${formatCurrency(totalSales.SubTotal)}</td>
                 </tr>
-              `).join('')}
-              ${transactions.map(t => `
                 <tr>
-                   <td>${t.TransactionMode} (${t.TransactionType})</td>
-                   <td class="center">-</td>
-                   <td class="right">${t.TransactionType === "IN" ? formatCurrency(t.Amount) : '-' + formatCurrency(t.Amount)}</td>
+                  <td>Discount</td>
+                  <td class="right">${formatCurrency(totalSales.DiscountAmount)}</td>
                 </tr>
-              `).join('')}
-              ${cashOutEntries.map(co => `
                 <tr>
-                   <td>${co.Reason || 'Cash Out'}</td>
-                   <td class="center">-</td>
-                   <td class="right">-${formatCurrency(co.Amount)}</td>
+                  <td>Service Charge</td>
+                  <td class="right">${formatCurrency(totalSales.ServiceCharge)}</td>
                 </tr>
-              `).join('')}
-              <tr class="divider"><td colspan="3"></td></tr>
-              <tr class="bold">
-                <td>Total Collected (In)</td>
-                <td class="center">-</td>
-                <td class="right">${formatCurrency(totalCashIn)}</td>
-              </tr>
-              <tr class="bold">
-                <td>Total Withdrawn (Out)</td>
-                <td class="center">-</td>
-                <td class="right">-${formatCurrency(totalCashOutSum)}</td>
-              </tr>
-              <tr class="bold" style="font-size: 14px;">
-                <td>Net Total in Drawer</td>
-                <td class="center">-</td>
-                <td class="right">${formatCurrency(totalCashIn - totalCashOutSum)}</td>
-              </tr>
-            </table>
-            <div class="double-divider"></div>
-            <div class="center" style="font-size: 11px; margin-top: 15px;">SMART-POS BY UNIPROSG</div>
+                <tr>
+                  <td>GST Collected</td>
+                  <td class="right">${formatCurrency(totalSales.TotalTax)}</td>
+                </tr>
+                <tr>
+                  <td>Tips</td>
+                  <td class="right">${formatCurrency(totalSales.Tips)}</td>
+                </tr>
+                <tr>
+                  <td colspan="2"><div class="line-divider"></div></td>
+                </tr>
+                <tr class="bold">
+                  <td>NET SALES</td>
+                  <td class="right">${formatCurrency(netSales)}</td>
+                </tr>
+              </table>
+
+              <div class="divider">========================================</div>
+              <div class="section-title">PAYMENT COLLECTION</div>
+              <div class="divider">========================================</div>
+              <table>
+                ${payments.map(p => `
+                  <tr>
+                    <td>${p.PaymodeName}</td>
+                    <td class="right">${formatCurrency(p.Amount)}</td>
+                  </tr>
+                `).join('')}
+                <tr>
+                  <td colspan="2"><div class="line-divider"></div></td>
+                </tr>
+                <tr class="bold">
+                  <td>TOTAL COLLECTION</td>
+                  <td class="right">${formatCurrency(paymentsTotal)}</td>
+                </tr>
+              </table>
+
+              <div class="divider">========================================</div>
+              <div class="section-title">CASH DRAWER SUMMARY</div>
+              <div class="divider">========================================</div>
+              <table>
+                <tr>
+                  <td>Opening Float</td>
+                  <td class="right">${formatCurrency(displayOpeningAmount)}</td>
+                </tr>
+                <tr>
+                  <td>Cash Sales</td>
+                  <td class="right">${formatCurrency(salesCash)}</td>
+                </tr>
+                <tr>
+                  <td>Cash In</td>
+                  <td class="right">${formatCurrency(cashInTotalSum)}</td>
+                </tr>
+                <tr>
+                  <td>Cash Out</td>
+                  <td class="right">${formatCurrency(totalCashOutSum)}</td>
+                </tr>
+                <tr>
+                  <td colspan="2"><div class="line-divider"></div></td>
+                </tr>
+                <tr class="bold">
+                  <td>EXPECTED CASH</td>
+                  <td class="right">${formatCurrency(totalCashIn - totalCashOutSum)}</td>
+                </tr>
+              </table>
+
+              <div class="divider">========================================</div>
+              <div class="center bold" style="font-size: 11px; margin-top: 10px; text-transform: uppercase;">SMART-POS BY UNIPROSG</div>
+              <div class="divider">========================================</div>
+            </div>
           </body>
         </html>
       `;
@@ -1178,46 +1294,48 @@ const loadDishes = async () => {
               return spaceCount > 0 ? `${left}${" ".repeat(spaceCount)}${right}\n` : `${left}\n${right.padStart(48, " ")}\n`;
             };
 
-            let text = "[C]================================================\n";
+            let text = "[C]========================================\n";
             text += "[C]<font size='big'><B>SETTLEMENT REPORT</B></font>\n";
-            text += "[C]================================================\n";
-            text += `[C]Period: ${fromDateStr} to ${toDateStr}\n`;
-            if (selectedTerminal !== "ALL") text += `[C]Terminal: ${selectedTerminal}\n`;
-            text += `[C]Generated: ${new Date().toLocaleTimeString()}\n`;
-            text += "[C]------------------------------------------------\n\n";
+            text += "[C]========================================\n\n";
+            text += "[L]<B>Period:</B>\n";
+            text += `[L]${fromDateStr}\n`;
+            text += "[L]to\n";
+            text += `[L]${toDateStr}\n\n`;
+            text += "[L]<B>Generated:</B>\n";
+            text += `[L]${formatDateTime(new Date())}\n\n`;
 
-            text += "[L]<B>REVENUE SUMMARY</B>\n";
-            text += "[L]------------------------------------------------\n";
-            text += formatTwoCols48("Gross Sales (" + (totalSales.InvoiceCount || 0) + "):", formatCurrency(totalSales.SubTotal));
-            text += formatTwoCols48("Total Discount:", "-" + formatCurrency(totalSales.DiscountAmount));
+            text += "[C]========================================\n";
+            text += "[C]<B>SALES SUMMARY</B>\n";
+            text += "[C]========================================\n";
+            text += formatTwoCols48("Gross Sales:", formatCurrency(totalSales.SubTotal));
+            text += formatTwoCols48("Discount:", formatCurrency(totalSales.DiscountAmount));
             text += formatTwoCols48("Service Charge:", formatCurrency(totalSales.ServiceCharge));
-            text += formatTwoCols48("Tax Collected (GST):", formatCurrency(totalSales.TotalTax));
-            text += formatTwoCols48("Rounding & Excess:", formatCurrency(totalSales.RoundedBy));
+            text += formatTwoCols48("GST Collected:", formatCurrency(totalSales.TotalTax));
             text += formatTwoCols48("Tips:", formatCurrency(totalSales.Tips));
-            text += "[L]------------------------------------------------\n";
-            text += formatTwoCols48("<B>Net Sales:</B>", "<B>" + formatCurrency(netSales) + "</B>");
-            text += "[L]------------------------------------------------\n\n";
+            text += "[L]----------------------------------------\n";
+            text += formatTwoCols48("<B>NET SALES:</B>", "<B>" + formatCurrency(netSales) + "</B>\n");
 
-            text += "[L]<B>PAYMENT BREAKDOWN</B>\n";
-            text += "[L]------------------------------------------------\n";
-            text += formatTwoCols48("Opening Balance:", formatCurrency(displayOpeningAmount));
+            text += "[C]========================================\n";
+            text += "[C]<B>PAYMENT COLLECTION</B>\n";
+            text += "[C]========================================\n";
             payments.forEach(p => {
               text += formatTwoCols48(p.PaymodeName + ":", formatCurrency(p.Amount));
             });
-            transactions.forEach(t => {
-              const sign = t.TransactionType === "IN" ? "" : "-";
-              text += formatTwoCols48(t.TransactionMode + " (" + t.TransactionType + "):", sign + formatCurrency(t.Amount));
-            });
-            cashOutEntries.forEach(co => {
-              text += formatTwoCols48((co.Reason || "Cash Out") + ":", "-" + formatCurrency(co.Amount));
-            });
-            text += "[L]------------------------------------------------\n";
-            text += formatTwoCols48("<B>Total Collected (In):</B>", "<B>" + formatCurrency(totalCashIn) + "</B>");
-            text += formatTwoCols48("<B>Total Withdrawn (Out):</B>", "<B>-" + formatCurrency(totalCashOutSum) + "</B>");
-            text += "[L]------------------------------------------------\n";
-            text += formatTwoCols48("<font size='big'><B>Net Total in Drawer:</B></font>", "<font size='big'><B>" + formatCurrency(totalCashIn - totalCashOutSum) + "</B></font>");
-            text += "[C]================================================\n";
-            text += "[C]SMART-POS BY UNIPROSG\n\n\n\n";
+            text += "[L]----------------------------------------\n";
+            text += formatTwoCols48("<B>TOTAL COLLECTION:</B>", "<B>" + formatCurrency(paymentsTotal) + "</B>\n");
+
+            text += "[C]========================================\n";
+            text += "[C]<B>CASH DRAWER SUMMARY</B>\n";
+            text += "[C]========================================\n";
+            text += formatTwoCols48("Opening Float:", formatCurrency(displayOpeningAmount));
+            text += formatTwoCols48("Cash Sales:", formatCurrency(salesCash));
+            text += formatTwoCols48("Cash In:", formatCurrency(cashInTotalSum));
+            text += formatTwoCols48("Cash Out:", formatCurrency(totalCashOutSum));
+            text += "[L]----------------------------------------\n";
+            text += formatTwoCols48("<font size='big'><B>EXPECTED CASH:</B></font>", "<font size='big'><B>" + formatCurrency(totalCashIn - totalCashOutSum) + "</B></font>\n");
+            text += "[C]========================================\n";
+            text += "[C]SMART-POS BY UNIPROSG\n";
+            text += "[C]========================================\n\n\n\n";
 
             const ThermalPrinter = require("react-native-thermal-printer").default;
             await ThermalPrinter.printTcp({
@@ -1245,54 +1363,58 @@ const loadDishes = async () => {
             await SunmiModule.printText("================================\n");
             
             if (SunmiModule.setFontSize) await SunmiModule.setFontSize(32);
-            await SunmiModule.printText("  SETTLEMENT REPORT\n");
+            await SunmiModule.printText("     SETTLEMENT REPORT\n");
             if (SunmiModule.setFontSize) await SunmiModule.setFontSize(24);
-            await SunmiModule.printText("================================\n");
+            await SunmiModule.printText("================================\n\n");
             
-            await SunmiModule.printText(`Period: ${fromDateStr} to ${toDateStr}\n`);
-            if (selectedTerminal !== "ALL") await SunmiModule.printText(`Terminal: ${selectedTerminal}\n`);
-            await SunmiModule.printText(`Generated: ${new Date().toLocaleTimeString()}\n`);
-            await SunmiModule.printText("--------------------------------\n");
+            await SunmiModule.printText("Period:\n");
+            await SunmiModule.printText(`${fromDateStr}\n`);
+            await SunmiModule.printText("to\n");
+            await SunmiModule.printText(`${toDateStr}\n\n`);
+            await SunmiModule.printText("Generated:\n");
+            await SunmiModule.printText(`${formatDateTime(new Date())}\n\n`);
 
             const formatTwoCols32 = (left: string, right: string) => {
               const spaceCount = 32 - left.length - right.length;
               return spaceCount > 0 ? `${left}${" ".repeat(spaceCount)}${right}\n` : `${left}\n${right.padStart(32, " ")}\n`;
             };
 
-            await SunmiModule.printText("REVENUE SUMMARY\n");
-            await SunmiModule.printText("--------------------------------\n");
-            await SunmiModule.printText(formatTwoCols32("Gross Sales (" + (totalSales.InvoiceCount || 0) + "):", formatCurrency(totalSales.SubTotal)));
-            await SunmiModule.printText(formatTwoCols32("Total Discount:", "-" + formatCurrency(totalSales.DiscountAmount)));
+            await SunmiModule.printText("================================\n");
+            await SunmiModule.printText("         SALES SUMMARY\n");
+            await SunmiModule.printText("================================\n");
+            await SunmiModule.printText(formatTwoCols32("Gross Sales:", formatCurrency(totalSales.SubTotal)));
+            await SunmiModule.printText(formatTwoCols32("Discount:", formatCurrency(totalSales.DiscountAmount)));
             await SunmiModule.printText(formatTwoCols32("Service Charge:", formatCurrency(totalSales.ServiceCharge)));
-            await SunmiModule.printText(formatTwoCols32("Tax Collected (GST):", formatCurrency(totalSales.TotalTax)));
-            await SunmiModule.printText(formatTwoCols32("Rounding & Excess:", formatCurrency(totalSales.RoundedBy)));
+            await SunmiModule.printText(formatTwoCols32("GST Collected:", formatCurrency(totalSales.TotalTax)));
             await SunmiModule.printText(formatTwoCols32("Tips:", formatCurrency(totalSales.Tips)));
             await SunmiModule.printText("--------------------------------\n");
-            await SunmiModule.printText(formatTwoCols32("Net Sales:", formatCurrency(netSales)));
-            await SunmiModule.printText("--------------------------------\n\n");
+            await SunmiModule.printText(formatTwoCols32("NET SALES:", formatCurrency(netSales)));
+            await SunmiModule.printText("\n");
 
-            await SunmiModule.printText("PAYMENT BREAKDOWN\n");
-            await SunmiModule.printText("--------------------------------\n");
-            await SunmiModule.printText(formatTwoCols32("Opening Balance:", formatCurrency(displayOpeningAmount)));
+            await SunmiModule.printText("================================\n");
+            await SunmiModule.printText("       PAYMENT COLLECTION\n");
+            await SunmiModule.printText("================================\n");
             for (const p of payments) {
               await SunmiModule.printText(formatTwoCols32(p.PaymodeName + ":", formatCurrency(p.Amount)));
             }
-            for (const t of transactions) {
-              const sign = t.TransactionType === "IN" ? "" : "-";
-              await SunmiModule.printText(formatTwoCols32(t.TransactionMode + " (" + t.TransactionType + "):", sign + formatCurrency(t.Amount)));
-            }
-            for (const co of cashOutEntries) {
-              await SunmiModule.printText(formatTwoCols32((co.Reason || "Cash Out") + ":", "-" + formatCurrency(co.Amount)));
-            }
             await SunmiModule.printText("--------------------------------\n");
-            await SunmiModule.printText(formatTwoCols32("Total Collected (In):", formatCurrency(totalCashIn)));
-            await SunmiModule.printText(formatTwoCols32("Total Withdrawn (Out):", "-" + formatCurrency(totalCashOutSum)));
+            await SunmiModule.printText(formatTwoCols32("TOTAL COLLECTION:", formatCurrency(paymentsTotal)));
+            await SunmiModule.printText("\n");
+
+            await SunmiModule.printText("================================\n");
+            await SunmiModule.printText("      CASH DRAWER SUMMARY\n");
+            await SunmiModule.printText("================================\n");
+            await SunmiModule.printText(formatTwoCols32("Opening Float:", formatCurrency(displayOpeningAmount)));
+            await SunmiModule.printText(formatTwoCols32("Cash Sales:", formatCurrency(salesCash)));
+            await SunmiModule.printText(formatTwoCols32("Cash In:", formatCurrency(cashInTotalSum)));
+            await SunmiModule.printText(formatTwoCols32("Cash Out:", formatCurrency(totalCashOutSum)));
             await SunmiModule.printText("--------------------------------\n");
             if (SunmiModule.setFontSize) await SunmiModule.setFontSize(28);
-            await SunmiModule.printText(formatTwoCols32("Net in Drawer:", formatCurrency(totalCashIn - totalCashOutSum)));
+            await SunmiModule.printText(formatTwoCols32("EXPECTED CASH:", formatCurrency(totalCashIn - totalCashOutSum)));
             if (SunmiModule.setFontSize) await SunmiModule.setFontSize(24);
             await SunmiModule.printText("================================\n");
             await SunmiModule.printText("     SMART-POS BY UNIPROSG\n");
+            await SunmiModule.printText("================================\n");
             await SunmiModule.lineWrap(3);
             await SunmiModule.cutPaper();
             printedToHardware = true;
@@ -1474,8 +1596,31 @@ const loadDishes = async () => {
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={[styles.card, { flex: isTablet ? 1 : undefined, minWidth: isTablet ? 0 : '48%', flexGrow: 1, padding: isTablet ? 15 : 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderWidth: 1 }]}
+                onPress={() => {
+                  if (enableCashDrawer) {
+                    Alert.alert("Locked", "Manual Cash In entry is disabled when Cash Drawer is ON.");
+                    return;
+                  }
+                  setShowCashInModal(true);
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="add-circle-outline" size={isTablet ? 16 : 14} color="#10B981" />
+                  <Text style={{ fontFamily: Fonts.bold, color: '#065F46', fontSize: isTablet ? 12 : 11 }}>Cash In</Text>
+                </View>
+                <Text style={{ fontFamily: Fonts.black, fontSize: isTablet ? 22 : 16, color: '#047857', marginTop: 5 }} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(totalCashInEntries)}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={[styles.card, { flex: isTablet ? 1 : undefined, minWidth: isTablet ? 0 : '48%', flexGrow: 1, padding: isTablet ? 15 : 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1 }]}
-                onPress={() => setShowCashOutModal(true)}
+                onPress={() => {
+                  if (enableCashDrawer) {
+                    Alert.alert("Locked", "Manual Cash Out entry is disabled when Cash Drawer is ON.");
+                    return;
+                  }
+                  setShowCashOutModal(true);
+                }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Ionicons name="remove-circle-outline" size={isTablet ? 16 : 14} color="#EF4444" />
@@ -1643,12 +1788,42 @@ const loadDishes = async () => {
                       </Text>
                     </View>
                   )}
+                  {cashInEntries.map((ci, i) => (
+                    <TouchableOpacity
+                      key={`ci-${i}`}
+                      style={[styles.tableRow, { alignItems: 'center' }]}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        if (enableCashDrawer) {
+                          Alert.alert("Locked", "Manual Cash In entry is disabled when Cash Drawer is ON.");
+                          return;
+                        }
+                        setCashInForm({ ...ci, CashInId: ci.CashInId || ci.cashInId, Amount: ci.Amount?.toString() || '' });
+                        setShowCashInModal(true);
+                      }}
+                    >
+                      <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.tableCellText}>{ci.Reason || 'Cash In'}</Text>
+                        <Ionicons name="create-outline" size={14} color={Theme.textPrimary} style={{ marginLeft: 6 }} />
+                      </View>
+                      <Text style={[styles.tableCellText, { flex: 1, textAlign: "right", color: Theme.success }]}>
+                        +{formatCurrency(ci.Amount)}
+                      </Text>
+                      <Text style={[styles.tableCellText, { flex: 1, textAlign: "right" }]}>
+                        0.00
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                   {cashOutEntries.map((co, i) => (
                     <TouchableOpacity
                       key={`co-${i}`}
                       style={[styles.tableRow, { alignItems: 'center' }]}
                       activeOpacity={0.7}
                       onPress={() => {
+                        if (enableCashDrawer) {
+                          Alert.alert("Locked", "Manual Cash Out entry is disabled when Cash Drawer is ON.");
+                          return;
+                        }
                         setCashOutForm({ ...co, CashOutId: co.CashOutId || co.cashOutId, Amount: co.Amount?.toString() || '' });
                         setShowCashOutModal(true);
                       }}
@@ -1683,7 +1858,7 @@ const loadDishes = async () => {
                       <Text style={[styles.tableCellText, { flex: 1, textAlign: "right" }]}></Text>
                     </View>
                   ))}
-                  {payments.length === 0 && displayOpeningAmount === 0 && transactions.length === 0 && cashOutEntries.length === 0 && <Text style={styles.emptyText}>No sales</Text>}
+                  {payments.length === 0 && displayOpeningAmount === 0 && transactions.length === 0 && cashOutEntries.length === 0 && cashInEntries.length === 0 && <Text style={styles.emptyText}>No sales</Text>}
                 </ScrollView>
                 <View style={{ flexDirection: "row", paddingVertical: 12, paddingHorizontal: 12, backgroundColor: "#FAFAFA", borderTopWidth: 1, borderTopColor: Theme.border, alignItems: "center" }}>
                   <View style={{ flex: 2, alignItems: 'flex-end', paddingRight: 15 }}>
@@ -1922,6 +2097,109 @@ const loadDishes = async () => {
               <TouchableOpacity
                 style={[styles.confirmBtn, { flex: 1 }]}
                 onPress={handleSaveCashOut}
+              >
+                <Text style={styles.confirmBtnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Cash In Modal */}
+      <Modal
+        visible={showCashInModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCashInModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowCashInModal(false)}
+          />
+          <View style={[styles.modalContent, { maxWidth: 600, width: '90%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Manage Cash In</Text>
+              <TouchableOpacity onPress={() => setShowCashInModal(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color={Theme.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalDivider} />
+
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingVertical: 5 }} showsVerticalScrollIndicator={false}>
+              {/* List of Today's Cash In */}
+              <View style={{ marginBottom: 15 }}>
+                {cashInEntries.length > 0 ? (
+                  <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
+                    {cashInEntries.map((ci, idx) => (
+                      <View key={idx} style={[styles.tableRow, { alignItems: 'center' }]}>
+                        <Text style={[styles.tableCellText, { flex: 2 }]}>{ci.Reason || 'Cash In'}</Text>
+                        <Text style={[styles.tableCellText, { flex: 1, textAlign: 'right', paddingRight: 15 }]}>{formatCurrency(ci.Amount)}</Text>
+                        <View style={{ flexDirection: 'row', gap: 15, width: 60, justifyContent: 'flex-end' }}>
+                          <TouchableOpacity onPress={() => setCashInForm({ ...ci, CashInId: ci.CashInId || ci.cashInId, Amount: ci.Amount?.toString() || '' })}>
+                            <Ionicons name="create-outline" size={18} color={Theme.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleDeleteCashIn(ci.CashInId || ci.cashInId)}>
+                            <Ionicons name="trash-outline" size={18} color={Theme.danger} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <View style={{ paddingVertical: 15, alignItems: 'center', backgroundColor: '#FAFAFA', borderRadius: 8, borderWidth: 1, borderColor: Theme.border }}>
+                    <Text style={{ fontFamily: Fonts.medium, fontSize: 13, color: Theme.textMuted }}>No cash in entries found for the selected time period.</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 15, marginBottom: 16 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Fonts.bold, fontSize: 13, marginBottom: 6, color: Theme.textSecondary }}>Amount *</Text>
+                  <TextInput
+                    style={[styles.premiumInput, { textAlign: 'right', fontSize: 18 }]}
+                    keyboardType="numeric"
+                    value={cashInForm.Amount}
+                    onChangeText={(v) => setCashInForm({ ...cashInForm, Amount: v })}
+                    placeholder="0.00"
+                    placeholderTextColor={Theme.textMuted}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Fonts.bold, fontSize: 13, marginBottom: 6, color: Theme.textSecondary }}>Payment Mode</Text>
+                  <TextInput
+                    style={[styles.premiumInput, { fontFamily: Fonts.medium }]}
+                    value={cashInForm.PaymentMode}
+                    onChangeText={(v) => setCashInForm({ ...cashInForm, PaymentMode: v })}
+                    placeholder="Cash"
+                    placeholderTextColor={Theme.textMuted}
+                  />
+                </View>
+              </View>
+
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ fontFamily: Fonts.bold, fontSize: 13, marginBottom: 6, color: Theme.textSecondary }}>Reason</Text>
+                <TextInput
+                  style={[styles.premiumInput, { fontFamily: Fonts.medium }]}
+                  value={cashInForm.Reason}
+                  onChangeText={(v) => setCashInForm({ ...cashInForm, Reason: v })}
+                  placeholderTextColor={Theme.textMuted}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={[styles.modalFooter, { flexDirection: 'row', gap: 10 }]}>
+              <TouchableOpacity
+                style={[styles.confirmBtn, { flex: 1, backgroundColor: Theme.bgMuted }]}
+                onPress={() => setCashInForm({ CashInId: '', Amount: '', Reason: '', Remarks: '', PaymentMode: 'Cash', ReferenceNo: '' })}
+              >
+                <Text style={[styles.confirmBtnText, { color: Theme.textPrimary }]}>Clear Form</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmBtn, { flex: 1 }]}
+                onPress={handleSaveCashIn}
               >
                 <Text style={styles.confirmBtnText}>Save</Text>
               </TouchableOpacity>
