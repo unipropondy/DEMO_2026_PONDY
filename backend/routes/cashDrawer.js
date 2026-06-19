@@ -20,6 +20,20 @@ router.post('/log', authenticateToken, async (req, res) => {
     const finalTerminalCode = terminalCode || '';
 
     await transaction.begin();
+
+    // 0. Backend Validation for Duplicate SALE Logs (3-Layer Protection Layer 2)
+    if ((actionType === 'SALE' || openSource === 'SALE') && orderId && String(orderId).trim() !== '') {
+      const checkReq = new sql.Request(transaction);
+      const dupCheck = await checkReq
+        .input('CheckOrderId', sql.NVarChar(100), String(orderId).trim())
+        .query(`SELECT COUNT(*) as cnt FROM CashDrawerLog WHERE OrderId = @CheckOrderId AND OpenSource = 'SALE'`);
+      
+      if (dupCheck.recordset[0].cnt > 0) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, error: 'Duplicate SALE drawer log for this OrderId is not allowed.' });
+      }
+    }
+
     const request = new sql.Request(transaction);
 
     // 1. Insert Cash Drawer Log

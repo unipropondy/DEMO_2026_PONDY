@@ -779,7 +779,7 @@ const loadDishes = async () => {
 
   const sysCash = salesCash + transactionsTotal;
 
-  const totalCashIn = paymentsTotal + displayOpeningAmount + transactions.filter(t => t.TransactionType === "IN").reduce((sum, t) => sum + (parseFloat(t.Amount) || 0), 0);
+  const totalCashIn = salesCash + displayOpeningAmount + transactions.filter(t => t.TransactionType === "IN").reduce((sum, t) => sum + (parseFloat(t.Amount) || 0), 0);
   const totalCashOutSum = totalCashOut + transactions.filter(t => t.TransactionType === "OUT").reduce((sum, t) => sum + (parseFloat(t.Amount) || 0), 0);
 
   const handleFinalize = async () => {

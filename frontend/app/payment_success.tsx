@@ -26,6 +26,7 @@ const formatSection = (sec: string) => {
 
 export default function PaymentSuccess() {
   const router = useRouter();
+  const isDrawerOpening = React.useRef(false);
   const params = useLocalSearchParams();
   const settings = useCompanySettingsStore((state) => state.settings);
   const currencySymbol = settings.currencySymbol || "$";
@@ -98,11 +99,33 @@ export default function PaymentSuccess() {
   };
 
   const openDrawerForCash = async () => {
-    const isCash = /^(CAS|CASH)$/i.test(method.trim()) || 
-                   (payments && payments.some((p: any) => /^(CAS|CASH)$/i.test((p.payMode || p.payModeName || '').trim())));
-    if (!isCash) return;
+    // 1. In-memory double-tap lock
+    if (isDrawerOpening.current) {
+      console.log("[payment_success] Cash drawer trigger already in progress. Bypassing duplicate call.");
+      return;
+    }
+    isDrawerOpening.current = true;
 
     try {
+      const isCash = /^(CAS|CASH)$/i.test(method.trim()) || 
+                     (payments && payments.some((p: any) => /^(CAS|CASH)$/i.test((p.payMode || p.payModeName || '').trim())));
+      if (!isCash) {
+        isDrawerOpening.current = false;
+        return;
+      }
+
+      // 2. AsyncStorage duplicate check (persistent across screen remounts)
+      if (orderId) {
+        const key = `drawer_opened_${orderId}`;
+        const hasOpened = await AsyncStorage.getItem(key);
+        if (hasOpened === 'true') {
+          console.log(`[payment_success] Cash drawer already opened for order ${orderId}. Bypassing duplicate trigger.`);
+          isDrawerOpening.current = false;
+          return;
+        }
+        await AsyncStorage.setItem(key, 'true');
+      }
+
       const userIdVal = await AsyncStorage.getItem("userId") || "1";
       const terminalCodeVal = await AsyncStorage.getItem("terminalCode") || "T1";
       
@@ -120,6 +143,8 @@ export default function PaymentSuccess() {
       });
     } catch (err) {
       console.warn("Auto open cash drawer failed:", err);
+    } finally {
+      isDrawerOpening.current = false;
     }
   };
 

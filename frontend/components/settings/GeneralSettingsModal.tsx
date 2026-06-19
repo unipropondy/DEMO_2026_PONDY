@@ -11,12 +11,15 @@ import {
   Animated,
   Easing,
   ScrollView,
+  TextInput,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Theme } from "@/constants/theme";
 import { Fonts } from "@/constants/Fonts";
 import { useGeneralSettingsStore } from "@/stores/generalSettingsStore";
 import { useToast } from "../Toast";
+import { API_URL } from "@/constants/Config";
 
 interface GeneralSettingsModalProps {
   visible: boolean;
@@ -93,6 +96,47 @@ export default function GeneralSettingsModal({
   const [enableDirectProcessToPay, setEnableDirectProcessToPay] = useState(settings.enableDirectProcessToPay);
   const [customerSideDisplay, setCustomerSideDisplay] = useState(settings.customerSideDisplay);
   const [enableGuestDetailsPopup, setEnableGuestDetailsPopup] = useState(settings.enableGuestDetailsPopup);
+  const [enableCashDrawer, setEnableCashDrawer] = useState(settings.enableCashDrawer !== undefined ? settings.enableCashDrawer : true);
+
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordValue, setPasswordValue] = useState("");
+  const [verifyingPassword, setVerifyingPassword] = useState(false);
+  const [pendingCashDrawerValue, setPendingCashDrawerValue] = useState<boolean | null>(null);
+
+  const handleToggleCashDrawer = (val: boolean) => {
+    setPendingCashDrawerValue(val);
+    setPasswordValue("");
+    setShowPasswordModal(true);
+  };
+
+  const handlePasswordVerify = async () => {
+    if (!passwordValue) {
+      showToast({ type: "error", message: "Please enter password" });
+      return;
+    }
+    setVerifyingPassword(true);
+    try {
+      const verifyRes = await fetch(`${API_URL}/api/auth/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: passwordValue }),
+      });
+      const verifyData = await verifyRes.json();
+      if (verifyData.success) {
+        if (pendingCashDrawerValue !== null) {
+          setEnableCashDrawer(pendingCashDrawerValue);
+        }
+        setShowPasswordModal(false);
+        showToast({ type: "success", message: "Access Unlocked" });
+      } else {
+        Alert.alert("Access Denied", "Incorrect admin password");
+      }
+    } catch (err) {
+      Alert.alert("Error", "Could not verify password. Check connection.");
+    } finally {
+      setVerifyingPassword(false);
+    }
+  };
 
   const handleToggleCheckoutFlow = (val: boolean) => {
     if (val) {
@@ -134,6 +178,7 @@ export default function GeneralSettingsModal({
       setEnableCheckoutBill(settings.enableCheckoutBill);
       setCustomerSideDisplay(settings.customerSideDisplay);
       setEnableGuestDetailsPopup(settings.enableGuestDetailsPopup !== undefined ? settings.enableGuestDetailsPopup : true);
+      setEnableCashDrawer(settings.enableCashDrawer !== undefined ? settings.enableCashDrawer : true);
       
       let initialCheckoutFlow = settings.enableCheckoutFlow;
       let initialDirectProcess = settings.enableDirectProcessToPay;
@@ -203,6 +248,7 @@ export default function GeneralSettingsModal({
       enableDirectProcessToPay,
       customerSideDisplay,
       enableGuestDetailsPopup,
+      enableCashDrawer,
     });
     
     setIsSaving(false);
@@ -354,6 +400,20 @@ export default function GeneralSettingsModal({
               </View>
               <CustomSwitch value={enableGuestDetailsPopup} onValueChange={setEnableGuestDetailsPopup} />
             </View>
+
+            {/* CARD 8: Enable Cash Drawer */}
+            <View style={[styles.settingCard, enableCashDrawer && styles.settingCardActive]}>
+              <View style={styles.cardLeft}>
+                <View style={styles.cardHeaderRow}>
+                  <View style={[styles.iconWrapper, enableCashDrawer ? styles.iconWrapperActive : styles.iconWrapperInactive]}>
+                    <Ionicons name="wallet-outline" size={16} color={enableCashDrawer ? Theme.primary : Theme.textSecondary} />
+                  </View>
+                  <Text style={styles.settingTitle}>Enable Cash Drawer Module</Text>
+                </View>
+                <Text style={styles.settingDesc}>Enable checkout cashbox opening triggers and manual overrides wizard.</Text>
+              </View>
+              <CustomSwitch value={enableCashDrawer} onValueChange={handleToggleCashDrawer} />
+            </View>
           </ScrollView>
 
           {/* Footer */}
@@ -387,6 +447,51 @@ export default function GeneralSettingsModal({
           {/* ── CUSTOM CONFIRMATION OVERLAY ── */}
           {showConfirmDialog && (
             <Animated.View style={[styles.confirmOverlay, { opacity: confirmOpacity }]}>
+
+          {/* ── ADMIN PASSWORD VERIFICATION MODAL OVERLAY ── */}
+          {showPasswordModal && (
+            <View style={styles.confirmOverlay}>
+              <View style={[styles.confirmCard, { maxWidth: 300 }]}>
+                <View style={[styles.confirmIconContainer, { backgroundColor: Theme.primaryLight }]}>
+                  <Ionicons name="lock-closed" size={24} color={Theme.primary} />
+                </View>
+                <Text style={styles.confirmTitle}>Admin Verification</Text>
+                <Text style={styles.confirmDesc}>
+                  Enter admin password to toggle Cash Drawer settings.
+                </Text>
+                <TextInput
+                  style={[styles.input, { width: "100%", textAlign: "center", marginBottom: 16, fontSize: 18 }]}
+                  placeholder="••••"
+                  placeholderTextColor={Theme.textMuted}
+                  secureTextEntry
+                  value={passwordValue}
+                  onChangeText={setPasswordValue}
+                  onSubmitEditing={handlePasswordVerify}
+                  autoFocus
+                />
+                <View style={styles.confirmActions}>
+                  <TouchableOpacity
+                    style={styles.confirmBtnCancel}
+                    onPress={() => setShowPasswordModal(false)}
+                    disabled={verifyingPassword}
+                  >
+                    <Text style={styles.confirmBtnCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.confirmBtnSave}
+                    onPress={handlePasswordVerify}
+                    disabled={verifyingPassword}
+                  >
+                    {verifyingPassword ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.confirmBtnSaveText}>Verify</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
               <Animated.View
                 style={[
                   styles.confirmCard,
@@ -436,6 +541,16 @@ export default function GeneralSettingsModal({
 }
 
 const styles = StyleSheet.create({
+  input: {
+    borderWidth: 1.5,
+    borderColor: Theme.border,
+    borderRadius: 12,
+    padding: 10,
+    fontSize: 16,
+    backgroundColor: "#FAF9F6",
+    color: Theme.textPrimary,
+    fontFamily: Fonts.medium,
+  },
   // Overlay & Modal Card
   overlay: {
     flex: 1,

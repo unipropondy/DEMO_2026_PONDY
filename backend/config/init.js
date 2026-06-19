@@ -238,6 +238,7 @@ async function initDB(pool) {
     await runQuery("AppSettings - EnableDirectProcessToPay", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[AppSettings]') AND name = 'EnableDirectProcessToPay') ALTER TABLE [dbo].[AppSettings] ADD EnableDirectProcessToPay BIT NOT NULL DEFAULT 0");
     await runQuery("AppSettings - CustomerSideDisplay", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[AppSettings]') AND name = 'CustomerSideDisplay') ALTER TABLE [dbo].[AppSettings] ADD CustomerSideDisplay BIT NOT NULL DEFAULT 1");
     await runQuery("AppSettings - EnableGuestDetailsPopup", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[AppSettings]') AND name = 'EnableGuestDetailsPopup') ALTER TABLE [dbo].[AppSettings] ADD EnableGuestDetailsPopup BIT NOT NULL DEFAULT 1");
+    await runQuery("AppSettings - EnableCashDrawer", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[AppSettings]') AND name = 'EnableCashDrawer') ALTER TABLE [dbo].[AppSettings] ADD EnableCashDrawer BIT NOT NULL DEFAULT 1");
 
     // 11. OrderMergeHistory Setup
     await runQuery("Create OrderMergeHistory", `
@@ -548,6 +549,16 @@ async function initDB(pool) {
               [IsSuccess] [bit] NOT NULL DEFAULT 1,
               [CreatedOn] [datetime] DEFAULT GETDATE()
           )
+      END
+    `);
+
+    // 22.1 Create Unique Filtered Index for SALE OrderIds (3-Layer Protection Layer 3)
+    await runQuery("Index - CashDrawerLog Unique OrderId Sale", `
+      IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'UIX_CashDrawerLog_OrderId_Sale' AND object_id = OBJECT_ID('CashDrawerLog'))
+      BEGIN
+          CREATE UNIQUE NONCLUSTERED INDEX UIX_CashDrawerLog_OrderId_Sale 
+          ON [dbo].[CashDrawerLog](OrderId) 
+          WHERE OrderId IS NOT NULL AND OrderId <> '' AND OpenSource = 'SALE';
       END
     `);
 
