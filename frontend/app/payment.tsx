@@ -59,6 +59,9 @@ type PaymentMethod = {
   isVoucher: boolean;
   position: number;
   active?: any;
+  yeahPayEnabled?: boolean;
+  deviceSn?: string | null;
+  deviceSalt?: string | null;
 };
 
 const PAYMODE_ICON_MAP: Record<string, string> = {
@@ -622,9 +625,6 @@ export default function PaymentScreen() {
     ? 0
     : Math.round(serviceChargeAmt * 100) / 100;
   const netAmountForDisplay = netAfterDiscount;
-  // ✅ FIX: Compute round-off from raw (unrounded) total vs rounded-display components.
-  // Previously this produced a phantom -$0.01 "Rounding" line when GST had a .5-cent fraction
-  // because displayedTax was rounded up but total was the raw float sum.
   const displayedRoundOff =
     roundOff !== 0
       ? parseFloat(
@@ -639,20 +639,32 @@ export default function PaymentScreen() {
   const quickCash = [20, 50, 100, 200, 500, 1000];
 
   const fetchPaymentMethods = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/sales/payment-methods`);
-      const data: any[] = await res.json();
-      const mapped: PaymentMethod[] = data.map((d) => ({
-        payMode: d.payMode || "",
-        description: d.description || d.payMode || "",
-        icon: getPaymodeIcon(d.payMode || ""),
-        commission: parseFloat(d.Commission) || 0,
-        serviceCharge: parseFloat(d.ServiceCharge) || 0,
-        isEntertainment: d.isEntertainment === 1 || d.isEntertainment === true,
-        isVoucher: d.isVoucher === 1 || d.isVoucher === true,
-        position: d.Position || 0,
-        active: d.active,
-      }));
+  try {
+    const res = await fetch(`${API_URL}/api/sales/payment-methods`);
+    const data: any[] = await res.json();
+    
+    // ✅ DEBUG - Log raw data
+    console.log('🔍🔍🔍 RAW DATA FROM BACKEND:', JSON.stringify(data, null, 2));
+    
+    const mapped: PaymentMethod[] = data.map((d) => ({
+  payMode: d.payMode || "",
+  description: d.description || d.payMode || "",
+  icon: getPaymodeIcon(d.payMode || ""),
+  commission: parseFloat(d.Commission) || 0,
+  serviceCharge: parseFloat(d.ServiceCharge) || 0,
+  isEntertainment: d.isEntertainment === 1 || d.isEntertainment === true,
+  isVoucher: d.isVoucher === 1 || d.isVoucher === true,
+  position: d.Position || 0,
+  active: d.active,
+  // ✅ FIX: Handle both boolean and number
+  yeahPayEnabled: d.YeahPayEnabled === 1 || d.YeahPayEnabled === true,
+  deviceSn: d.DeviceSN || null,
+  deviceSalt: d.DeviceSalt || null,
+}));
+    // ✅ DEBUG - Log mapped data
+    console.log('🔍🔍🔍 MAPPED DATA:', JSON.stringify(mapped, null, 2));
+    
+    // ... rest of your code
 
       const seen = new Set<string>();
       const deduped = mapped.filter((m) => {
@@ -761,103 +773,179 @@ export default function PaymentScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const confirmPayment = async () => {
-    if (processing) return;
-    if (isLedgerCollection) {
-      const parsedAmt = parseFloat(collectionAmount) || 0;
-      if (parsedAmt <= 0) {
-        showToast({
-          type: "warning",
-          message: "Invalid Amount",
-          subtitle: "Please enter a positive collection amount.",
-        });
+const confirmPayment = async () => {
+  if (processing) return;
+
+  // 🔍 DEBUG
+  console.log('🔍🔍🔍 CONFIRM PAYMENT DEBUG:');
+  console.log('  method:', method);
+  
+  const selectedMethod = paymentMethods.find(m => m.payMode === method);
+  console.log('  selectedMethod:', selectedMethod);
+  
+  const isYeahPay = selectedMethod?.yeahPayEnabled === true;
+  console.log('  isYeahPay:', isYeahPay);
+  console.log('  total:', total);
+
+  // ✅ YEAHPAY - Direct terminal call (NO QR!)
+  if (isYeahPay && total > 0) {
+    console.log('✅✅✅ YEAHPAY DETECTED! Calling terminal...');
+    setProcessing(true);
+    
+    try {
+      const deviceSn = selectedMethod?.deviceSn || '';
+      const salt = selectedMethod?.deviceSalt || '';
+      const isCard = method.trim().toUpperCase().includes("CARD") && !method.trim().toUpperCase().includes("PAYNOW");
+      
+      console.log('🔄 [MainPayment] Calling YeahPay terminal for:', method);
+      console.log('   Amount:', total);
+      console.log('   DeviceSN:', deviceSn);
+      console.log('   Salt:', salt ? 'Yes' : 'No');
+      
+      if (!deviceSn) {
+        Alert.alert('Configuration Error', 'DeviceSN not configured.');
+        setProcessing(false);
         return;
       }
-      if (collectAmount !== undefined && parsedAmt > collectAmount + 0.01) {
+      
+      const endpoint = isCard ? '/api/yeahpay/card-payment' : '/api/yeahpay/paynow-payment';
+      console.log('🔵 Endpoint:', endpoint);
+      
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: total,
+          deviceSn: deviceSn,
+          salt: salt || ''
+        })
+      });
+      
+      const result = await response.json();
+      console.log('✅ [MainPayment] Terminal response:', result);
+      
+      if (result.success) {
         showToast({
-          type: "warning",
-          message: "Overpayment Prevention",
-          subtitle: `Cannot exceed outstanding balance of ${currencySymbol}${collectAmount.toFixed(2)}`,
+          type: 'success',
+          message: '✅ Payment Successful',
+          subtitle: `${currencySymbol}${total.toFixed(2)} paid via ${method}`
         });
-        return;
+        executeFinalPayment();
+      } else if (result.code === -1027) {
+        Alert.alert('Cancelled', 'Transaction was cancelled on terminal');
+        setProcessing(false);
+      } else if (result.code === -1028 || result.code === -1008) {
+        Alert.alert('Timeout', 'Card read timed out. Please try again.');
+        setProcessing(false);
+      } else {
+        Alert.alert('Payment Failed', result.msg || result.error || 'Payment declined');
+        setProcessing(false);
       }
+    } catch (error: any) {
+      console.error('❌ [MainPayment] Terminal error:', error);
+      Alert.alert('Error', error.message || 'Failed to connect to terminal');
+      setProcessing(false);
     }
-    if (isLedgerCollection && total <= 0) {
-      Alert.alert(
-        "No Payment Required",
-        `Outstanding balance is ${currencySymbol}${total.toFixed(2)}. No collection payment is required.`,
-      );
-      return;
-    }
-    if (
-      total > 0 &&
-      isCashMethod(method) &&
-      paidNum < total &&
-      Math.abs(paidNum - total) > 0.01
-    ) {
+    return;
+  }
+
+  // ============================================================
+  // REST OF EXISTING CODE
+  // ============================================================
+
+  if (isLedgerCollection) {
+    const parsedAmt = parseFloat(collectionAmount) || 0;
+    if (parsedAmt <= 0) {
       showToast({
         type: "warning",
-        message: "Insufficient Payment",
-        subtitle: `Please enter at least ${currencySymbol}${total.toFixed(2)}`,
+        message: "Invalid Amount",
+        subtitle: "Please enter a positive collection amount.",
       });
       return;
     }
-    const { settings } = usePaymentSettingsStore.getState();
-    const mUpper = method.trim().toUpperCase();
-    if (
-      mUpper === "MEMBER" ||
-      mUpper === "CREDIT" ||
-      mUpper === "5" ||
-      mUpper === "6"
-    ) {
-      if (!selectedMember) {
-        // No member chosen yet — open modal to search and select one
-        setShowMemberModal(true);
-        return;
-      }
-      // Member already selected — proceed to Complement Settlement
-      const isLimitExceeded =
-        (selectedMember.CurrentBalance || 0) + total >
-        (selectedMember.CreditLimit || 0);
-      if (isLimitExceeded) {
-        const isAdminOrManager =
-          user?.role === "ADMIN" || user?.role === "MANAGER";
-        if (isAdminOrManager) {
-          Alert.alert(
-            "Credit Limit Exceeded",
-            `Customer outstanding will be ${currencySymbol}${((selectedMember.CurrentBalance || 0) + total).toFixed(2)} which exceeds limit of ${currencySymbol}${(selectedMember.CreditLimit || 0).toFixed(2)}. Authorize this credit sale?`,
-            [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Authorize & Complete",
-                onPress: () => executeFinalPayment(),
-              },
-            ],
-          );
-        } else {
-          showToast({
-            type: "error",
-            message: "Credit Limit Exceeded",
-            subtitle: "Manager approval required to override",
-          });
-        }
+    if (collectAmount !== undefined && parsedAmt > collectAmount + 0.01) {
+      showToast({
+        type: "warning",
+        message: "Overpayment Prevention",
+        subtitle: `Cannot exceed outstanding balance of ${currencySymbol}${collectAmount.toFixed(2)}`,
+      });
+      return;
+    }
+  }
+  if (isLedgerCollection && total <= 0) {
+    Alert.alert(
+      "No Payment Required",
+      `Outstanding balance is ${currencySymbol}${total.toFixed(2)}. No collection payment is required.`,
+    );
+    return;
+  }
+  if (
+    total > 0 &&
+    isCashMethod(method) &&
+    paidNum < total &&
+    Math.abs(paidNum - total) > 0.01
+  ) {
+    showToast({
+      type: "warning",
+      message: "Insufficient Payment",
+      subtitle: `Please enter at least ${currencySymbol}${total.toFixed(2)}`,
+    });
+    return;
+  }
+  const { settings } = usePaymentSettingsStore.getState();
+  const mUpper = method.trim().toUpperCase();
+  if (
+    mUpper === "MEMBER" ||
+    mUpper === "CREDIT" ||
+    mUpper === "5" ||
+    mUpper === "6"
+  ) {
+    if (!selectedMember) {
+      setShowMemberModal(true);
+      return;
+    }
+    const isLimitExceeded =
+      (selectedMember.CurrentBalance || 0) + total >
+      (selectedMember.CreditLimit || 0);
+    if (isLimitExceeded) {
+      const isAdminOrManager =
+        user?.role === "ADMIN" || user?.role === "MANAGER";
+      if (isAdminOrManager) {
+        Alert.alert(
+          "Credit Limit Exceeded",
+          `Customer outstanding will be ${currencySymbol}${((selectedMember.CurrentBalance || 0) + total).toFixed(2)} which exceeds limit of ${currencySymbol}${(selectedMember.CreditLimit || 0).toFixed(2)}. Authorize this credit sale?`,
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Authorize & Complete",
+              onPress: () => executeFinalPayment(),
+            },
+          ],
+        );
       } else {
-        executeFinalPayment();
+        showToast({
+          type: "error",
+          message: "Credit Limit Exceeded",
+          subtitle: "Manager approval required to override",
+        });
       }
-      return;
+    } else {
+      executeFinalPayment();
     }
+    return;
+  }
 
-    if (mUpper.includes("UPI") && settings.upiId) {
-      setIsUPIVisible(true);
-      return;
-    }
-    if (mUpper.includes("PAYNOW") && settings.payNowQrUrl) {
-      setIsPayNowVisible(true);
-      return;
-    }
-    executeFinalPayment();
-  };
-
+  // ✅ Only show QR for REGULAR PayNow (NOT YeahPay)
+  
+  
+  // ✅ Only show UPI for regular UPI
+  if (mUpper.includes("UPI") && settings.upiId) {
+    setIsUPIVisible(true);
+    return;
+  }
+  
+  executeFinalPayment();
+};
   const executeFinalPayment = async (
     payments?: Array<{
       payModeId: number;
@@ -1072,8 +1160,6 @@ export default function PaymentScreen() {
                 setCartItems(currentContextId, updated);
               }
               useCartStore.getState().setActiveSplitItems(null);
-              // Do not clean table context if items remain.
-              // If empty, backend socket handles cleanup automatically.
             } else {
               if (context.orderType === "DINE_IN") {
                 clearTable(context.section!, context.tableNo!);
@@ -1641,7 +1727,6 @@ export default function PaymentScreen() {
             )}
           </View>
 
-          {/* Modifiers & Notes */}
           {(item.spicy && item.spicy !== "Medium") ||
           (item.oil && item.oil !== "Normal") ||
           (item.salt && item.salt !== "Normal") ||
@@ -1836,7 +1921,6 @@ export default function PaymentScreen() {
                   isLandscape && { flex: 1.2, paddingRight: 20 },
                 ]}
               >
-                {/* Summary for Mobile */}
                 {!showOrderPanel && (
                   <View style={styles.mobileSummaryCard}>
                     <View style={styles.mobileSummaryRow}>
@@ -1903,6 +1987,8 @@ export default function PaymentScreen() {
                       payMode: pm.payMode,
                       description: pm.description,
                       position: pm.position,
+                      deviceSn: pm.deviceSn || '',      // ✅ PASS THIS
+    deviceSalt: pm.deviceSalt || '',
                     }))}
                     selectedMember={selectedMember}
                     onSelectMember={(mode) => {
@@ -1945,43 +2031,58 @@ export default function PaymentScreen() {
                       </View>
                     ) : (
                       <View style={styles.methodsGrid}>
-                        {paymentMethods.map((m) => (
-                          <TouchableOpacity
-                            key={m.payMode}
-                            style={[
-                              styles.methodCard,
-                              method === m.payMode && styles.activeMethodCard,
-                              isMobile && { width: "30%", height: 75 },
-                            ]}
-                            onPress={() => handleSelectMethod(m)}
-                          >
-                            <View
+                        {paymentMethods.map((m) => {
+                          const isYeahPay = m.yeahPayEnabled === true;
+                          const isSelected = method === m.payMode;
+
+                          return (
+                            <TouchableOpacity
+                              key={m.payMode}
                               style={[
-                                styles.methodIconBox,
-                                method === m.payMode && styles.activeIconBox,
-                                isMobile && { width: 30, height: 30 },
+                                styles.methodCard,
+                                isSelected && styles.activeMethodCard,
+                                isYeahPay && styles.yeahpayMethodCard,
+                                isMobile && { width: "30%", height: 75 },
                               ]}
+                              onPress={() => handleSelectMethod(m)}
                             >
-                              <FontAwesome5
-                                name={m.icon}
-                                size={isMobile ? 16 : 20}
-                                color={
-                                  method === m.payMode ? "#fff" : Theme.primary
-                                }
-                              />
-                            </View>
-                            <Text
-                              style={[
-                                styles.methodLabel,
-                                method === m.payMode &&
-                                  styles.activeMethodLabel,
-                                isMobile && { fontSize: 10 },
-                              ]}
-                            >
-                              {m.description}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
+                              <View
+                                style={[
+                                  styles.methodIconBox,
+                                  isSelected && styles.activeIconBox,
+                                  isYeahPay && styles.yeahpayIconBox,
+                                  isMobile && { width: 30, height: 30 },
+                                ]}
+                              >
+                                <FontAwesome5
+                                  name={m.icon}
+                                  size={isMobile ? 16 : 20}
+                                  color={
+                                    isSelected ? "#fff" :
+                                    isYeahPay ? "#059669" :
+                                    Theme.primary
+                                  }
+                                />
+                              </View>
+                              <Text
+                                style={[
+                                  styles.methodLabel,
+                                  isSelected && styles.activeMethodLabel,
+                                  isYeahPay && styles.yeahpayLabel,
+                                  isMobile && { fontSize: 10 },
+                                ]}
+                              >
+                                {m.description}
+                              </Text>
+                              {isYeahPay && (
+                                <View style={styles.yeahpayBadge}>
+                                  <Ionicons name="shield-checkmark" size={10} color="#059669" />
+                                  <Text style={styles.yeahpayBadgeText}>Secure</Text>
+                                </View>
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
                     )}
 
@@ -2213,7 +2314,6 @@ export default function PaymentScreen() {
                       </View>
                     )}
 
-                    {/* On mobile, show Ledger Collection Details inside left pane */}
                     {!showOrderPanel && isLedgerCollection && (
                       <View style={styles.creditMemberSection}>
                         <View style={styles.sectionHeader}>
@@ -2780,7 +2880,6 @@ export default function PaymentScreen() {
         }}
       />
 
-      {/* MEMBER SEARCH MODAL */}
       <Modal
         visible={showMemberModal}
         transparent
@@ -2815,7 +2914,6 @@ export default function PaymentScreen() {
                   showsVerticalScrollIndicator={false}
                 >
                   {isQuickAddMode ? (
-                    /* QUICK ADD FORM */
                     <View style={styles.quickAddForm}>
                       <View style={styles.formField}>
                         <Text style={styles.formLabel}>Customer Name *</Text>
@@ -2961,9 +3059,7 @@ export default function PaymentScreen() {
                       </View>
                     </View>
                   ) : (
-                    /* SEARCH & LIST WORKFLOW */
                     <>
-                      {/* Quick Add Toggle Button */}
                       {method.trim().toUpperCase() !== "MEMBER" && (
                         <TouchableOpacity
                           style={styles.quickAddToggleBtn}
@@ -2987,7 +3083,6 @@ export default function PaymentScreen() {
                         </TouchableOpacity>
                       )}
 
-                      {/* Search Bar */}
                       <View style={styles.searchBarBox}>
                         <Ionicons
                           name="search"
@@ -3022,7 +3117,6 @@ export default function PaymentScreen() {
                         )}
                       </View>
 
-                      {/* Members List */}
                       <View style={{ marginVertical: 8 }}>
                         {members.length === 0 ? (
                           <View
@@ -3070,7 +3164,6 @@ export default function PaymentScreen() {
                                     });
                                     return;
                                   }
-                                  // Select member only — payment is completed via "Complement Settlement" button below
                                   setSelectedMember(item);
                                 }}
                               >
@@ -3156,7 +3249,6 @@ export default function PaymentScreen() {
                         )}
                       </View>
 
-                      {/* Selected Member Details & Confirmation */}
                       {selectedMember && (
                         <View style={styles.selectedMemberDetailCard}>
                           <Text
@@ -3240,7 +3332,6 @@ export default function PaymentScreen() {
                   )}
                 </ScrollView>
 
-                {/* Fixed bottom actions outside ScrollView */}
                 {isQuickAddMode ? (
                   <View style={styles.adjustModalActions}>
                     <TouchableOpacity
@@ -3292,8 +3383,6 @@ export default function PaymentScreen() {
                       <TouchableOpacity
                         style={styles.confirmBtn}
                         onPress={() => {
-                          // Only close the modal and confirm member selection.
-                          // Payment is finalized by pressing "Complement Settlement" on the payment screen.
                           setShowMemberModal(false);
                         }}
                       >
@@ -3494,6 +3583,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   activeMethodLabel: { color: "#fff" },
+  yeahpayMethodCard: {
+    borderColor: '#059669',
+    borderWidth: 2,
+    backgroundColor: '#ECFDF5',
+  },
+  yeahpayIconBox: {
+    backgroundColor: '#D1FAE5',
+  },
+  yeahpayLabel: {
+    color: '#065F46',
+    fontFamily: Fonts.black,
+  },
+  yeahpayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    gap: 3,
+    marginTop: 2,
+  },
+  yeahpayBadgeText: {
+    fontSize: 8,
+    fontFamily: Fonts.black,
+    color: '#059669',
+  },
   cashSection: { marginTop: 5 },
   sectionHeader: { marginBottom: 8 },
   sectionTitle: {
@@ -4031,7 +4147,6 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 16,
   },
-  // Credit / Member Section Styles
   creditMemberSection: {
     marginTop: 5,
     marginBottom: 10,

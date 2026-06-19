@@ -1,6 +1,6 @@
 export const API_URL =
   process.env.EXPO_PUBLIC_API_URL ||
-  "https://demo2026pondy-production.up.railway.app";
+  "http://192.168.0.131:3000";
 
 console.log(
   `🌐 [Config] API_URL: ${API_URL} | Platform: ${require("react-native").Platform.OS} | Env: ${process.env.NODE_ENV}`,

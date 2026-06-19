@@ -8,7 +8,7 @@ const { processSplitPayments } = require("../services/payment.service");
 const { getBusinessDaySqlBounds } = require("../utils/timezoneHelper");
 const { getBusinessTimezoneSettings, getCompanySettings } = require("../utils/settingsCache");
 const { sendBalanceNotification } = require("../utils/whatsappService");
-
+const PaymentService = require('../services/payment.service');
 
 // Helper to generate a random 8-character hex ID (e.g. A996E780)
 const generateRandomBillId = () => {
@@ -2309,12 +2309,27 @@ router.get("/payment-history", async (req, res) => {
     }
 });
 
+// routes/sales.js
+
 router.get("/payment-methods", async (req, res) => {
     try {
       const pool = await poolPromise;
       const result = await pool.request().query(`
-        SELECT PayMode as payMode, Description as description, Position, Active as active FROM [dbo].[Paymode] ORDER BY Position ASC
+        SELECT 
+          PayMode as payMode, 
+          Description as description, 
+          Position, 
+          Active as active,
+          DeviceSN,
+          DeviceSalt,
+          YeahPayEnabled
+        FROM [dbo].[Paymode] 
+        ORDER BY Position ASC
       `);
+      
+      // ✅ DEBUG - Log raw result
+      console.log('🔍 Raw DB result:', JSON.stringify(result.recordset, null, 2));
+      
       res.json(result.recordset || []);
     } catch (err) {
       res.status(500).json({ error: err.message });

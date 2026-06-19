@@ -16,7 +16,8 @@ import { Fonts } from "../../constants/Fonts";
 import { Theme } from "../../constants/theme";
 import UPIPaymentModal from "./UPIPaymentModal";
 import PayNowPaymentModal from "./PayNowPaymentModal";
-
+import { API_URL } from "@/constants/Config";  // ✅ ADD
+import { useToast } from "../Toast";  
 const formatMoney = (symbol: string, amount: number) => {
   try {
     return `${symbol}${(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -31,13 +32,15 @@ export type SplitPaymentRow = {
   payMode: string;
   amount: string;
   referenceNo: string;
-  status: "Paid" | "Pending";
+  status: "Paid" | "Pending" | "Cancelled";
 };
 
 type PaymentMethodType = {
   payMode: string;
   description: string;
   position: number;
+   deviceSn?: string | null;    // ✅ ADD THIS
+  deviceSalt?: string | null;
 };
 
 interface SplitPaymentComponentProps {
@@ -46,6 +49,7 @@ interface SplitPaymentComponentProps {
   onComplete: (payments: Array<{ payModeId: number; payMode: string; amount: number; referenceNo?: string }>) => void;
   onCancel: () => void;
   processing: boolean;
+  setProcessing?: (value: boolean) => void;
   memberFlow?: boolean;
   currencySymbol?: string;
   selectedMember?: any;
@@ -54,7 +58,9 @@ interface SplitPaymentComponentProps {
 
 const isQRMode = (modeName: string): boolean => {
   const m = modeName.toUpperCase().trim();
-  return m.includes("PAYNOW") || m.includes("PAY-NOW") || m.includes("UPI") || m.includes("GPAY") || m.includes("PHONE") || m.includes("PAYTM");
+  return m.includes("PAYNOW") || m.includes("PAY-NOW") || 
+         m.includes("UPI") || m.includes("GPAY") || 
+         m.includes("PHONE") || m.includes("PAYTM");
 };
 
 const isPayNowMode = (modeName: string): boolean => {
@@ -62,6 +68,17 @@ const isPayNowMode = (modeName: string): boolean => {
   return m.includes("PAYNOW") || m.includes("PAY-NOW");
 };
 
+// ✅ ADD THIS - For Card detection
+// ✅ FIXED - Check for CARD without excluding PAYNOW
+const isCardMode = (modeName: string): boolean => {
+  const m = modeName.toUpperCase().trim();
+  // ✅ Check if it contains "CARD" 
+  return m.includes("CARD");
+};
+const needsTerminalCall = (modeName: string): boolean => {
+  const m = modeName.toUpperCase().trim();
+  return m.includes("PAYNOW") || m.includes("PAY-NOW") || m.includes("CARD");
+};
 const isUpiMode = (modeName: string): boolean => {
   const m = modeName.toUpperCase().trim();
   return m.includes("UPI") || m.includes("GPAY") || m.includes("PHONE") || m.includes("PAYTM");
@@ -86,7 +103,8 @@ export default function SplitPaymentComponent({
   const [qrModalType, setQrModalType] = useState<"PAYNOW" | "UPI" | null>(null);
   const [qrModalAmount, setQrModalAmount] = useState(0);
   const [activeQrRowId, setActiveQrRowId] = useState<string | null>(null);
-
+const { showToast } = useToast();  
+const [isGeneratingQR, setIsGeneratingQR] = useState(false);
   // Filter payment methods: for member collections, we shouldn't allow paying with MEMBER credit
   const availableMethods = useMemo(() => {
     if (memberFlow) {
@@ -288,27 +306,114 @@ export default function SplitPaymentComponent({
   };
 
   // Launch digital payment sequential verification
-  const handleGenerateQR = (row: SplitPaymentRow) => {
-    const amt = parseFloat(row.amount);
-    if (isNaN(amt) || amt <= 0) {
-      Alert.alert("Invalid Amount", "Please enter a valid amount before generating QR.");
+ // components/payment/SplitPaymentComponent.tsx
+
+// SplitPaymentComponent.tsx - Update handleGenerateQR
+
+const handleGenerateQR = async (row: SplitPaymentRow) => {
+  const amt = parseFloat(row.amount);
+  if (isNaN(amt) || amt <= 0) {
+    Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+    return;
+  }
+
+  setActiveQrRowId(row.id);
+  setQrModalAmount(amt);
+
+  try {
+    setIsGeneratingQR(true);
+    
+    const selectedMethod = paymentMethods.find(m => m.payMode === row.payMode);
+    const deviceSn = selectedMethod?.deviceSn || '';
+    const salt = selectedMethod?.deviceSalt || '';
+    
+    console.log('🔄 [SplitPayment] Calling terminal for:', row.payMode);
+    console.log('   Amount:', amt);
+    console.log('   DeviceSN:', deviceSn);
+    console.log('   Salt:', salt ? 'Yes' : 'No');
+    
+    if (!deviceSn) {
+      Alert.alert('Configuration Error', 'DeviceSN not configured.');
+      setIsGeneratingQR(false);
       return;
     }
+    
+    // ✅ Determine endpoint based on payment mode
+    const isCard = isCardMode(row.payMode);
+const endpoint = isCard ? '/api/yeahpay/card-payment' : '/api/yeahpay/paynow-payment';
 
-    setActiveQrRowId(row.id);
-    setQrModalAmount(amt);
-
-    if (isPayNowMode(row.payMode)) {
-      setQrModalType("PAYNOW");
-      setQrModalVisible(true);
-    } else if (isUpiMode(row.payMode)) {
-      setQrModalType("UPI");
-      setQrModalVisible(true);
+const response = await fetch(`${API_URL}${endpoint}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    amount: amt,
+    deviceSn: deviceSn,
+    salt: salt || ''
+  })
+});
+    
+    const result = await response.json();
+    console.log('✅ [SplitPayment] Terminal response:', result);
+    
+    const responseCode = result.code;
+    
+    if (result.success) {
+      setRows(prevRows =>
+        prevRows.map(r => 
+          r.id === row.id 
+            ? { ...r, status: 'Paid' } 
+            : r
+        )
+      );
+      
+      showToast({
+        type: 'success',
+        message: `✅ ${isCard ? 'Card' : 'PayNow'} Payment Successful`,
+        subtitle: `$${amt.toFixed(2)} paid via ${row.payMode}`
+      });
+      
+      setQrModalVisible(false);
+      setQrModalType(null);
+      setActiveQrRowId(null);
+      
+    } else if (responseCode === -1027) {
+      setRows(prevRows =>
+        prevRows.map(r => 
+          r.id === row.id 
+            ? { ...r, status: 'Cancelled' as const } 
+            : r
+        )
+      );
+      
+      Alert.alert(
+        'Transaction Cancelled',
+        `${isCard ? 'Card' : 'Payment'} was cancelled on the terminal.`,
+        [{ text: 'OK' }]
+      );
+      
+      setQrModalVisible(false);
+      setQrModalType(null);
+      setActiveQrRowId(null);
+      
+    } else if (responseCode === -1028 || responseCode === -1008) {
+      Alert.alert(
+        'Transaction Timeout',
+        `${isCard ? 'Card' : 'Payment'} read timed out. Please try again.`,
+        [{ text: 'OK' }]
+      );
+      
     } else {
-      Alert.alert("Error", "Selected payment mode is not a QR payment type.");
+      const errorMsg = result.msg || result.error || 'Payment failed';
+      Alert.alert('Payment Failed', errorMsg);
     }
-  };
-
+    
+  } catch (error: any) {
+    console.error('❌ [SplitPayment] Terminal error:', error);
+    Alert.alert('Error', error.message || 'Failed to connect to terminal');
+  } finally {
+    setIsGeneratingQR(false);
+  }
+};
   const handleQrPaymentSuccess = () => {
     if (activeQrRowId) {
       setRows(prevRows =>
@@ -434,27 +539,49 @@ export default function SplitPaymentComponent({
               )}
 
               {/* Status and QR Generation Actions */}
-              <View style={styles.rowFooter}>
-                <View style={styles.statusBox}>
-                  <Text style={styles.statusLabel}>Status: </Text>
-                  <View style={[styles.statusBadge, row.status === "Paid" ? styles.badgePaid : styles.badgePending]}>
-                    <Text style={[styles.statusText, row.status === "Paid" ? styles.textPaid : styles.textPending]}>
-                      {row.status === "Paid" ? "PAID" : "PENDING"}
-                    </Text>
-                  </View>
-                </View>
 
-                {isQRMode(row.payMode) && row.status === "Pending" && (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => handleGenerateQR(row)}
-                    style={styles.generateQrBtn}
-                  >
-                    <Ionicons name="qr-code" size={14} color="#fff" />
-                    <Text style={styles.generateQrText}>Generate QR</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+
+{/* Status and Action Buttons */}
+<View style={styles.rowFooter}>
+  <View style={styles.statusBox}>
+    <Text style={styles.statusLabel}>Status: </Text>
+    <View style={[
+      styles.statusBadge,
+      row.status === "Paid" ? styles.badgePaid :
+      row.status === "Cancelled" ? styles.badgeCancelled :
+      styles.badgePending
+    ]}>
+      <Text style={[
+        styles.statusText,
+        row.status === "Paid" ? styles.textPaid :
+        row.status === "Cancelled" ? styles.textCancelled :
+        styles.textPending
+      ]}>
+        {row.status === "Paid" ? "PAID" :
+         row.status === "Cancelled" ? "CANCELLED" :
+         "PENDING"}
+      </Text>
+    </View>
+  </View>
+
+  {/* ✅ Button shows when NOT Paid AND NOT Cancelled */}
+ {needsTerminalCall(row.payMode) && row.status === "Pending" && (
+  <TouchableOpacity
+    activeOpacity={0.8}
+    onPress={() => handleGenerateQR(row)}
+    style={styles.generateQrBtn}
+  >
+    <Ionicons 
+      name={isPayNowMode(row.payMode) ? "qr-code" : "call-outline"} 
+      size={14} 
+      color="#fff" 
+    />
+    <Text style={styles.generateQrText}>
+      {isPayNowMode(row.payMode) ? "Generate QR" : "Call Terminal"}
+    </Text>
+  </TouchableOpacity>
+)}
+</View>
 
               {/* Reference Number for Non-Cash, editable only if unlocked */}
               {row.payMode.toUpperCase().trim() !== "CASH" && row.payMode.toUpperCase().trim() !== "CAS" && (
@@ -597,6 +724,12 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+    badgeCancelled: {
+  backgroundColor: '#FEE2E2',  // Red background
+},
+textCancelled: {
+  color: '#DC2626',  // Red text
+},
   sectionTitle: {
     fontSize: 18,
     fontFamily: Fonts.black,
@@ -748,6 +881,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
+
+
   memberSelectLinkText: {
     fontSize: 12,
     fontFamily: Fonts.bold,

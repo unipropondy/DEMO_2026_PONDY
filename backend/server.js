@@ -51,7 +51,8 @@ const exportRoutes = require("./routes/export");
 const creditCustomerRoutes = require("./routes/creditCustomers");
 const settlementRoutes = require("./routes/settlementRoutes");
 const settlementLegacyRoutes = require("./routes/settlement");
-
+const config = require('./config');
+const yeahpayRoutes = require('./routes/yeahpay');
 const http = require("http");
 const { Server } = require("socket.io");
 
@@ -102,7 +103,8 @@ io.on("connection", (socket) => {
     console.log("🔌 Client disconnected:", socket.id);
   });
 });
-
+console.log('🔐 [YeahPay] AppId loaded:', config.appId ? '✅ Yes' : '❌ Missing');
+console.log('🔐 [YeahPay] Sync URL:', config.syncApiUrl);
 // 🔄 REAL-TIME DB POLLER: Syncs database updates (e.g. from online/QR orders or external systems) with Socket.io clients instantly
 // Only emits when changes are detected, preventing performance issues.
 const previousTablesState = new Map();
@@ -237,7 +239,7 @@ app.use("/api/export", exportRoutes);
 app.use("/api/credit-customers", creditCustomerRoutes);
 app.use("/api/settlement", settlementRoutes);
 app.use("/api/settlement", settlementLegacyRoutes);
-
+app.use('/api/yeahpay', yeahpayRoutes);
 // AI Chat Integration
 const aiRouter = require("./ai-service-src/routes/ai.routes");
 const rateLimit = require("express-rate-limit");
