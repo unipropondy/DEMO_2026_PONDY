@@ -117,7 +117,8 @@ export default function PaymentScreen() {
   const memberPhone = params.memberPhone as string | undefined;
   const isMember = params.isMember === "true";
   const isLedgerCollection = !!memberId;
-
+const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "cancelled" | "failed">("idle");
+const [paymentMessage, setPaymentMessage] = useState("");
   const allocationsParam = useMemo(() => {
     if (!params.allocations) return null;
     try {
@@ -776,41 +777,33 @@ export default function PaymentScreen() {
 const confirmPayment = async () => {
   if (processing) return;
 
-  // 🔍 DEBUG
-  console.log('🔍🔍🔍 CONFIRM PAYMENT DEBUG:');
-  console.log('  method:', method);
-  
   const selectedMethod = paymentMethods.find(m => m.payMode === method);
-  console.log('  selectedMethod:', selectedMethod);
-  
   const isYeahPay = selectedMethod?.yeahPayEnabled === true;
-  console.log('  isYeahPay:', isYeahPay);
-  console.log('  total:', total);
+  const isCard = method.trim().toUpperCase().includes("CARD") && !method.trim().toUpperCase().includes("PAYNOW");
 
-  // ✅ YEAHPAY - Direct terminal call (NO QR!)
+  // ✅ YEAHPAY - Direct terminal call
   if (isYeahPay && total > 0) {
-    console.log('✅✅✅ YEAHPAY DETECTED! Calling terminal...');
+    setPaymentStatus("processing");
+    setPaymentMessage("Processing payment...");
     setProcessing(true);
     
     try {
       const deviceSn = selectedMethod?.deviceSn || '';
       const salt = selectedMethod?.deviceSalt || '';
-      const isCard = method.trim().toUpperCase().includes("CARD") && !method.trim().toUpperCase().includes("PAYNOW");
       
       console.log('🔄 [MainPayment] Calling YeahPay terminal for:', method);
       console.log('   Amount:', total);
       console.log('   DeviceSN:', deviceSn);
-      console.log('   Salt:', salt ? 'Yes' : 'No');
       
       if (!deviceSn) {
+        setPaymentStatus("failed");
+        setPaymentMessage("DeviceSN not configured");
         Alert.alert('Configuration Error', 'DeviceSN not configured.');
         setProcessing(false);
         return;
       }
       
       const endpoint = isCard ? '/api/yeahpay/card-payment' : '/api/yeahpay/paynow-payment';
-      console.log('🔵 Endpoint:', endpoint);
-      
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -824,31 +817,69 @@ const confirmPayment = async () => {
       const result = await response.json();
       console.log('✅ [MainPayment] Terminal response:', result);
       
-      if (result.success) {
+      const responseCode = result.code;
+      
+      // ✅ SUCCESS - Code 0
+      if (result.success || responseCode === 0) {
+        setPaymentStatus("success");
+        setPaymentMessage(`✅ ${currencySymbol}${total.toFixed(2)} paid successfully via ${method}`);
+        
         showToast({
           type: 'success',
           message: '✅ Payment Successful',
           subtitle: `${currencySymbol}${total.toFixed(2)} paid via ${method}`
         });
+        
+        // ✅ Proceed to save
         executeFinalPayment();
-      } else if (result.code === -1027) {
-        Alert.alert('Cancelled', 'Transaction was cancelled on terminal');
+        
+      // ✅ CANCELLED - Code -1027
+      } else if (responseCode === -1027) {
+        setPaymentStatus("cancelled");
+        setPaymentMessage(`❌ Transaction cancelled on terminal`);
+        
+        Alert.alert(
+          '❌ Transaction Cancelled',
+          'Payment was cancelled on the terminal. Please try again.',
+          [{ text: 'OK' }]
+        );
         setProcessing(false);
-      } else if (result.code === -1028 || result.code === -1008) {
-        Alert.alert('Timeout', 'Card read timed out. Please try again.');
+        
+      // ✅ TIMEOUT - Code -1028, -1008
+      } else if (responseCode === -1028 || responseCode === -1008) {
+        setPaymentStatus("failed");
+        setPaymentMessage(`⏰ Transaction timeout`);
+        
+        Alert.alert(
+          '⏰ Transaction Timeout',
+          'Card read timed out. Please try again.',
+          [{ text: 'OK' }]
+        );
         setProcessing(false);
+        
+      // ✅ FAILED - Other errors
       } else {
-        Alert.alert('Payment Failed', result.msg || result.error || 'Payment declined');
+        setPaymentStatus("failed");
+        const errorMsg = result.msg || result.error || 'Payment declined';
+        setPaymentMessage(`❌ ${errorMsg}`);
+        
+        Alert.alert(
+          '❌ Payment Failed',
+          errorMsg,
+          [{ text: 'OK' }]
+        );
         setProcessing(false);
       }
+      
     } catch (error: any) {
       console.error('❌ [MainPayment] Terminal error:', error);
+      setPaymentStatus("failed");
+      setPaymentMessage(`❌ ${error.message}`);
       Alert.alert('Error', error.message || 'Failed to connect to terminal');
       setProcessing(false);
     }
     return;
   }
-
   // ============================================================
   // REST OF EXISTING CODE
   // ============================================================
@@ -2085,6 +2116,40 @@ const confirmPayment = async () => {
                         })}
                       </View>
                     )}
+                    {paymentStatus !== "idle" && (
+  <View style={[
+    styles.statusContainer,
+    paymentStatus === "success" && styles.statusSuccess,
+    paymentStatus === "cancelled" && styles.statusCancelled,
+    paymentStatus === "failed" && styles.statusFailed,
+    paymentStatus === "processing" && styles.statusProcessing,
+  ]}>
+    <Ionicons 
+      name={
+        paymentStatus === "success" ? "checkmark-circle" :
+        paymentStatus === "cancelled" ? "close-circle" :
+        paymentStatus === "failed" ? "alert-circle" :
+        "sync"
+      } 
+      size={24} 
+      color={
+        paymentStatus === "success" ? "#22c55e" :
+        paymentStatus === "cancelled" ? "#f59e0b" :
+        paymentStatus === "failed" ? "#ef4444" :
+        "#3b82f6"
+      } 
+    />
+    <Text style={[
+      styles.statusMessage,
+      paymentStatus === "success" && styles.statusMessageSuccess,
+      paymentStatus === "cancelled" && styles.statusMessageCancelled,
+      paymentStatus === "failed" && styles.statusMessageFailed,
+      paymentStatus === "processing" && styles.statusMessageProcessing,
+    ]}>
+      {paymentMessage}
+    </Text>
+  </View>
+)}
 
                     {(method.trim().toUpperCase() === "MEMBER" ||
                       method.trim().toUpperCase() === "CREDIT") && (
@@ -3544,6 +3609,50 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Theme.border,
   },
+  // In the styles object, add these:
+
+statusContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: 12,
+  borderRadius: 12,
+  marginVertical: 10,
+  gap: 10,
+  borderWidth: 1,
+},
+statusSuccess: {
+  backgroundColor: '#dcfce7',
+  borderColor: '#22c55e',
+},
+statusCancelled: {
+  backgroundColor: '#fef3c7',
+  borderColor: '#f59e0b',
+},
+statusFailed: {
+  backgroundColor: '#fee2e2',
+  borderColor: '#ef4444',
+},
+statusProcessing: {
+  backgroundColor: '#dbeafe',
+  borderColor: '#3b82f6',
+},
+statusMessage: {
+  fontSize: 14,
+  fontFamily: Fonts.bold,
+  flex: 1,
+},
+statusMessageSuccess: {
+  color: '#16a34a',
+},
+statusMessageCancelled: {
+  color: '#d97706',
+},
+statusMessageFailed: {
+  color: '#dc2626',
+},
+statusMessageProcessing: {
+  color: '#2563eb',
+},
   methodsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
