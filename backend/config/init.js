@@ -538,6 +538,9 @@ async function initDB(pool) {
       END
     `);
 
+    // Ensure Description column exists in CashDrawerRemarks
+    await runQuery("CashDrawerRemarks - Description", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerRemarks]') AND name = 'Description') ALTER TABLE [dbo].[CashDrawerRemarks] ADD [Description] NVARCHAR(100) NOT NULL DEFAULT ''");
+
     // 21. Seed default CashDrawerRemarks
     await runQuery("Seed default CashDrawerRemarks", `
       IF NOT EXISTS (SELECT TOP 1 1 FROM [dbo].[CashDrawerRemarks])
@@ -571,6 +574,9 @@ async function initDB(pool) {
           )
       END
     `);
+
+    // Ensure OpenSource column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - OpenSource", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'OpenSource') ALTER TABLE [dbo].[CashDrawerLog] ADD [OpenSource] NVARCHAR(20) NOT NULL DEFAULT 'MANUAL'");
 
     // 22.1 Create Unique Filtered Index for SALE OrderIds (3-Layer Protection Layer 3)
     await runQuery("Index - CashDrawerLog Unique OrderId Sale", `
