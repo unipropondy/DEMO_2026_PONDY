@@ -581,6 +581,39 @@ async function initDB(pool) {
     // Ensure OrderId column exists in CashDrawerLog
     await runQuery("CashDrawerLog - OrderId", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'OrderId') ALTER TABLE [dbo].[CashDrawerLog] ADD [OrderId] NVARCHAR(100) NULL");
 
+    // Ensure LogId column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - LogId", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'LogId') ALTER TABLE [dbo].[CashDrawerLog] ADD [LogId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID()");
+
+    // Ensure OutletId column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - OutletId", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'OutletId') ALTER TABLE [dbo].[CashDrawerLog] ADD [OutletId] INT NOT NULL DEFAULT 1");
+
+    // Ensure ActionType column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - ActionType", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'ActionType') ALTER TABLE [dbo].[CashDrawerLog] ADD [ActionType] NVARCHAR(30) NULL");
+
+    // Ensure Amount column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - Amount", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'Amount') ALTER TABLE [dbo].[CashDrawerLog] ADD [Amount] DECIMAL(18, 2) NULL");
+
+    // Ensure TenderedAmount column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - TenderedAmount", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'TenderedAmount') ALTER TABLE [dbo].[CashDrawerLog] ADD [TenderedAmount] DECIMAL(18, 2) NULL");
+
+    // Ensure ChangeAmount column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - ChangeAmount", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'ChangeAmount') ALTER TABLE [dbo].[CashDrawerLog] ADD [ChangeAmount] DECIMAL(18, 2) NULL");
+
+    // Ensure Reason column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - Reason", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'Reason') ALTER TABLE [dbo].[CashDrawerLog] ADD [Reason] NVARCHAR(100) NULL");
+
+    // Ensure Remark column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - Remark", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'Remark') ALTER TABLE [dbo].[CashDrawerLog] ADD [Remark] NVARCHAR(500) NULL");
+
+    // Ensure OpenedByUserId column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - OpenedByUserId", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'OpenedByUserId') ALTER TABLE [dbo].[CashDrawerLog] ADD [OpenedByUserId] NVARCHAR(100) NULL");
+
+    // Ensure ApprovedByUserId column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - ApprovedByUserId", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'ApprovedByUserId') ALTER TABLE [dbo].[CashDrawerLog] ADD [ApprovedByUserId] NVARCHAR(100) NULL");
+
+    // Ensure IsSuccess column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - IsSuccess", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'IsSuccess') ALTER TABLE [dbo].[CashDrawerLog] ADD [IsSuccess] BIT NOT NULL DEFAULT 1");
+
     // 22.1 Create Unique Filtered Index for SALE OrderIds (3-Layer Protection Layer 3)
     await runQuery("Index - CashDrawerLog Unique OrderId Sale", `
       IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'UIX_CashDrawerLog_OrderId_Sale' AND object_id = OBJECT_ID('CashDrawerLog'))
