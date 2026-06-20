@@ -551,6 +551,9 @@ async function initDB(pool) {
       END
     `);
 
+    // Ensure 'Settlement' option exists in CashDrawerRemarks
+    await runQuery("Seed Settlement in CashDrawerRemarks", "IF NOT EXISTS (SELECT 1 FROM [dbo].[CashDrawerRemarks] WHERE Description = 'Settlement') INSERT INTO [dbo].[CashDrawerRemarks] (Description) VALUES ('Settlement')");
+
     // 22. Create CashDrawerLog table
     await runQuery("Create CashDrawerLog table", `
       IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND type in (N'U'))
