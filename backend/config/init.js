@@ -588,6 +588,36 @@ async function initDB(pool) {
       END
     `);
 
+    // 23. Create PrintJobQueue table for Print Bridge
+    await runQuery("Create PrintJobQueue table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PrintJobQueue]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[PrintJobQueue](
+              [JobId] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+              [StoreId] NVARCHAR(50) NOT NULL,
+              [PrinterName] NVARCHAR(100) NULL,
+              [PrinterIp] NVARCHAR(100) NOT NULL,
+              [PrinterPort] INT NOT NULL DEFAULT 9100,
+              [Content] NVARCHAR(MAX) NOT NULL,
+              [Status] NVARCHAR(20) NOT NULL DEFAULT 'PENDING',
+              [ErrorMessage] NVARCHAR(MAX) NULL,
+              [CreatedOn] DATETIME NOT NULL DEFAULT GETDATE(),
+              [ProcessedOn] DATETIME NULL,
+              [CompletedOn] DATETIME NULL,
+              [Attempts] INT NOT NULL DEFAULT 0
+          )
+      END
+    `);
+
+    // Create index on StoreId and Status for efficient polling
+    await runQuery("Index - PrintJobQueue StoreId Status", `
+      IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_PrintJobQueue_Store_Status' AND object_id = OBJECT_ID('PrintJobQueue'))
+      BEGIN
+          CREATE NONCLUSTERED INDEX IX_PrintJobQueue_Store_Status
+          ON [dbo].[PrintJobQueue](StoreId, Status);
+      END
+    `);
+
     console.log("✅ Database schema and performance indexes are up to date.");
 
     // 🔄 Auto-sync kitchens to PrintMaster on every startup

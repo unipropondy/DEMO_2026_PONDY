@@ -242,6 +242,8 @@ app.use("/api/settlement", settlementLegacyRoutes);
 app.use('/api/yeahpay', yeahpayRoutes);
 const cashDrawerRouter = require("./routes/cashDrawer");
 app.use("/api/cash-drawer", cashDrawerRouter);
+const printJobsRouter = require("./routes/printJobs");
+app.use("/api/print-jobs", printJobsRouter);
 // AI Chat Integration
 const aiRouter = require("./ai-service-src/routes/ai.routes");
 const rateLimit = require("express-rate-limit");
