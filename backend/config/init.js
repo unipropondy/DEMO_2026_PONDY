@@ -578,6 +578,9 @@ async function initDB(pool) {
     // Ensure OpenSource column exists in CashDrawerLog
     await runQuery("CashDrawerLog - OpenSource", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'OpenSource') ALTER TABLE [dbo].[CashDrawerLog] ADD [OpenSource] NVARCHAR(20) NOT NULL DEFAULT 'MANUAL'");
 
+    // Ensure OrderId column exists in CashDrawerLog
+    await runQuery("CashDrawerLog - OrderId", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerLog]') AND name = 'OrderId') ALTER TABLE [dbo].[CashDrawerLog] ADD [OrderId] NVARCHAR(100) NULL");
+
     // 22.1 Create Unique Filtered Index for SALE OrderIds (3-Layer Protection Layer 3)
     await runQuery("Index - CashDrawerLog Unique OrderId Sale", `
       IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'UIX_CashDrawerLog_OrderId_Sale' AND object_id = OBJECT_ID('CashDrawerLog'))
