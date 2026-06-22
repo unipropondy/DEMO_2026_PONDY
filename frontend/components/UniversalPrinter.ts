@@ -326,6 +326,34 @@ class UniversalPrinter {
     return `<table><tbody>${entries.map(([k, v]) => `<tr><td>${k}</td><td class="amount">${symbol}${(v as number).toFixed(2)}</td></tr>`).join("")}</tbody></table>`;
   }
 
+  private static async queuePrintJob(
+    printerType: number,
+    kitchenTypeValue: string | number | undefined,
+    content: string
+  ): Promise<boolean> {
+    try {
+      const storeId = "STORE_001";
+      const response = await fetch(`${API_URL}/api/print-jobs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer unipro-pos-bridge-token-2026",
+          "x-store-id": storeId
+        },
+        body: JSON.stringify({
+          printerType,
+          kitchenTypeValue: kitchenTypeValue !== undefined ? String(kitchenTypeValue) : undefined,
+          content
+        })
+      });
+      const data = await response.json();
+      return data.success === true;
+    } catch (e) {
+      console.warn("[UniversalPrinter] Failed to queue print job:", e);
+      return false;
+    }
+  }
+
   // ==================== KOT PRINTING (80mm) ====================
   private static async logPrintJob(
     orderId: string,
@@ -358,6 +386,22 @@ class UniversalPrinter {
     type: "NEW" | "ADDITIONAL" | "REPRINT" = "NEW",
     printerIpOverride?: string,
   ): Promise<boolean> {
+    if (Platform.OS === "web") {
+      try {
+        const text = this.formatKOTThermalText(orderData, type);
+        // Map kitchenCode or kitchenTypeValue
+        const kitchenTypeValue = orderData.kitchenCode || orderData.KitchenCode || orderData.kitchenTypeValue || orderData.KitchenTypeValue || "0";
+        console.log(`📡 [Web Print Bridge] Queueing KOT to Kitchen type: ${kitchenTypeValue}`);
+        const success = await this.queuePrintJob(2, kitchenTypeValue, text);
+        if (success) {
+          await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
+          return true;
+        }
+      } catch (err) {
+        console.warn("[Web Print Bridge] KOT Queue failed:", err);
+      }
+    }
+
     // 🚀 NON-BLOCKING BACKGROUND EXECUTION: Run printing in the background to prevent UI lag on APK
     (async () => {
       try {
@@ -795,6 +839,30 @@ class UniversalPrinter {
     preferredType?: PrinterType,
     isReprint: boolean = false,
   ): Promise<boolean> {
+    if (Platform.OS === "web") {
+      try {
+        const company = await BillPDFGenerator.loadSettings(outletId);
+        const text = this.formatThermalTextWithDiscount(
+          saleData,
+          company,
+          discountInfo,
+        );
+        const isTakeaway =
+          !saleData.tableNo ||
+          String(saleData.tableNo).trim() === "" ||
+          String(saleData.tableNo).toUpperCase().startsWith("TW") ||
+          String(saleData.tableNo).toUpperCase() === "TAKEAWAY" ||
+          String(saleData.tableNo).toUpperCase() === "TAKE AWAY";
+
+        const pType = isTakeaway ? 3 : 1;
+        console.log(`📡 [Web Print Bridge] Queueing receipt to printer type: ${pType}`);
+        const success = await this.queuePrintJob(pType, undefined, text);
+        if (success) return true;
+      } catch (err) {
+        console.warn("[Web Print Bridge] Receipt Queue failed:", err);
+      }
+    }
+
     // 🚀 NON-BLOCKING BACKGROUND EXECUTION: Run printing in the background to prevent UI lag on APK
     (async () => {
       try {

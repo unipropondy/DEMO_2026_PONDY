@@ -112,5 +112,89 @@ router.post('/:jobId/failed', authenticateBridge, async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+// 5. POST /api/print-jobs - Queue a new print job from the frontend Web version
+router.post('/', authenticateBridge, async (req, res) => {
+  try {
+    const { printerType, kitchenTypeValue, content } = req.body;
+    const storeId = req.storeId;
+
+    if (printerType === undefined || !content) {
+      return res.status(400).json({ success: false, error: 'Missing required fields: printerType and content' });
+    }
+
+    const pool = getPool();
+
+    // Resolve Printer IP and Name from PrintMaster
+    let printerIp = '';
+    let printerName = '';
+    const pType = parseInt(printerType);
+
+    if (pType === 2) {
+      // Kitchen Printer
+      const kitchenRes = await pool.request()
+        .input('KitchenTypeValue', sql.NVarChar(50), kitchenTypeValue ? String(kitchenTypeValue) : '0')
+        .query(`
+          SELECT TOP 1 PrinterIP, PrinterName 
+          FROM PrintMaster 
+          WHERE PrinterType = 2 AND CAST(KitchenTypeValue AS VARCHAR(50)) = CAST(@KitchenTypeValue AS VARCHAR(50)) AND IsActive = 1
+        `);
+      if (kitchenRes.recordset.length > 0) {
+        printerIp = kitchenRes.recordset[0].PrinterIP;
+        printerName = kitchenRes.recordset[0].PrinterName;
+      }
+    }
+
+    // Fallback or Direct check for Cashier (1) or TakeAway (3) or if Kitchen Printer not found
+    if (!printerIp) {
+      const printerRes = await pool.request()
+        .input('PrinterType', sql.Int, pType)
+        .query(`
+          SELECT TOP 1 PrinterIP, PrinterName 
+          FROM PrintMaster 
+          WHERE PrinterType = @PrinterType AND IsActive = 1
+        `);
+      if (printerRes.recordset.length > 0) {
+        printerIp = printerRes.recordset[0].PrinterIP;
+        printerName = printerRes.recordset[0].PrinterName;
+      }
+    }
+
+    // Ultimate fallback to Cashier Printer (Type 1)
+    if (!printerIp) {
+      const cashierRes = await pool.request()
+        .query(`
+          SELECT TOP 1 PrinterIP, PrinterName 
+          FROM PrintMaster 
+          WHERE PrinterType = 1 AND IsActive = 1
+        `);
+      if (cashierRes.recordset.length > 0) {
+        printerIp = cashierRes.recordset[0].PrinterIP;
+        printerName = cashierRes.recordset[0].PrinterName;
+      } else {
+        // Hardcoded default fallback
+        printerIp = '192.168.0.20';
+        printerName = 'Receipt Printer';
+      }
+    }
+
+    // Insert the job into PrintJobQueue
+    await pool.request()
+      .input('StoreId', sql.NVarChar(50), storeId)
+      .input('PrinterName', sql.NVarChar(100), printerName)
+      .input('PrinterIp', sql.NVarChar(100), printerIp)
+      .input('PrinterPort', sql.Int, 9100) // Default thermal printer raw TCP port
+      .input('Content', sql.NVarChar(sql.MAX), content)
+      .query(`
+        INSERT INTO PrintJobQueue (StoreId, PrinterName, PrinterIp, PrinterPort, Content, Status, CreatedOn)
+        VALUES (@StoreId, @PrinterName, @PrinterIp, @PrinterPort, @Content, 'PENDING', GETDATE())
+      `);
+
+    res.json({ success: true, message: 'Print job queued successfully', printerIp, printerName });
+  } catch (err) {
+    console.error('Error queuing print job:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 module.exports = router;
+
