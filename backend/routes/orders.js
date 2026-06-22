@@ -1611,20 +1611,22 @@ router.post("/log-print", async (req, res) => {
   try {
     const { orderId, orderNumber, printType } = req.body;
     const pool = await poolPromise;
+    
+    const safeOrderId = toGuidOrNull(orderId);
+    const safeOrderNo = orderNumber ? String(orderNumber).substring(0, 50) : null;
+    const safePrintType = parseInt(printType, 10) || 1;
+
     await pool
       .request()
-      .input(
-        "oid",
-        sql.UniqueIdentifier,
-        orderId && orderId.length > 30 ? orderId : null,
-      )
-      .input("ono", sql.VarChar(50), orderNumber)
-      .input("pt", sql.Int, printType || 1)
+      .input("oid", sql.UniqueIdentifier, safeOrderId)
+      .input("ono", sql.VarChar(50), safeOrderNo)
+      .input("pt", sql.Int, safePrintType)
       .query(
         "INSERT INTO PrintReport (OrderId, Ordernumber, PrintType, orderDate) VALUES (@oid, @ono, @pt, GETDATE())",
       );
     res.json({ success: true });
   } catch (err) {
+    console.error("❌ log-print error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

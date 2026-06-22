@@ -426,26 +426,27 @@ class UniversalPrinter {
         // 🚀 Fallback: If Print Bridge failed or printer not detected on web, trigger iframe print preview immediately
         console.log("⚠️ [Web KOT Print] Print Bridge queue failed. Falling back to iframe print preview.");
         const html = this.generateKOTHTML(orderData, type);
-        const frame = document.createElement("iframe");
-        frame.style.visibility = "hidden";
-        frame.style.position = "fixed";
-        frame.style.right = "0";
-        frame.style.bottom = "0";
-        frame.style.width = "0";
-        frame.style.height = "0";
-        document.body.appendChild(frame);
+        let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
+        if (!frame) {
+          frame = document.createElement("iframe");
+          frame.id = "kot-print-iframe";
+          frame.style.display = "none";
+          document.body.appendChild(frame);
+        }
 
-        const doc = frame.contentWindow?.document;
+        const doc = frame.contentWindow?.document || frame.contentDocument;
         if (doc) {
           doc.open();
           doc.write(html);
           doc.close();
 
-          setTimeout(() => {
+          const triggerPrint = () => {
             frame.contentWindow?.focus();
             frame.contentWindow?.print();
-            setTimeout(() => document.body.removeChild(frame), 1000);
-          }, 500);
+          };
+
+          frame.contentWindow?.addEventListener("load", triggerPrint);
+          setTimeout(triggerPrint, 800);
         }
         await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
         return true;
@@ -453,31 +454,33 @@ class UniversalPrinter {
         console.warn("[Web Print Bridge] KOT Queue failed, falling back to iframe print preview:", err);
         try {
           const html = this.generateKOTHTML(orderData, type);
-          const frame = document.createElement("iframe");
-          frame.style.visibility = "hidden";
-          frame.style.position = "fixed";
-          frame.style.right = "0";
-          frame.style.bottom = "0";
-          frame.style.width = "0";
-          frame.style.height = "0";
-          document.body.appendChild(frame);
+          let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
+          if (!frame) {
+            frame = document.createElement("iframe");
+            frame.id = "kot-print-iframe";
+            frame.style.display = "none";
+            document.body.appendChild(frame);
+          }
 
-          const doc = frame.contentWindow?.document;
+          const doc = frame.contentWindow?.document || frame.contentDocument;
           if (doc) {
             doc.open();
             doc.write(html);
             doc.close();
 
-            setTimeout(() => {
+            const triggerPrint = () => {
               frame.contentWindow?.focus();
               frame.contentWindow?.print();
-              setTimeout(() => document.body.removeChild(frame), 1000);
-            }, 500);
+            };
+
+            frame.contentWindow?.addEventListener("load", triggerPrint);
+            setTimeout(triggerPrint, 800);
           }
           await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
           return true;
         } catch (fallbackErr) {
           console.error("Web KOT print fallback failed:", fallbackErr);
+          return false;
         }
       }
     }
@@ -553,37 +556,6 @@ class UniversalPrinter {
           }
         }
 
-        // ✅ 3. Web Fallback (Bypass expo-print for better isolation)
-        if (Platform.OS === "web") {
-          try {
-            const frame = document.createElement("iframe");
-            frame.style.visibility = "hidden";
-            frame.style.position = "fixed";
-            frame.style.right = "0";
-            frame.style.bottom = "0";
-            frame.style.width = "0";
-            frame.style.height = "0";
-            document.body.appendChild(frame);
-
-            const doc = frame.contentWindow?.document;
-            if (doc) {
-              doc.open();
-              doc.write(html);
-              doc.close();
-
-              // Wait for internal content to load
-              setTimeout(() => {
-                frame.contentWindow?.focus();
-                frame.contentWindow?.print();
-                setTimeout(() => document.body.removeChild(frame), 1000);
-              }, 500);
-            }
-            await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
-            return;
-          } catch (e) {
-            console.error("Web KOT isolated print failed:", e);
-          }
-        }
 
         // ✅ 3. Mobile Fallback (Android/iOS)
         const { uri } = await Print.printToFileAsync({
