@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getPool, sql } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
+const { getActiveOrganization } = require('../utils/organizationHelper');
 
 // POST /api/cash-drawer/log
 router.post('/log', authenticateToken, async (req, res) => {
@@ -18,6 +19,10 @@ router.post('/log', authenticateToken, async (req, res) => {
     const userId = req.user?.id || req.user?.userId || '00000000-0000-0000-0000-000000000000';
     const parsedOutletId = parseInt(outletId) || 1;
     const finalTerminalCode = terminalCode || '';
+
+    // Get dynamic active BusinessUnitId (required column in database schema)
+    const org = await getActiveOrganization();
+    const businessUnitId = org.businessUnitId;
 
     await transaction.begin();
 
@@ -38,6 +43,8 @@ router.post('/log', authenticateToken, async (req, res) => {
 
     // 1. Insert Cash Drawer Log
     await request
+      .input('BusinessUnitId', sql.UniqueIdentifier, businessUnitId)
+      .input('UserId', sql.UniqueIdentifier, userId)
       .input('OutletId', sql.Int, parsedOutletId)
       .input('TerminalCode', sql.NVarChar(50), finalTerminalCode)
       .input('ActionType', sql.NVarChar(30), actionType || 'OTHER')
@@ -53,10 +60,10 @@ router.post('/log', authenticateToken, async (req, res) => {
       .input('IsSuccess', sql.Bit, isSuccess !== false ? 1 : 0)
       .query(`
         INSERT INTO CashDrawerLog
-          (OutletId, TerminalCode, ActionType, Amount, TenderedAmount, ChangeAmount, OrderId,
+          (BusinessUnitId, UserId, OutletId, TerminalCode, ActionType, Amount, TenderedAmount, ChangeAmount, OrderId,
            Reason, Remark, OpenedByUserId, ApprovedByUserId, OpenSource, IsSuccess, CreatedOn)
         VALUES
-          (@OutletId, @TerminalCode, @ActionType, @Amount, @TenderedAmount, @ChangeAmount, @OrderId,
+          (@BusinessUnitId, @UserId, @OutletId, @TerminalCode, @ActionType, @Amount, @TenderedAmount, @ChangeAmount, @OrderId,
            @Reason, @Remark, @OpenedByUserId, @ApprovedByUserId, @OpenSource, @IsSuccess, GETDATE())
       `);
 

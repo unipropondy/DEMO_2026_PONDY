@@ -177,21 +177,46 @@ router.post('/', authenticateBridge, async (req, res) => {
       }
     }
 
+    const jobId = require('crypto').randomUUID();
+
     // Insert the job into PrintJobQueue
     await pool.request()
+      .input('JobId', sql.UniqueIdentifier, jobId)
       .input('StoreId', sql.NVarChar(50), storeId)
       .input('PrinterName', sql.NVarChar(100), printerName)
       .input('PrinterIp', sql.NVarChar(100), printerIp)
       .input('PrinterPort', sql.Int, 9100) // Default thermal printer raw TCP port
       .input('Content', sql.NVarChar(sql.MAX), content)
       .query(`
-        INSERT INTO PrintJobQueue (StoreId, PrinterName, PrinterIp, PrinterPort, Content, Status, CreatedOn)
-        VALUES (@StoreId, @PrinterName, @PrinterIp, @PrinterPort, @Content, 'PENDING', GETDATE())
+        INSERT INTO PrintJobQueue (JobId, StoreId, PrinterName, PrinterIp, PrinterPort, Content, Status, CreatedOn)
+        VALUES (@JobId, @StoreId, @PrinterName, @PrinterIp, @PrinterPort, @Content, 'PENDING', GETDATE())
       `);
 
-    res.json({ success: true, message: 'Print job queued successfully', printerIp, printerName });
+    res.json({ success: true, message: 'Print job queued successfully', jobId, printerIp, printerName });
   } catch (err) {
     console.error('Error queuing print job:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/print-jobs/status/:jobId - Check print job status
+router.get('/status/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const pool = getPool();
+    const result = await pool.request()
+      .input('JobId', sql.UniqueIdentifier, jobId)
+      .query(`
+        SELECT Status, ErrorMessage 
+        FROM PrintJobQueue 
+        WHERE JobId = @JobId
+      `);
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+    res.json({ success: true, status: result.recordset[0].Status, error: result.recordset[0].ErrorMessage });
+  } catch (err) {
+    console.error('Error fetching print job status:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

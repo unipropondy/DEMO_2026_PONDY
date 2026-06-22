@@ -347,7 +347,32 @@ class UniversalPrinter {
         })
       });
       const data = await response.json();
-      return data.success === true;
+      if (data.success !== true || !data.jobId) {
+        return false;
+      }
+
+      // Poll for bridge completion (up to 1.5 seconds)
+      const jobId = data.jobId;
+      const start = Date.now();
+      while (Date.now() - start < 1500) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        try {
+          const statusRes = await fetch(`${API_URL}/api/print-jobs/status/${jobId}`);
+          const statusData = await statusRes.json();
+          if (statusData.success && statusData.status === 'COMPLETED') {
+            console.log(`✅ [UniversalPrinter] Print job ${jobId} completed successfully on bridge`);
+            return true;
+          }
+          if (statusData.success && statusData.status === 'FAILED') {
+            console.warn(`❌ [UniversalPrinter] Print job ${jobId} failed on bridge side:`, statusData.error);
+            return false;
+          }
+        } catch (err) {
+          console.error("[UniversalPrinter] Status poll error:", err);
+        }
+      }
+      console.warn(`[UniversalPrinter] Print job ${jobId} timed out (bridge offline/no printer)`);
+      return false;
     } catch (e) {
       console.warn("[UniversalPrinter] Failed to queue print job:", e);
       return false;
@@ -397,8 +422,63 @@ class UniversalPrinter {
           await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
           return true;
         }
+
+        // 🚀 Fallback: If Print Bridge failed or printer not detected on web, trigger iframe print preview immediately
+        console.log("⚠️ [Web KOT Print] Print Bridge queue failed. Falling back to iframe print preview.");
+        const html = this.generateKOTHTML(orderData, type);
+        const frame = document.createElement("iframe");
+        frame.style.visibility = "hidden";
+        frame.style.position = "fixed";
+        frame.style.right = "0";
+        frame.style.bottom = "0";
+        frame.style.width = "0";
+        frame.style.height = "0";
+        document.body.appendChild(frame);
+
+        const doc = frame.contentWindow?.document;
+        if (doc) {
+          doc.open();
+          doc.write(html);
+          doc.close();
+
+          setTimeout(() => {
+            frame.contentWindow?.focus();
+            frame.contentWindow?.print();
+            setTimeout(() => document.body.removeChild(frame), 1000);
+          }, 500);
+        }
+        await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
+        return true;
       } catch (err) {
-        console.warn("[Web Print Bridge] KOT Queue failed:", err);
+        console.warn("[Web Print Bridge] KOT Queue failed, falling back to iframe print preview:", err);
+        try {
+          const html = this.generateKOTHTML(orderData, type);
+          const frame = document.createElement("iframe");
+          frame.style.visibility = "hidden";
+          frame.style.position = "fixed";
+          frame.style.right = "0";
+          frame.style.bottom = "0";
+          frame.style.width = "0";
+          frame.style.height = "0";
+          document.body.appendChild(frame);
+
+          const doc = frame.contentWindow?.document;
+          if (doc) {
+            doc.open();
+            doc.write(html);
+            doc.close();
+
+            setTimeout(() => {
+              frame.contentWindow?.focus();
+              frame.contentWindow?.print();
+              setTimeout(() => document.body.removeChild(frame), 1000);
+            }, 500);
+          }
+          await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
+          return true;
+        } catch (fallbackErr) {
+          console.error("Web KOT print fallback failed:", fallbackErr);
+        }
       }
     }
 
@@ -858,8 +938,13 @@ class UniversalPrinter {
         console.log(`📡 [Web Print Bridge] Queueing receipt to printer type: ${pType}`);
         const success = await this.queuePrintJob(pType, undefined, text);
         if (success) return true;
+
+        // 🚀 Fallback: If Print Bridge failed or printer not detected on web, trigger iframe print preview immediately
+        console.log("⚠️ [Web Receipt Print] Print Bridge queue failed. Falling back to iframe print preview.");
+        return await this.offerPDFFallback(saleData, outletId, t, discountInfo);
       } catch (err) {
-        console.warn("[Web Print Bridge] Receipt Queue failed:", err);
+        console.warn("[Web Print Bridge] Receipt Queue failed, falling back to iframe print preview:", err);
+        return await this.offerPDFFallback(saleData, outletId, t, discountInfo);
       }
     }
 

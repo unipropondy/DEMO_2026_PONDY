@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import ThermalPrinter from 'react-native-thermal-printer';
 import { API_URL } from '../constants/Config';
 import { useAuthStore } from '../stores/authStore';
@@ -38,6 +39,54 @@ export default class CashDrawerService {
   }
 
   static async openCashDrawer(printerIp: string): Promise<boolean> {
+    if (Platform.OS === 'web') {
+      try {
+        const storeId = "STORE_001";
+        console.log(`📡 [Web CashDrawer] Sending open command via Print Bridge`);
+        const response = await fetch(`${API_URL}/api/print-jobs`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer unipro-pos-bridge-token-2026",
+            "x-store-id": storeId
+          },
+          body: JSON.stringify({
+            printerType: 1, // Cashier Printer
+            content: "G3AAGRk=" // Base64 encoding of ESC p 0 25 25 (\x1B\x70\x00\x19\x19)
+          })
+        });
+        const resData = await response.json();
+        if (resData.success !== true || !resData.jobId) {
+          return false;
+        }
+
+        // Poll for completion (up to 1.5 seconds)
+        const jobId = resData.jobId;
+        const start = Date.now();
+        while (Date.now() - start < 1500) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          try {
+            const statusRes = await fetch(`${API_URL}/api/print-jobs/status/${jobId}`);
+            const statusData = await statusRes.json();
+            if (statusData.success && statusData.status === 'COMPLETED') {
+              console.log(`✅ [Web CashDrawer] Drawer opened successfully via Print Bridge`);
+              return true;
+            }
+            if (statusData.success && statusData.status === 'FAILED') {
+              console.warn('[Web CashDrawer] Bridge open command failed on bridge side:', statusData.error);
+              return false;
+            }
+          } catch (err) {
+            console.error('[Web CashDrawer] Status poll error:', err);
+          }
+        }
+        console.warn('[Web CashDrawer] Bridge open command timed out (bridge offline/no printer)');
+        return false;
+      } catch (e) {
+        console.error('[Web CashDrawer] Bridge open command failed:', e);
+        return false;
+      }
+    }
     if (!printerIp || printerIp.trim() === '') {
       console.warn('[CashDrawer] No printer IP configured');
       return false;
