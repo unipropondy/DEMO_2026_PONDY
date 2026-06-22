@@ -163,12 +163,12 @@ router.get('/logs', authenticateToken, async (req, res) => {
     let where = '1=1';
 
     if (fromDate) {
-      request.input('fromDate', sql.DateTime, new Date(fromDate));
-      where += ' AND l.CreatedOn >= @fromDate';
+      request.input('fromDate', sql.VarChar, fromDate);
+      where += ' AND l.CreatedOn >= CAST(@fromDate AS DATETIME)';
     }
     if (toDate) {
-      request.input('toDate', sql.DateTime, new Date(toDate));
-      where += ' AND l.CreatedOn <= @toDate';
+      request.input('toDate', sql.VarChar, toDate);
+      where += ' AND l.CreatedOn <= CAST(@toDate AS DATETIME)';
     }
     if (actionType && actionType !== 'ALL') {
       request.input('actionType', sql.NVarChar(30), actionType);
