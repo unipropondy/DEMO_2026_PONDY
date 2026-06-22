@@ -194,7 +194,7 @@ export default function CashDrawerScreen() {
       {/* Header bar */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/category")}
           style={styles.backButton}
         >
           <Ionicons name="chevron-back" size={24} color={Theme.textPrimary} />
@@ -385,7 +385,10 @@ export default function CashDrawerScreen() {
 
             <TouchableOpacity
               style={styles.textButton}
-              onPress={() => setStep(selectedReason ? 3 : 2)}
+              onPress={() => {
+                const reason = REASONS.find(r => r.label === selectedReason);
+                setStep(reason?.amountRequired ? 3 : 2);
+              }}
             >
               <Text style={styles.textButtonText}>Back</Text>
             </TouchableOpacity>

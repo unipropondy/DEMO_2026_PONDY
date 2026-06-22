@@ -67,8 +67,14 @@ router.post('/log', authenticateToken, async (req, res) => {
            @Reason, @Remark, @OpenedByUserId, @ApprovedByUserId, @OpenSource, @IsSuccess, GETDATE())
       `);
 
-    // 2. Settlement Integration (processed regardless of physical printer trigger success to ensure financial records match)
-    if (true) {
+    // 2. Settlement Integration — PROFESSIONAL POS DESIGN:
+    //    Financial records (CashInEntry/CashOutEntry) are ALWAYS written once a supervisor
+    //    approves the action (PIN verified on frontend). This matches industry standards
+    //    (MICROS, Square, Toast): the FINANCIAL transaction is the source of truth.
+    //    'IsSuccess' in CashDrawerLog tracks HARDWARE trigger only — if the printer is
+    //    offline the drawer may not open physically, but the cash movement still happened
+    //    and must appear in settlement. Cashier can manually open drawer in that case.
+    if (actionType && amount > 0) {
       if (actionType === 'CASH_IN' && amount > 0) {
         // Fetch SGT date directly from remote SQL server clock (myerpcloud.dyndns.org)
         const dateRes = await new sql.Request(transaction).query("SELECT FORMAT(GETDATE(), 'yyyyMMdd') as dateStr");
