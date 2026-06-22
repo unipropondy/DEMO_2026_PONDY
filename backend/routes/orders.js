@@ -1613,7 +1613,7 @@ router.post("/log-print", async (req, res) => {
     const pool = await poolPromise;
     
     const safeOrderId = toGuidOrNull(orderId);
-    const safeOrderNo = orderNumber ? String(orderNumber).substring(0, 50) : null;
+    const safeOrderNo = orderNumber ? String(orderNumber).substring(0, 50) : 'N/A';
     const safePrintType = parseInt(printType, 10) || 1;
 
     await pool
