@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import ThermalPrinter from 'react-native-thermal-printer';
 import { API_URL } from '../constants/Config';
 import { useAuthStore } from '../stores/authStore';
@@ -38,6 +39,30 @@ export default class CashDrawerService {
   }
 
   static async openCashDrawer(printerIp: string): Promise<boolean> {
+    if (Platform.OS === 'web') {
+      try {
+        const storeId = "STORE_001";
+        console.log(`📡 [Web CashDrawer] Sending open command via Print Bridge`);
+        const response = await fetch(`${API_URL}/api/print-jobs`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer unipro-pos-bridge-token-2026",
+            "x-store-id": storeId
+          },
+          body: JSON.stringify({
+            printerType: 1, // Cashier Printer
+            content: "G3AAGRk=" // Base64 encoding of ESC p 0 25 25 (\x1B\x70\x00\x19\x19)
+          })
+        });
+        const resData = await response.json();
+        return resData.success === true;
+      } catch (e) {
+        console.error('[Web CashDrawer] Bridge open command failed:', e);
+        return false;
+      }
+    }
+
     if (!printerIp || printerIp.trim() === '') {
       console.warn('[CashDrawer] No printer IP configured');
       return false;
