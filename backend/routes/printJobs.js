@@ -28,16 +28,30 @@ router.post('/auth', authenticateBridge, (req, res) => {
 });
 
 let lastBridgeActivity = 0;
+let lastBridgeIp = '';
 
-// GET /api/print-jobs/bridge-status - Check if print bridge is active/online
+const normalizeIp = (ip) => {
+  if (!ip) return '';
+  const match = ip.match(/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/);
+  if (match) return match[1];
+  return ip.trim();
+};
+
+// GET /api/print-jobs/bridge-status - Check if print bridge is active/online and on the same network
 router.get('/bridge-status', (req, res) => {
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const isOnline = (Date.now() - lastBridgeActivity) < 6000; // 6 seconds threshold
-  res.json({ success: true, online: isOnline });
+  
+  // Verify that the client is on the same local network (public IP matches)
+  const sameNetwork = lastBridgeIp && (normalizeIp(clientIp) === normalizeIp(lastBridgeIp));
+  
+  res.json({ success: true, online: isOnline && sameNetwork });
 });
 
 // 2. GET /api/print-jobs/pending - Fetch pending jobs for the store
 router.get('/pending', authenticateBridge, async (req, res) => {
   lastBridgeActivity = Date.now();
+  lastBridgeIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const pool = getPool();
   const transaction = new sql.Transaction(pool);
 
