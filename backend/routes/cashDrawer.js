@@ -67,8 +67,8 @@ router.post('/log', authenticateToken, async (req, res) => {
            @Reason, @Remark, @OpenedByUserId, @ApprovedByUserId, @OpenSource, @IsSuccess, GETDATE())
       `);
 
-    // 2. Settlement Integration (if trigger succeeded)
-    if (isSuccess !== false) {
+    // 2. Settlement Integration (processed regardless of physical printer trigger success to ensure financial records match)
+    if (true) {
       if (actionType === 'CASH_IN' && amount > 0) {
         // Generate cash in number
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
