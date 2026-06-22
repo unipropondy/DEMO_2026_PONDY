@@ -70,8 +70,9 @@ router.post('/log', authenticateToken, async (req, res) => {
     // 2. Settlement Integration (processed regardless of physical printer trigger success to ensure financial records match)
     if (true) {
       if (actionType === 'CASH_IN' && amount > 0) {
-        // Generate cash in number in SGT
-        const dateStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Singapore' }).replace(/-/g, '');
+        // Fetch SGT date directly from remote SQL server clock (myerpcloud.dyndns.org)
+        const dateRes = await new sql.Request(transaction).query("SELECT FORMAT(GETDATE(), 'yyyyMMdd') as dateStr");
+        const dateStr = dateRes.recordset[0].dateStr;
         const randId = Math.floor(1000 + Math.random() * 9000);
         const cashInNo = `CI-${dateStr}-${randId}`;
  
@@ -90,8 +91,9 @@ router.post('/log', authenticateToken, async (req, res) => {
             VALUES (@CashInNo, CAST(GETDATE() AS DATE), @Amount, @Reason, @Remarks, @PaymentMode, @ReferenceNo, @TerminalCode, @CreatedBy, GETDATE())
           `);
       } else if (actionType === 'CASH_OUT' && amount > 0) {
-        // Generate payout number in SGT
-        const dateStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Singapore' }).replace(/-/g, '');
+        // Fetch SGT date directly from remote SQL server clock (myerpcloud.dyndns.org)
+        const dateRes = await new sql.Request(transaction).query("SELECT FORMAT(GETDATE(), 'yyyyMMdd') as dateStr");
+        const dateStr = dateRes.recordset[0].dateStr;
         const randId = Math.floor(1000 + Math.random() * 9000);
         const cashOutNo = `CO-${dateStr}-${randId}`;
 
