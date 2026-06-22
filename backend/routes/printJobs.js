@@ -27,8 +27,17 @@ router.post('/auth', authenticateBridge, (req, res) => {
   res.json({ success: true, message: 'Authenticated successfully', storeId: req.storeId });
 });
 
+let lastBridgeActivity = 0;
+
+// GET /api/print-jobs/bridge-status - Check if print bridge is active/online
+router.get('/bridge-status', (req, res) => {
+  const isOnline = (Date.now() - lastBridgeActivity) < 6000; // 6 seconds threshold
+  res.json({ success: true, online: isOnline });
+});
+
 // 2. GET /api/print-jobs/pending - Fetch pending jobs for the store
 router.get('/pending', authenticateBridge, async (req, res) => {
+  lastBridgeActivity = Date.now();
   const pool = getPool();
   const transaction = new sql.Transaction(pool);
 

@@ -326,6 +326,17 @@ class UniversalPrinter {
     return `<table><tbody>${entries.map(([k, v]) => `<tr><td>${k}</td><td class="amount">${symbol}${(v as number).toFixed(2)}</td></tr>`).join("")}</tbody></table>`;
   }
 
+  private static async isBridgeOnline(): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_URL}/api/print-jobs/bridge-status`);
+      const data = await response.json();
+      return !!(data && data.success && data.online);
+    } catch (e) {
+      console.warn("[UniversalPrinter] Failed to check print bridge status:", e);
+      return false;
+    }
+  }
+
   private static async queuePrintJob(
     printerType: number,
     kitchenTypeValue: string | number | undefined,
@@ -413,6 +424,36 @@ class UniversalPrinter {
   ): Promise<boolean> {
     if (Platform.OS === "web") {
       try {
+        const isOnline = await this.isBridgeOnline();
+        if (!isOnline) {
+          console.log("📡 [Web Print Bridge] Bridge is OFFLINE. Direct fallback to preview.");
+          const html = this.generateKOTHTML(orderData, type);
+          let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
+          if (!frame) {
+            frame = document.createElement("iframe");
+            frame.id = "kot-print-iframe";
+            frame.style.display = "none";
+            document.body.appendChild(frame);
+          }
+
+          const doc = frame.contentWindow?.document || frame.contentDocument;
+          if (doc) {
+            doc.open();
+            doc.write(html);
+            doc.close();
+
+            const triggerPrint = () => {
+              frame.contentWindow?.focus();
+              frame.contentWindow?.print();
+            };
+
+            frame.contentWindow?.addEventListener("load", triggerPrint);
+            setTimeout(triggerPrint, 50);
+          }
+          await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
+          return true;
+        }
+
         const text = this.formatKOTThermalText(orderData, type);
         // Map kitchenCode or kitchenTypeValue
         const kitchenTypeValue = orderData.kitchenCode || orderData.KitchenCode || orderData.kitchenTypeValue || orderData.KitchenTypeValue || "0";
@@ -893,6 +934,12 @@ class UniversalPrinter {
   ): Promise<boolean> {
     if (Platform.OS === "web") {
       try {
+        const isOnline = await this.isBridgeOnline();
+        if (!isOnline) {
+          console.log("📡 [Web Print Bridge] Bridge is OFFLINE. Direct fallback to preview.");
+          return await this.offerPDFFallback(saleData, outletId, t, discountInfo);
+        }
+
         const company = await BillPDFGenerator.loadSettings(outletId);
         const text = this.formatThermalTextWithDiscount(
           saleData,
