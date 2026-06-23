@@ -211,7 +211,7 @@ router.post('/email-pdf', async (req, res) => {
     console.log("[export/email-pdf] Recipient:", to);
 
     console.log('[export/email-pdf] Generating PDF attachment…');
-    const docDef = generateSalesReportPdf(enrichedData);
+    const docDef = await generateSalesReportPdf(enrichedData);
     pdfBuffer = await createPdfBinary(docDef);
 
     if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
