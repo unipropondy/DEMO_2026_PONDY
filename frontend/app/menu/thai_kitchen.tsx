@@ -947,7 +947,7 @@ export default function MenuScreen() {
   );
 
   const toggleModifier = (mod: any) => {
-    if (mod.isOpenModifier === 1 || mod.isOpenModifier === true || mod.ModifierName.toUpperCase() === "OPEN") {
+    if (mod.isOpenModifier === 1 || mod.isOpenModifier === true) {
       setShowCustomModal(true);
       return;
     }
