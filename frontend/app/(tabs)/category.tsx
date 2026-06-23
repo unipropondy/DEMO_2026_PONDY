@@ -1375,51 +1375,56 @@ export default function Category() {
           {/* Kitchen Status — moved from menu */}
           {enableKDS && (
             <TouchableOpacity
-              style={styles.headerActionBtn}
+              style={[styles.headerActionBtn, { position: "relative" }]}
               onPress={() => router.push("/kitchen-status")}
               activeOpacity={0.75}
             >
-              <View style={{ position: "relative" }}>
-                <Ionicons
-                  name="restaurant-outline"
-                  size={20}
-                  color={Theme.success}
-                />
-                {readyItemsCount > 0 && (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: -6,
-                      right: -6,
-                      backgroundColor: Theme.danger || "#ef4444",
-                      borderRadius: 8,
-                      minWidth: 16,
-                      height: 16,
-                      justifyContent: "center",
-                      alignItems: "center",
-                      paddingHorizontal: 3,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#fff",
-                        fontSize: 9,
-                        fontFamily: Fonts.black || "System",
-                        lineHeight: 11,
-                        textAlign: "center",
-                      }}
-                    >
-                      {readyItemsCount}
-                    </Text>
-                  </View>
-                )}
-              </View>
+              <Ionicons
+                name="restaurant-outline"
+                size={20}
+                color={Theme.success}
+              />
               {isTablet && isLandscape && (
                 <Text
                   style={[styles.headerActionText, { color: Theme.success }]}
                 >
                   Status
                 </Text>
+              )}
+              {readyItemsCount > 0 && (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -6,
+                    right: -6,
+                    backgroundColor: Theme.danger || "#ef4444",
+                    borderRadius: 9,
+                    minWidth: 18,
+                    height: 18,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    paddingHorizontal: 4,
+                    borderWidth: 1.5,
+                    borderColor: "#FFF",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 1,
+                    elevation: 2,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontSize: 9,
+                      fontFamily: Fonts.black || "System",
+                      lineHeight: 11,
+                      textAlign: "center",
+                    }}
+                  >
+                    {readyItemsCount}
+                  </Text>
+                </View>
               )}
             </TouchableOpacity>
           )}
