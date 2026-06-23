@@ -2076,6 +2076,7 @@ const confirmPayment = async () => {
                               style={[
                                 styles.methodCard,
                                 isSelected && styles.activeMethodCard,
+                                !isSelected && isYeahPay && styles.yeahpayMethodCard,
                                 isMobile && { width: "30%", height: 80 },
                               ]}
                               onPress={() => handleSelectMethod(m)}
