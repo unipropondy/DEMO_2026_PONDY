@@ -967,7 +967,10 @@ const confirmPayment = async () => {
   }
 
   // ✅ Only show QR for REGULAR PayNow (NOT YeahPay)
-  
+  if (mUpper.includes("PAYNOW") && settings.payNowQrUrl) {
+    setIsPayNowVisible(true);
+    return;
+  }
   
   // ✅ Only show UPI for regular UPI
   if (mUpper.includes("UPI") && settings.upiId) {
