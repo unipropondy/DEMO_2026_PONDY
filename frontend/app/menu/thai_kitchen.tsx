@@ -341,6 +341,7 @@ export default function MenuScreen() {
     allDishes,
     isLoading: menuLoading,
     modifierCache,
+    forceRefreshMenu,
   } = useMenuStore();
 
   const [groups, setGroups] = useState<any[]>([]);
@@ -655,6 +656,27 @@ export default function MenuScreen() {
             styles.headerBillBtn,
             isPhone &&
             isLandscape && { width: 36, height: 36, borderRadius: 8 },
+            menuLoading && { opacity: 0.5 },
+          ]}
+          onPress={handleForceRefresh}
+          disabled={menuLoading}
+        >
+          {menuLoading ? (
+            <ActivityIndicator size="small" color={Theme.primary} />
+          ) : (
+            <Ionicons
+              name="refresh-outline"
+              size={isPhone && isLandscape ? 20 : 24}
+              color={Theme.primary}
+            />
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.headerBillBtn,
+            isPhone &&
+            isLandscape && { width: 36, height: 36, borderRadius: 8 },
           ]}
           onPress={() => setShowReprintOptions(true)}
         >
@@ -771,6 +793,47 @@ export default function MenuScreen() {
     const newId = getContextId(orderContext);
     setCurrentContext(newId);
   }, [orderContext]);
+
+  const handleForceRefresh = async () => {
+    try {
+      showToast({
+        type: "info",
+        message: "Refreshing Menu...",
+        subtitle: "Syncing with database...",
+      });
+      await forceRefreshMenu();
+
+      const currentKitchens = useMenuStore.getState().kitchens;
+      const targetKitchenId =
+        selectedKitchenId ||
+        (currentKitchens.length > 0 ? currentKitchens[0].CategoryId : "");
+
+      if (targetKitchenId) {
+        const groupsData = await fetchGroups(targetKitchenId);
+        setGroups(groupsData);
+
+        const targetGroup =
+          selectedGroup ||
+          (groupsData.length > 0 ? groupsData[0].DishGroupId : "");
+        if (targetGroup) {
+          const dishesData = await fetchDishes(targetGroup);
+          setItems(dishesData);
+        }
+      }
+      showToast({
+        type: "success",
+        message: "Menu Refreshed",
+        subtitle: "All configurations reloaded successfully",
+      });
+    } catch (err) {
+      console.error("Failed to refresh menu:", err);
+      showToast({
+        type: "error",
+        message: "Refresh Failed",
+        subtitle: "Please try again",
+      });
+    }
+  };
 
   useEffect(() => {
     const initMenu = async () => {

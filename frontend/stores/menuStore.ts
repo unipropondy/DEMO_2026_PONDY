@@ -15,6 +15,7 @@ interface MenuState {
   fetchDishes: (groupId: string) => Promise<any[]>;
   fetchModifiersForGroup: (groupId: string) => Promise<void>;
   clearCache: () => void;
+  forceRefreshMenu: () => Promise<void>;
 }
 
 export const useMenuStore = create<MenuState>((set, get) => ({
@@ -138,4 +139,15 @@ export const useMenuStore = create<MenuState>((set, get) => ({
   },
 
   clearCache: () => set({ kitchens: [], dishGroups: {}, dishesByGroup: {}, allDishes: [], modifierCache: {}, lastFetched: null }),
+
+  forceRefreshMenu: async () => {
+    set({ isLoading: true });
+    try {
+      await fetch(`${API_URL}/api/menu/clear-cache`, { method: 'POST' });
+    } catch (err) {
+      console.warn("Backend cache clear failed:", err);
+    }
+    get().clearCache();
+    await get().fetchMenu();
+  },
 }));
