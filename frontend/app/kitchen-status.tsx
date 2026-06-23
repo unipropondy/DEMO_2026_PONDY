@@ -31,6 +31,12 @@ export default function KitchenStatusScreen() {
   const router = useRouter();
   const activeOrders = useActiveOrdersStore((s) => s.activeOrders);
   const markItemServed = useActiveOrdersStore((s) => s.markItemServed);
+  const handleServeAll = async (orderId: string, items: any[]) => {
+    const readyItems = items.filter((i: any) => i.status === "READY");
+    for (const item of readyItems) {
+      await markItemServed(item.parentOrderId || orderId, item.lineItemId);
+    }
+  };
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
   const numColumns = width > 1000 ? 3 : width > 700 ? 2 : 1;
@@ -166,8 +172,21 @@ export default function KitchenStatusScreen() {
             </View>
           </View>
           <View style={styles.headerRight}>
-            <View style={styles.orderStats}>
-              <Text style={styles.statsText}>{readyCount}/{totalCount} READY</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {readyCount > 0 && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.serveAllBtn,
+                    pressed && { opacity: 0.7 }
+                  ]}
+                  onPress={() => handleServeAll(item.orderId, item.items)}
+                >
+                  <Text style={styles.serveAllBtnText}>SERVE ALL</Text>
+                </Pressable>
+              )}
+              <View style={styles.orderStats}>
+                <Text style={styles.statsText}>{readyCount}/{totalCount} READY</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -434,5 +453,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: Fonts.bold,
     color: Theme.textMuted,
+  },
+  serveAllBtn: {
+    backgroundColor: Theme.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    ...Theme.shadowSm,
+  },
+  serveAllBtnText: {
+    color: "#FFF",
+    fontSize: 10,
+    fontFamily: Fonts.black,
   },
 });

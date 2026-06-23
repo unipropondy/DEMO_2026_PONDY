@@ -113,6 +113,20 @@ const OrderCard = React.memo(function OrderCard({ item, cardHeight, pulseAnim, g
               ? `${formatSection(item.context.section)} • Table ${item.context.tableNo}`
               : `Takeaway • #${item.context.takeawayNo || item.orderId.slice(-4)}`}
           </Text>
+          {item.items?.some((i: any) => i.status === "SENT" || i.status === "NEW") && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.cardHeaderReadyBtn,
+                pressed && { opacity: 0.7 }
+              ]}
+              onPress={(e) => {
+                e.stopPropagation();
+                item.onMarkAllReady?.(item);
+              }}
+            >
+              <Text style={styles.cardHeaderReadyBtnText}>READY ALL</Text>
+            </Pressable>
+          )}
           <Animated.Text style={[styles.timer, { color: ui.primary, opacity: timerOpacity }]}>
             {minutes}:{seconds.toString().padStart(2, "00")}
           </Animated.Text>
@@ -403,10 +417,23 @@ export default function KDSScreen() {
     scrollOffset.current = e.nativeEvent.contentOffset.y;
   };
 
+  const handleMarkAllReady = async (order: any) => {
+    if (!order?.items) return;
+    const pendingItems = order.items.filter((i: any) => i.status === "SENT" || i.status === "NEW");
+    for (const item of pendingItems) {
+      const targetOrderId = item.parentOrderId || order.orderId;
+      await markItemReady(targetOrderId, item.lineItemId);
+    }
+  };
+
   const renderOrder = ({ item }: any) => {
     return (
       <OrderCard
-        item={{ ...item, onPress: (o: any) => setSelectedOrderId(o.orderId) }}
+        item={{
+          ...item,
+          onPress: (o: any) => setSelectedOrderId(o.orderId),
+          onMarkAllReady: handleMarkAllReady,
+        }}
         cardHeight={cardHeight}
         pulseAnim={pulseAnim}
         groups={item.itemGroups}
@@ -503,9 +530,24 @@ export default function KDSScreen() {
                 })}
               </ScrollView>
 
-              <Pressable style={styles.modalDoneBtn} onPress={() => setSelectedOrderId(null)}>
-                <Text style={styles.modalDoneText}>Done</Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", gap: 12, marginTop: 20 }}>
+                {selectedOrder?.items?.some((i: any) => i.status === "SENT" || i.status === "NEW") && (
+                  <Pressable
+                    style={[styles.modalDoneBtn, { flex: 1, backgroundColor: Theme.success + "15", marginTop: 0 }]}
+                    onPress={async () => {
+                      if (selectedOrder) {
+                        await handleMarkAllReady(selectedOrder);
+                        setSelectedOrderId(null);
+                      }
+                    }}
+                  >
+                    <Text style={[styles.modalDoneText, { color: Theme.success }]}>Mark All Ready</Text>
+                  </Pressable>
+                )}
+                <Pressable style={[styles.modalDoneBtn, { flex: 1, marginTop: 0 }]} onPress={() => setSelectedOrderId(null)}>
+                  <Text style={styles.modalDoneText}>Done</Text>
+                </Pressable>
+              </View>
             </View>
           </BlurView>
         </Modal>
@@ -929,6 +971,19 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   takeawayBadgeText: {
+    color: "#FFF",
+    fontSize: 10,
+    fontFamily: Fonts.black,
+  },
+  cardHeaderReadyBtn: {
+    backgroundColor: Theme.success,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginRight: 10,
+    ...Theme.shadowSm,
+  },
+  cardHeaderReadyBtnText: {
     color: "#FFF",
     fontSize: 10,
     fontFamily: Fonts.black,
