@@ -475,6 +475,37 @@ export default function Category() {
       : true,
   );
 
+  const activeOrders = useActiveOrdersStore((s) => s.activeOrders);
+  const readyItemsCount = useMemo(() => {
+    let count = 0;
+    const tableGroups: Record<string, any> = {};
+
+    activeOrders.forEach((order) => {
+      const { context } = order;
+      const groupKey = context.orderType === "DINE_IN" 
+        ? `TABLE_${context.section}_${context.tableNo}`
+        : `TAKEAWAY_${context.takeawayNo}`;
+
+      if (!tableGroups[groupKey]) {
+        tableGroups[groupKey] = {
+          items: []
+        };
+      }
+
+      order.items.forEach((i: any) => {
+        if (i.status === "READY") {
+          const exists = tableGroups[groupKey].items.find((ei: any) => ei.lineItemId === i.lineItemId);
+          if (!exists) {
+            tableGroups[groupKey].items.push(i);
+            count++;
+          }
+        }
+      });
+    });
+
+    return count;
+  }, [activeOrders]);
+
   // 🔔 Real-time sync now handled globally via useGlobalSocketSync
 
   // ——— Route guard: redirect to login if not authenticated ———
@@ -1348,11 +1379,41 @@ export default function Category() {
               onPress={() => router.push("/kitchen-status")}
               activeOpacity={0.75}
             >
-              <Ionicons
-                name="restaurant-outline"
-                size={20}
-                color={Theme.success}
-              />
+              <View style={{ position: "relative" }}>
+                <Ionicons
+                  name="restaurant-outline"
+                  size={20}
+                  color={Theme.success}
+                />
+                {readyItemsCount > 0 && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -6,
+                      right: -6,
+                      backgroundColor: Theme.danger || "#ef4444",
+                      borderRadius: 8,
+                      minWidth: 16,
+                      height: 16,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      paddingHorizontal: 3,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontSize: 9,
+                        fontFamily: Fonts.black || "System",
+                        lineHeight: 11,
+                        textAlign: "center",
+                      }}
+                    >
+                      {readyItemsCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
               {isTablet && isLandscape && (
                 <Text
                   style={[styles.headerActionText, { color: Theme.success }]}
