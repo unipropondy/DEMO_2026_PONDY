@@ -2100,6 +2100,7 @@ const confirmPayment = async () => {
                                 style={[
                                   styles.methodLabel,
                                   isSelected && styles.activeMethodLabel,
+                                  !isSelected && isYeahPay && styles.yeahpayLabel,
                                   isMobile && { fontSize: 10 },
                                 ]}
                               >
