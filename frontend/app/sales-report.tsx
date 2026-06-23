@@ -34,7 +34,7 @@ import TransactionCard from "../components/TransactionCard";
 import UniversalPrinter from "../components/UniversalPrinter";
 import { Fonts } from "../constants/Fonts";
 import { Theme } from "../constants/theme";
-import { getSingaporeDateString, parseDatabaseDate } from "../utils/timezoneHelper";
+import { getSingaporeDateString, parseDatabaseDate, formatToSingaporeDate } from "../utils/timezoneHelper";
 import { useAuthStore } from "../stores/authStore";
 
 type FilterType = "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "CUSTOM";
@@ -1647,7 +1647,7 @@ export default function SalesReport() {
                           { textAlign: "center" }
                         ]}
                       >
-                        {row.FromDate ? parseDatabaseDate(row.FromDate).toLocaleDateString("en-GB") : "N/A"}
+                        {row.FromDate ? formatToSingaporeDate(row.FromDate, { day: "numeric", month: "numeric", year: "numeric" }) : "N/A"}
                       </Text>
                       <Text
                         style={[
@@ -1657,7 +1657,7 @@ export default function SalesReport() {
                           { textAlign: "center" }
                         ]}
                       >
-                        {row.ToDate ? parseDatabaseDate(row.ToDate).toLocaleDateString("en-GB") : "N/A"}
+                        {row.ToDate ? formatToSingaporeDate(row.ToDate, { day: "numeric", month: "numeric", year: "numeric" }) : "N/A"}
                       </Text>
                       <Text
                         style={[
@@ -2713,9 +2713,24 @@ export default function SalesReport() {
                       }}
                     >
                       <Text style={[styles.modalSub, { fontSize: 10 }]}>
-                        {parseDatabaseDate(
-                          selectedOrder?.SettlementDate,
-                        ).toLocaleString()}
+                        {(() => {
+                          const dateObj = parseDatabaseDate(selectedOrder?.SettlementDate);
+                          if (!dateObj || isNaN(dateObj.getTime())) return "N/A";
+                          const datePart = new Intl.DateTimeFormat('en-GB', {
+                            timeZone: 'Asia/Singapore',
+                            day: 'numeric',
+                            month: 'numeric',
+                            year: 'numeric'
+                          }).format(dateObj);
+                          const timePart = new Intl.DateTimeFormat('en-US', {
+                            timeZone: 'Asia/Singapore',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: true
+                          }).format(dateObj);
+                          return `${datePart}, ${timePart}`;
+                        })()}
                       </Text>
                       <View
                         style={{
@@ -2830,7 +2845,26 @@ export default function SalesReport() {
                     </View>
                     <View style={styles.cancelledDetailRow}>
                       <Text style={styles.cancelledDetailText}>By: {selectedOrder.CancelledByUserName || "SYSTEM"}</Text>
-                      <Text style={styles.cancelledDetailText}>Date: {selectedOrder.CancelledDate ? parseDatabaseDate(selectedOrder.CancelledDate).toLocaleString() : "N/A"}</Text>
+                      <Text style={styles.cancelledDetailText}>
+                        Date: {(() => {
+                          if (!selectedOrder.CancelledDate) return "N/A";
+                          const dateObj = parseDatabaseDate(selectedOrder.CancelledDate);
+                          const datePart = new Intl.DateTimeFormat('en-GB', {
+                            timeZone: 'Asia/Singapore',
+                            day: 'numeric',
+                            month: 'numeric',
+                            year: 'numeric'
+                          }).format(dateObj);
+                          const timePart = new Intl.DateTimeFormat('en-US', {
+                            timeZone: 'Asia/Singapore',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: true
+                          }).format(dateObj);
+                          return `${datePart}, ${timePart}`;
+                        })()}
+                      </Text>
                     </View>
                   </View>
                 ) : null}

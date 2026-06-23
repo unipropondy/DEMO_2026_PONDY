@@ -1112,8 +1112,7 @@ export default function ReceivablesScreen() {
 
                             {/* Table Rows */}
                             {transactions.map((tx, idx) => {
-                              const d = new Date(tx.CreatedDate);
-                              const formattedDate = d.toLocaleDateString([], { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+                              const formattedDate = formatToSingaporeDate(tx.CreatedDate, { day: "numeric", month: "short" }) + " " + formatToSingaporeTime(tx.CreatedDate, { hour: "2-digit", minute: "2-digit", hour12: false });
                               const isDebit = tx.TransactionType === "DEBIT" || (tx.TransactionType === "ADJUSTMENT" && tx.Amount > 0);
                               return (
                                 <View key={tx.TransactionId || idx} style={styles.ledgerRow}>
@@ -1148,8 +1147,7 @@ export default function ReceivablesScreen() {
                         ) : (
                           <View style={{ gap: 10 }}>
                             {outstandingBills.map((bill) => {
-                              const bd = new Date(bill.InvoiceDate);
-                              const formattedBillDate = bd.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+                              const formattedBillDate = formatToSingaporeDate(bill.InvoiceDate, { day: "numeric", month: "short", year: "numeric" });
                               return (
                                 <View key={bill.SettlementId} style={styles.billItemCard}>
                                   <TouchableOpacity 
@@ -1211,8 +1209,7 @@ export default function ReceivablesScreen() {
                                         <Text style={styles.billSettlementsEmpty}>No payments allocated to this invoice yet.</Text>
                                       ) : (
                                         (billSettlements[bill.TransactionId] || []).map((setl) => {
-                                          const sd = new Date(setl.CreatedDate);
-                                          const formattedSd = sd.toLocaleDateString([], { day: "numeric", month: "short" }) + " " + sd.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+                                          const formattedSd = formatToSingaporeDate(setl.CreatedDate, { day: "numeric", month: "short" }) + " " + formatToSingaporeTime(setl.CreatedDate, { hour: "2-digit", minute: "2-digit", hour12: false });
                                           return (
                                             <View key={setl.AllocationId} style={styles.billSettlementRow}>
                                               <View style={{ flex: 1 }}>

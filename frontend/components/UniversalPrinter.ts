@@ -6,7 +6,7 @@ import * as Sharing from "expo-sharing";
 import { Alert, Platform } from "react-native";
 import ThermalPrinter from "react-native-thermal-printer";
 import { API_URL } from "../constants/Config";
-import { formatToSingaporeDate, formatToSingaporeTime } from "../utils/timezoneHelper";
+import { formatToSingaporeDate, formatToSingaporeTime, formatToSingaporeDateTime } from "../utils/timezoneHelper";
 import BillPDFGenerator from "./BillPDFGenerator";
 import { PrinterDetector } from "./PrinterDetector";
 import SunmiPrinterService from "./SunmiPrinterService";
@@ -266,7 +266,7 @@ class UniversalPrinter {
           ? groupTransactions(transactions)
               .map(
                 (sale: any) =>
-                  `<div class="transaction-card"><div><strong>#${sale.id}</strong> - ${symbol}${sale.total.toFixed(2)}</div><div>${new Date(sale.date).toLocaleString()}</div>${sale.items.map((item: any) => `<div>• ${item.name} x${item.quantity} - ${symbol}${(item.price * item.quantity).toFixed(2)}</div>`).join("")}</div>`,
+                  `<div class="transaction-card"><div><strong>#${sale.id}</strong> - ${symbol}${sale.total.toFixed(2)}</div><div>${formatToSingaporeDateTime(sale.date)}</div>${sale.items.map((item: any) => `<div>• ${item.name} x${item.quantity} - ${symbol}${(item.price * item.quantity).toFixed(2)}</div>`).join("")}</div>`,
               )
               .join("")
           : "<p>No transactions</p>"
