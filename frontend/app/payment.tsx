@@ -2076,7 +2076,7 @@ const confirmPayment = async () => {
                               style={[
                                 styles.methodCard,
                                 isSelected && styles.activeMethodCard,
-                                isMobile && { width: "30%", height: 75 },
+                                isMobile && { width: "30%", height: 80 },
                               ]}
                               onPress={() => handleSelectMethod(m)}
                             >
@@ -3655,13 +3655,16 @@ statusMessageProcessing: {
   },
   methodCard: {
     width: "31.8%",
-    height: 70,
+    height: 80,
     backgroundColor: Theme.bgMuted,
     borderRadius: 14,
+    flexDirection: "column",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
     borderColor: Theme.border,
+    paddingHorizontal: 4,
+    paddingVertical: 8,
     gap: 4,
   },
   activeMethodCard: {
@@ -3676,6 +3679,7 @@ statusMessageProcessing: {
     backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
+    flexShrink: 0,
   },
   activeIconBox: { backgroundColor: "rgba(255,255,255,0.2)" },
   methodLabel: {
@@ -3683,9 +3687,9 @@ statusMessageProcessing: {
     fontFamily: Fonts.bold,
     color: Theme.textSecondary,
     textAlign: "center",
-    paddingHorizontal: 4,
-    alignSelf: "stretch",
+    alignSelf: "center",
     width: "100%",
+    flexShrink: 1,
   },
   activeMethodLabel: { color: "#fff" },
   yeahpayMethodCard: {
