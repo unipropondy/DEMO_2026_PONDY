@@ -245,6 +245,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
+  
   closeBtn: {
     padding: 4,
   },
