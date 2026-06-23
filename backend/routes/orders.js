@@ -1535,8 +1535,6 @@ router.get("/active-kitchen", async (req, res) => {
       ) pm ON CAST(ckt.KitchenTypeCode AS VARCHAR(50)) = CAST(pm.KitchenTypeValue AS VARCHAR(50)) AND pm.rn = 1
       LEFT JOIN TableMaster tm ON h.Tableno = tm.TableNumber
       WHERE (h.isOrderClosed = 0 OR h.isOrderClosed IS NULL)
-      -- Exclude QR orders that are not yet paid (PAYMENT_STATUS = 0 and entry_status = 'q') when QR code setting is enabled
-      AND NOT (ISNULL(tm.entry_status, '') = 'q' AND ISNULL(tm.PAYMENT_STATUS, 0) = 0 AND EXISTS (SELECT 1 FROM AppSettings WHERE EnableQRCodeSettings = 1))
       -- 🚀 FIX: Include SENT (2), READY (3), SERVED (4), HOLD (5) items for Merge Bill to work
       -- Also include recently voided items (StatusCode 0) within last 3 minutes for sync consistency
       AND (d.StatusCode IN (2,3,4,5) OR (d.StatusCode = 0 AND DATEDIFF(MINUTE, d.ModifiedOn, GETDATE()) < 3))
