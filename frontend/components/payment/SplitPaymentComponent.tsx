@@ -39,8 +39,9 @@ type PaymentMethodType = {
   payMode: string;
   description: string;
   position: number;
-   deviceSn?: string | null;    // ✅ ADD THIS
+  deviceSn?: string | null;    // ✅ ADD THIS
   deviceSalt?: string | null;
+  yeahPayEnabled?: boolean;
 };
 
 interface SplitPaymentComponentProps {
@@ -319,6 +320,15 @@ const handleGenerateQR = async (row: SplitPaymentRow) => {
 
   setActiveQrRowId(row.id);
   setQrModalAmount(amt);
+
+  const selectedMethod = paymentMethods.find(m => m.payMode === row.payMode);
+  const isYeahPay = selectedMethod?.yeahPayEnabled === true;
+
+  if (isPayNowMode(row.payMode) && !isYeahPay) {
+    setQrModalType("PAYNOW");
+    setQrModalVisible(true);
+    return;
+  }
 
   try {
     setIsGeneratingQR(true);
@@ -701,9 +711,24 @@ const response = await fetch(`${API_URL}${endpoint}`, {
       {qrModalType === "PAYNOW" && (
         <PayNowPaymentModal
           visible={qrModalVisible}
-          onClose={() => setQrModalVisible(false)}
+          onClose={() => {
+            setQrModalVisible(false);
+            setQrModalType(null);
+            setActiveQrRowId(null);
+          }}
           amount={qrModalAmount}
           onSuccess={handleQrPaymentSuccess}
+          onFailed={() => {
+            if (activeQrRowId) {
+              setRows(prevRows =>
+                prevRows.map(r => 
+                  r.id === activeQrRowId 
+                    ? { ...r, status: 'Cancelled' as const } 
+                    : r
+                )
+              );
+            }
+          }}
         />
       )}
 

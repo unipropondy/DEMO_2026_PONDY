@@ -2021,8 +2021,9 @@ const confirmPayment = async () => {
                       payMode: pm.payMode,
                       description: pm.description,
                       position: pm.position,
-                      deviceSn: pm.deviceSn || '',      // ✅ PASS THIS
-    deviceSalt: pm.deviceSalt || '',
+                      deviceSn: pm.deviceSn || '',
+                      deviceSalt: pm.deviceSalt || '',
+                      yeahPayEnabled: pm.yeahPayEnabled,
                     }))}
                     selectedMember={selectedMember}
                     onSelectMember={(mode) => {
