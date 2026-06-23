@@ -568,6 +568,19 @@ export default function KDSScreen() {
 
           <View style={styles.headerRightSection}>
             <Text style={styles.totalOrdersCount}>{stats.total} orders</Text>
+            {kitchenOrders.some(order => order.items.some((i: any) => i.status === "SENT" || i.status === "NEW")) && (
+              <TouchableOpacity
+                onPress={async () => {
+                  for (const order of kitchenOrders) {
+                    await handleMarkAllReady(order);
+                  }
+                }}
+                style={styles.globalReadyBtn}
+              >
+                <Ionicons name="checkmark-done-circle" size={20} color="#FFF" />
+                <Text style={styles.globalReadyBtnText}>Mark All Ready</Text>
+              </TouchableOpacity>
+            )}
             {isKDSUser && (
               <TouchableOpacity
                 onPress={() => {
@@ -987,5 +1000,20 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 10,
     fontFamily: Fonts.black,
+  },
+  globalReadyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Theme.success,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    ...Theme.shadowSm,
+  },
+  globalReadyBtnText: {
+    color: "#FFF",
+    fontFamily: Fonts.bold,
+    fontSize: 13,
   },
 });

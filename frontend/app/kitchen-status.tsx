@@ -9,6 +9,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -209,7 +210,24 @@ export default function KitchenStatusScreen() {
           <Ionicons name="clipboard" size={20} color={Theme.primary} />
           <Text style={styles.title}>Kitchen Status</Text>
         </View>
-        <View style={{ width: 40 }} />
+        {groupedOrders.some(order => order.items.some((i: any) => i.status === "READY")) ? (
+          <TouchableOpacity
+            onPress={async () => {
+              for (const order of groupedOrders) {
+                const readyItems = order.items.filter((i: any) => i.status === "READY");
+                for (const item of readyItems) {
+                  await markItemServed(item.parentOrderId || order.orderId, item.lineItemId);
+                }
+              }
+            }}
+            style={styles.globalServeAllBtn}
+          >
+            <Ionicons name="checkmark-done-circle" size={20} color="#FFF" />
+            <Text style={styles.globalServeAllBtnText}>Serve All</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 40 }} />
+        )}
       </View>
 
       <FlatList
@@ -465,5 +483,20 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 10,
     fontFamily: Fonts.black,
+  },
+  globalServeAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Theme.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    ...Theme.shadowSm,
+  },
+  globalServeAllBtnText: {
+    color: "#FFF",
+    fontFamily: Fonts.bold,
+    fontSize: 13,
   },
 });
