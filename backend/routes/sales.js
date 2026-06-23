@@ -1,5 +1,7 @@
 const express = require("express");
 const router = express.Router();
+const { authenticateToken } = require("../middleware/auth");
+router.use(authenticateToken);
 const sql = require("mssql");
 const { poolPromise } = require("../config/db");
 const { runInTransaction } = require("../utils/transactionHelper");

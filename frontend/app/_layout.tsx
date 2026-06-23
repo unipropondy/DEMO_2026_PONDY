@@ -74,6 +74,11 @@ global.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Pr
       }
     }
 
+    const token = useAuthStore.getState().token;
+    if (token && !headers['Authorization'] && !headers['authorization']) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const requestId = headers['x-request-id'] || headers['X-Request-ID'] || getUUID();
     headers['x-request-id'] = requestId;
     options.headers = headers;

@@ -27,6 +27,10 @@ if (!envContent.includes("JWT_SECRET=")) {
 // 4. Load env variables
 require("dotenv").config({ path: envPath });
 
+if (!process.env.JWT_SECRET) {
+  throw new Error("FATAL: JWT_SECRET environment variable is not set!");
+}
+
 const { poolPromise } = require("./config/db");
 const { initDB, syncKitchensToPrintMaster } = require("./config/init");
 const dbCheck = require("./middleware/dbCheck");
@@ -264,7 +268,7 @@ const authenticateAiToken = (req, res, next) => {
     return next();
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'supersecureposjwttokensecretkey', (err, decoded) => {
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) {
       req.user = { shop_id: 1, role: 'ADMIN', username: 'TestOwner', user_id: 1 };
       return next();

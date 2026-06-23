@@ -3,6 +3,8 @@ const crypto = require("crypto");
 const router = express.Router();
 const sql = require("mssql");
 const { poolPromise } = require("../config/db");
+const { authenticateToken } = require("../middleware/auth");
+router.use(authenticateToken);
 const { getActiveOrganization } = require("../utils/organizationHelper");
 const { getCompanySettings } = require("../utils/settingsCache");
 const DEFAULT_GUID = "00000000-0000-0000-0000-000000000000";
@@ -99,7 +101,7 @@ async function getOrGenerateOrderId(req, tableId) {
         .input("RestId", sql.UniqueIdentifier, String(currentBizId))
         .input("Today", sql.Date, todayStr).query(`
           BEGIN TRANSACTION;
-          IF NOT EXISTS (SELECT 1 FROM OrderSequences WHERE RestaurantId = @RestId AND SequenceDate = @Today)
+          IF NOT EXISTS (SELECT 1 FROM OrderSequences WITH (UPDLOCK, HOLDLOCK) WHERE RestaurantId = @RestId AND SequenceDate = @Today)
           BEGIN
               INSERT INTO OrderSequences (RestaurantId, SequenceDate, LastNumber) VALUES (@RestId, @Today, 0);
           END
@@ -184,7 +186,7 @@ async function getOrGenerateOrderId(req, tableId) {
       .input("RestId", sql.UniqueIdentifier, String(currentBizId))
       .input("Today", sql.Date, todayStr).query(`
         BEGIN TRANSACTION;
-        IF NOT EXISTS (SELECT 1 FROM OrderSequences WHERE RestaurantId = @RestId AND SequenceDate = @Today)
+        IF NOT EXISTS (SELECT 1 FROM OrderSequences WITH (UPDLOCK, HOLDLOCK) WHERE RestaurantId = @RestId AND SequenceDate = @Today)
         BEGIN
             INSERT INTO OrderSequences (RestaurantId, SequenceDate, LastNumber) VALUES (@RestId, @Today, 0);
         END

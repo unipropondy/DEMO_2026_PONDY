@@ -2,7 +2,11 @@ const express = require("express");
 const router = express.Router();
 const { poolPromise, sql } = require("../config/db");
 const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET || "supersecureposjwttokensecretkey";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("FATAL: JWT_SECRET environment variable is not set!");
+}
+const bcrypt = require("bcryptjs");
 
 /* ================= AUTH - LOGIN ================= */
 router.post("/login", async (req, res) => {
@@ -17,30 +21,6 @@ router.post("/login", async (req, res) => {
 
     if (!userName || !password) {
       return res.status(400).json({ success: false, message: "User ID and Password are required." });
-    }
-
-    // ✅ SPECIAL KDS LOGIN (HARDCODED)
-    if (userName.toUpperCase() === "KDS" && password === "as786") {
-      console.log(`[AUTH] KDS Special Login Successful`);
-      const kdsToken = jwt.sign(
-        { userId: "999", role: "KDS" },
-        JWT_SECRET,
-        { expiresIn: "24h" }
-      );
-      return res.json({
-        success: true,
-        token: kdsToken,
-        user: {
-          userId: "999",
-          id: "999",
-          userCode: "KDS",
-          userName: "KDS",
-          fullName: "Kitchen Display System",
-          role: "KDS",
-          roleName: "Kitchen Staff",
-          userGroupId: 999
-        }
-      });
     }
 
     console.log(`[AUTH] Attempting login for UserName: "${userName}"`);
@@ -84,22 +64,48 @@ router.post("/login", async (req, res) => {
 
     const dbPassword = (user.UserPassword || "").trim();
     let isValid = false;
+    let needsRehash = false;
 
-    // Password Matching Strategy (Standard + Base64 + Hybrid)
-    const parts = dbPassword.split("-");
-    const candidates = [dbPassword, parts[0]].filter(c => c.length > 0);
+    // 1. Try bcrypt check
+    try {
+      if (dbPassword.startsWith("$2a$") || dbPassword.startsWith("$2b$")) {
+        isValid = await bcrypt.compare(password, dbPassword);
+      }
+    } catch (e) {
+      console.error("Bcrypt compare error:", e);
+    }
 
-    for (const cand of candidates) {
-      if (cand === password) { isValid = true; break; }
-      try {
-        const decoded = Buffer.from(cand, "base64").toString("utf-8").trim();
-        if (decoded === password) { isValid = true; break; }
-      } catch (e) {}
+    // 2. Legacy check fallback
+    if (!isValid) {
+      const parts = dbPassword.split("-");
+      const candidates = [dbPassword, parts[0]].filter(c => c.length > 0);
+
+      for (const cand of candidates) {
+        if (cand === password) { isValid = true; needsRehash = true; break; }
+        try {
+          const decoded = Buffer.from(cand, "base64").toString("utf-8").trim();
+          if (decoded === password) { isValid = true; needsRehash = true; break; }
+        } catch (e) {}
+      }
     }
 
     if (!isValid) {
       console.log(`[AUTH] Login failed: Password mismatch for user "${user.UserName}".`);
       return res.status(401).json({ success: false, message: "Invalid User ID or Password." });
+    }
+
+    // Auto-migrate legacy password to bcrypt
+    if (needsRehash) {
+      try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await pool.request()
+          .input("UserId", user.UserId)
+          .input("HashedPassword", hashedPassword)
+          .query("UPDATE [dbo].[UserMaster] SET UserPassword = @HashedPassword WHERE UserId = @UserId");
+        console.log(`[AUTH] Successfully migrated password to bcrypt for user "${user.UserName}".`);
+      } catch (e) {
+        console.error(`[AUTH] Failed to migrate password to bcrypt for user "${user.UserName}":`, e);
+      }
     }
 
     // Update Last Login
@@ -153,22 +159,14 @@ router.post("/verify", async (req, res) => {
     const base64Password = Buffer.from(password).toString("base64");
 
     let query = `
-      SELECT TOP 1 u.UserId 
+      SELECT u.UserId, u.UserPassword, u.UserName 
       FROM [dbo].[UserMaster] u
       INNER JOIN [dbo].[UserGroupMaster] g ON u.UserGroupid = g.UserGroupId
       WHERE (u.IsDisabled IS NULL OR u.IsDisabled = 0)
         AND g.isActive = 1
-        AND (
-          u.UserPassword = @password
-          OR u.UserPassword = @base64Password
-          OR u.UserPassword LIKE @password + '-%'
-          OR u.UserPassword LIKE @base64Password + '-%'
-        )
     `;
 
-    const request = pool.request()
-      .input("password", sql.VarChar, password)
-      .input("base64Password", sql.VarChar, base64Password);
+    const request = pool.request();
 
     if (role) {
       let roleList = [];
@@ -191,7 +189,53 @@ router.post("/verify", async (req, res) => {
 
     const result = await request.query(query);
 
-    const isValid = result.recordset.length > 0;
+    let isValid = false;
+    let matchedUser = null;
+    let needsRehash = false;
+
+    for (const u of result.recordset) {
+      const dbPassword = (u.UserPassword || "").trim();
+      
+      // Try bcrypt check
+      if (dbPassword.startsWith("$2a$") || dbPassword.startsWith("$2b$")) {
+        try {
+          if (await bcrypt.compare(password, dbPassword)) {
+            isValid = true;
+            matchedUser = u;
+            break;
+          }
+        } catch (e) {}
+      } else {
+        // Try legacy check
+        const parts = dbPassword.split("-");
+        const candidates = [dbPassword, parts[0]].filter(c => c.length > 0);
+
+        for (const cand of candidates) {
+          if (cand === password || Buffer.from(cand, "base64").toString("utf-8").trim() === password) {
+            isValid = true;
+            matchedUser = u;
+            needsRehash = true;
+            break;
+          }
+        }
+        if (isValid) break;
+      }
+    }
+
+    // Auto-migrate legacy password to bcrypt during verification
+    if (isValid && needsRehash && matchedUser) {
+      try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await pool.request()
+          .input("UserId", matchedUser.UserId)
+          .input("HashedPassword", hashedPassword)
+          .query("UPDATE [dbo].[UserMaster] SET UserPassword = @HashedPassword WHERE UserId = @UserId");
+        console.log(`[AUTH] Successfully migrated password to bcrypt for user "${matchedUser.UserName}" during verification.`);
+      } catch (e) {
+        console.error(`[AUTH] Failed to migrate password to bcrypt during verification:`, e);
+      }
+    }
+
     return res.json({ success: isValid });
   } catch (err) {
     console.error("VERIFY ERROR:", err);
