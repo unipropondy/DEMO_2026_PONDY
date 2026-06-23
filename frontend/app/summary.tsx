@@ -545,9 +545,13 @@ export default function SummaryScreen() {
       }
 
       if (context?.tableId) {
+        const token = useAuthStore.getState().token;
         await fetch(`${API_URL}/api/orders/checkout`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({ tableId: context.tableId }),
         });
       }

@@ -643,9 +643,13 @@ export const useCartStore = create<CartState>()(
             version: newVersion
           });
 
+          const token = useAuthStore.getState().token;
           const res = await fetch(`${API_URL}/api/orders/remove-item`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
             body: JSON.stringify({ 
               tableId, 
               itemId: lineItemId, 
@@ -743,9 +747,13 @@ export const useCartStore = create<CartState>()(
             version: newVersion
           });
 
+          const token = useAuthStore.getState().token;
           const res = await fetchWithRetry(`${API_URL}/api/orders/save-cart`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
             body: JSON.stringify({
               tableId,
               orderId: get().tableOrderIds[tableId],
@@ -1037,9 +1045,13 @@ export const useCartStore = create<CartState>()(
             const items = currentState.carts[contextId] || [];
             const orderId = currentState.tableOrderIds[tableId] || null;
             
+            const token = useAuthStore.getState().token;
             const res = await fetch(`${API_URL}/api/orders/save-cart`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { 
+                "Content-Type": "application/json",
+                ...(token ? { "Authorization": `Bearer ${token}` } : {})
+              },
               signal: controller.signal,
               body: JSON.stringify({
                 tableId,
@@ -1132,7 +1144,10 @@ export const useCartStore = create<CartState>()(
                return;
             }
 
-            const res = await fetch(`${API_URL}/api/orders/cart/${tableId}`);
+            const token = useAuthStore.getState().token;
+            const res = await fetch(`${API_URL}/api/orders/cart/${tableId}`, {
+              headers: token ? { "Authorization": `Bearer ${token}` } : {}
+            });
             const data = await res.json();
 
             // 🛡️ FINAL CHECK: Ensure no edits happened DURING the network request
@@ -1295,9 +1310,13 @@ export const useCartStore = create<CartState>()(
       checkoutOrder: async (tableId) => {
         try {
           console.log(`🚀 [CartStore] Initiating Checkout for Table: ${tableId}`);
+          const token = useAuthStore.getState().token;
           const response = await fetchWithRetry(`${API_URL}/api/orders/checkout`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
             body: JSON.stringify({ tableId }),
           });
           
@@ -1319,9 +1338,13 @@ export const useCartStore = create<CartState>()(
       completeOrder: async (tableId) => {
         try {
           console.log(`🚀 [CartStore] Completing Order for Table: ${tableId}`);
+          const token = useAuthStore.getState().token;
           const response = await fetchWithRetry(`${API_URL}/api/orders/complete`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
             body: JSON.stringify({ tableId }),
           });
 
