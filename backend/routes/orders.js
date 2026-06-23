@@ -1545,12 +1545,6 @@ router.get("/active-kitchen", async (req, res) => {
     `);
     const orders = {};
     result.recordset.forEach((row) => {
-      console.log({
-        tableId: row.TableId,
-        entry_status: row.entry_status,
-        PAYMENT_STATUS: row.PAYMENT_STATUS,
-        Status: row.Status
-      });
       if (!orders[row.orderId]) {
         const isTakeaway =
           !row.tableNo ||
