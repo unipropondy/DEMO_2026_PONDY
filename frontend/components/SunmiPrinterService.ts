@@ -275,9 +275,9 @@ class SunmiPrinterService {
         await this.left(`TABLE NO: ${saleData.tableNo}`);
       }
       await this.left(`DATE: ${dateStr} ${timeStr}`);
-      await this.left(
-        `WAITER: ${saleData.waiterName || saleData.cashier || companySettings.cashierName || "Staff"}`,
-      );
+      if (saleData.waiterName && saleData.waiterName !== "Staff") {
+        await this.left(`WAITER: ${saleData.waiterName}`);
+      }
       await this.divider("-");
 
       // ============ ITEMS SECTION ============

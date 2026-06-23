@@ -711,7 +711,7 @@ private static escapeHtml(str: string): string {
                   <span class="detail-value" style="font-size: 14px; font-weight: 900;">${saleData.tableNo}</span>
                 </div>
               ` : ''}
-              ${saleData.waiterName ? `
+              ${saleData.waiterName && saleData.waiterName !== "Staff" ? `
                 <div class="detail-row" style="margin-top: 1mm;">
                   <span class="detail-label" style="font-size: 9px; color: #666;">WAITER:</span>
                   <span class="detail-value" style="font-size: 9px; color: #666;">${saleData.waiterName}</span>
