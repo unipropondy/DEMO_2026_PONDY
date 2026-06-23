@@ -1,6 +1,6 @@
 import "react-native-get-random-values";
 import "react-native-reanimated";
-import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
+import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router/react-navigation";
 import {
   Inter_400Regular,
   Inter_500Medium,

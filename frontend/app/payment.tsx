@@ -1,7 +1,6 @@
 import { API_URL } from "@/constants/Config";
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
-import { useIsFocused } from "@react-navigation/native";
-import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
+import { useIsFocused, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
