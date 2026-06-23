@@ -2076,7 +2076,6 @@ const confirmPayment = async () => {
                               style={[
                                 styles.methodCard,
                                 isSelected && styles.activeMethodCard,
-                                isYeahPay && styles.yeahpayMethodCard,
                                 isMobile && { width: "30%", height: 75 },
                               ]}
                               onPress={() => handleSelectMethod(m)}
@@ -2085,7 +2084,6 @@ const confirmPayment = async () => {
                                 style={[
                                   styles.methodIconBox,
                                   isSelected && styles.activeIconBox,
-                                  isYeahPay && styles.yeahpayIconBox,
                                   isMobile && { width: 30, height: 30 },
                                 ]}
                               >
@@ -2094,7 +2092,6 @@ const confirmPayment = async () => {
                                   size={isMobile ? 16 : 20}
                                   color={
                                     isSelected ? "#fff" :
-                                    isYeahPay ? "#059669" :
                                     Theme.primary
                                   }
                                 />
@@ -2103,18 +2100,11 @@ const confirmPayment = async () => {
                                 style={[
                                   styles.methodLabel,
                                   isSelected && styles.activeMethodLabel,
-                                  isYeahPay && styles.yeahpayLabel,
                                   isMobile && { fontSize: 10 },
                                 ]}
                               >
                                 {m.description}
                               </Text>
-                              {isYeahPay && (
-                                <View style={styles.yeahpayBadge}>
-                                  <Ionicons name="shield-checkmark" size={10} color="#059669" />
-                                  <Text style={styles.yeahpayBadgeText}>Secure</Text>
-                                </View>
-                              )}
                             </TouchableOpacity>
                           );
                         })}
