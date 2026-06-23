@@ -3683,7 +3683,9 @@ statusMessageProcessing: {
     fontFamily: Fonts.bold,
     color: Theme.textSecondary,
     textAlign: "center",
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
+    alignSelf: "stretch",
+    width: "100%",
   },
   activeMethodLabel: { color: "#fff" },
   yeahpayMethodCard: {
