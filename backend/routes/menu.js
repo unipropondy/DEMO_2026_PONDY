@@ -290,7 +290,8 @@ router.get("/modifiers/:dishId", async (req, res) => {
     const pool = await poolPromise;
     const result = await pool.request().input("dishId", req.params.dishId)
       .query(`
-        SELECT dm.DishId, dm.ModifierId AS ModifierID, m.ModifierCode, m.ModifierName, 0 AS Price
+        SELECT dm.DishId, dm.ModifierId AS ModifierID, m.ModifierCode, m.ModifierName, 
+               CASE WHEN m.isPriceAffect = 1 AND m.isDishPrice = 1 THEN ISNULL(m.DishCost, 0) ELSE 0 END AS Price
         FROM DishModifier dm 
         INNER JOIN ModifierMaster m ON dm.ModifierId = m.ModifierId
         WHERE dm.DishId = @dishId ORDER BY m.ModifierName ASC
@@ -311,7 +312,8 @@ router.get("/modifiers/group/:DishGroupId", async (req, res) => {
     const pool = await poolPromise;
     const result = await pool.request().input("DishGroupId", req.params.DishGroupId)
       .query(`
-        SELECT dm.DishId, dm.ModifierId AS ModifierID, m.ModifierCode, m.ModifierName, 0 AS Price
+        SELECT dm.DishId, dm.ModifierId AS ModifierID, m.ModifierCode, m.ModifierName, 
+               CASE WHEN m.isPriceAffect = 1 AND m.isDishPrice = 1 THEN ISNULL(m.DishCost, 0) ELSE 0 END AS Price
         FROM DishModifier dm 
         INNER JOIN ModifierMaster m ON dm.ModifierId = m.ModifierId
         INNER JOIN DishMaster d ON dm.DishId = d.DishId
