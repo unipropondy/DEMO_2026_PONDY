@@ -2586,7 +2586,7 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
                   RewardsEarned = RewardsEarned + @RewardsEarned,
                   RewardPending = @RewardPending,
                   LastVisitDate = GETDATE(),
-                  Name = ISNULL(@Name, Name)
+                  Name = CASE WHEN Name IS NULL OR Name = '' THEN ISNULL(@Name, Name) ELSE Name END
               WHERE LoyaltyCustomerId = @LoyaltyCustomerId
             `);
         }

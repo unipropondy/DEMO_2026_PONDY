@@ -178,9 +178,13 @@ export default function SummaryScreen() {
 
   useEffect(() => {
     const phone = (activeOrder as any)?.mobileNo || (activeOrder as any)?.MobileNo || (tableState as any)?.mobileNo || (tableState as any)?.MobileNo || "";
+    const name = (activeOrder as any)?.customerName || (activeOrder as any)?.CustomerName || (tableState as any)?.customerName || (tableState as any)?.CustomerName || "";
     if (phone && phone.trim() !== "") {
       setLoyaltyPhone(phone);
       handleLoyaltyLookup(phone);
+    }
+    if (name && name.trim() !== "") {
+      setLoyaltyName(name);
     }
   }, [activeOrder, tableState]);
 
@@ -1283,32 +1287,45 @@ export default function SummaryScreen() {
 
                 {/* LOYALTY CARD SECTION */}
                 <View style={{ marginBottom: 15, padding: 12, backgroundColor: Theme.bgNav, borderRadius: 12, borderWidth: 1, borderColor: Theme.border }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
                     <Ionicons name="gift-outline" size={16} color={Theme.primary} />
                     <Text style={{ fontFamily: Fonts.bold, fontSize: 13, color: Theme.textPrimary }}>Walk-in Loyalty Program</Text>
                   </View>
                   
-                  <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                  <View style={{ marginBottom: 10 }}>
+                    <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: Theme.textSecondary, marginBottom: 4 }}>Customer Name</Text>
                     <TextInput
-                      style={{ flex: 1, height: 38, borderWidth: 1, borderColor: Theme.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: "#fff", fontSize: 13, fontFamily: Fonts.regular, color: Theme.textPrimary }}
+                      style={{ height: 38, borderWidth: 1, borderColor: Theme.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: "#fff", fontSize: 13, fontFamily: Fonts.regular, color: Theme.textPrimary }}
+                      placeholder="Enter Customer Name..."
+                      placeholderTextColor={Theme.textMuted}
+                      value={loyaltyName}
+                      onChangeText={setLoyaltyName}
+                    />
+                  </View>
+
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: Theme.textSecondary, marginBottom: 4 }}>Mobile Number</Text>
+                    <TextInput
+                      style={{ height: 38, borderWidth: 1, borderColor: Theme.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: "#fff", fontSize: 13, fontFamily: Fonts.regular, color: Theme.textPrimary }}
                       placeholder="Enter Phone Number..."
                       placeholderTextColor={Theme.textMuted}
                       keyboardType="phone-pad"
                       value={loyaltyPhone}
                       onChangeText={setLoyaltyPhone}
                     />
-                    <TouchableOpacity 
-                      style={{ paddingHorizontal: 12, height: 38, backgroundColor: Theme.primary, borderRadius: 8, justifyContent: "center", alignItems: "center" }}
-                      onPress={() => handleLoyaltyLookup()}
-                      disabled={isSearchingLoyalty}
-                    >
-                      {isSearchingLoyalty ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Text style={{ color: "#fff", fontFamily: Fonts.bold, fontSize: 12 }}>Lookup</Text>
-                      )}
-                    </TouchableOpacity>
                   </View>
+
+                  <TouchableOpacity 
+                    style={{ height: 38, backgroundColor: Theme.primary, borderRadius: 8, justifyContent: "center", alignItems: "center", marginBottom: 8 }}
+                    onPress={() => handleLoyaltyLookup()}
+                    disabled={isSearchingLoyalty}
+                  >
+                    {isSearchingLoyalty ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={{ color: "#fff", fontFamily: Fonts.bold, fontSize: 13 }}>Lookup</Text>
+                    )}
+                  </TouchableOpacity>
 
                   {loyaltyCustomer && (
                     <View style={{ marginTop: 4, gap: 4 }}>
