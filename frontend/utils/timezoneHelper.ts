@@ -1,9 +1,9 @@
 /**
- * Timezone utilities to enforce Asia/Singapore (SGT) timezone in the frontend.
+ * Timezone utilities to enforce Asia/Singapore (SGT, UTC+8) timezone in the frontend.
  */
 
 export function getSingaporeDateString(date: Date = new Date()): string {
-  // Returns "YYYY-MM-DD" in Asia/Singapore
+  // Returns "YYYY-MM-DD" in Asia/Singapore (SGT)
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Singapore',
     year: 'numeric',
