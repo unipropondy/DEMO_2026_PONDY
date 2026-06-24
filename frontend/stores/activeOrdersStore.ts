@@ -6,6 +6,7 @@ import { CartItem, DiscountInfo, getContextId, useCartStore } from "./cartStore"
 import { OrderContext } from "./orderContextStore";
 import { API_URL } from "../constants/Config";
 import { socket } from "../constants/socket";
+import { useAuthStore } from "./authStore";
 
 
 /* ================= TYPES ================= */
@@ -293,9 +294,13 @@ const storeCreator: StateCreator<
     // 2. Persist to Backend (unless already synced from socket)
     if (!skipSync) {
       try {
+        const token = useAuthStore.getState().token;
         await fetch(`${API_URL}/api/orders/update-item-status`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({ orderId, lineItemId, status: "READY", tableId }),
         });
       } catch (err) {
@@ -330,9 +335,13 @@ const storeCreator: StateCreator<
     // 2. Persist to Backend
     if (!skipSync) {
       try {
+        const token = useAuthStore.getState().token;
         await fetch(`${API_URL}/api/orders/update-item-status`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({ orderId, lineItemId, status: "SERVED", tableId }),
         });
       } catch (err) {
@@ -354,7 +363,12 @@ const storeCreator: StateCreator<
       
       set({ isFetching: true });
       try {
-        const res = await fetch(`${API_URL}/api/orders/active-kitchen`);
+        const token = useAuthStore.getState().token;
+        const res = await fetch(`${API_URL}/api/orders/active-kitchen`, {
+          headers: {
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          }
+        });
         if (!res.ok) throw new Error("Failed to fetch active kitchen orders");
         const result = await res.json();
         const ordersFromApi = result.orders || (Array.isArray(result) ? result : []);
