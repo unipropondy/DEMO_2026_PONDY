@@ -126,6 +126,9 @@ export default function SummaryScreen() {
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showLoyaltyModal, setShowLoyaltyModal] = useState(false);
+  const [defaultLoyaltyMembers, setDefaultLoyaltyMembers] = useState<any[]>([]);
+  const [loyaltySearchText, setLoyaltySearchText] = useState("");
 
   const tableState = context?.tableId
     ? useTableStatusStore.getState().tableMap[context.tableId.toLowerCase()]
@@ -206,6 +209,29 @@ export default function SummaryScreen() {
     }
   };
 
+  const handleSearchTextChange = async (text: string) => {
+    setLoyaltySearchText(text);
+    const cleanText = text.trim();
+    if (cleanText.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`${API_URL}/api/loyalty/search?q=${encodeURIComponent(cleanText)}`, {
+        headers: {
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        }
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setSearchResults(data);
+      }
+    } catch (err) {
+      console.error("Loyalty search error:", err);
+    }
+  };
+
   const handleSelectCustomer = (cust: any) => {
     const parsed = parsePhone(cust.Phone);
     setSelectedCountry(parsed.country);
@@ -223,6 +249,28 @@ export default function SummaryScreen() {
       );
     }
   };
+
+  useEffect(() => {
+    if (showLoyaltyModal) {
+      const fetchDefaults = async () => {
+        try {
+          const token = useAuthStore.getState().token;
+          const res = await fetch(`${API_URL}/api/loyalty/search?q=`, {
+            headers: {
+              ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            }
+          });
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setDefaultLoyaltyMembers(data);
+          }
+        } catch (err) {
+          console.error("Fetch default loyalty members error:", err);
+        }
+      };
+      fetchDefaults();
+    }
+  }, [showLoyaltyModal]);
 
   useEffect(() => {
     const phone = (activeOrder as any)?.mobileNo || (activeOrder as any)?.MobileNo || (tableState as any)?.mobileNo || (tableState as any)?.MobileNo || "";
@@ -874,6 +922,37 @@ export default function SummaryScreen() {
               style={[
                 styles.actionBtn,
                 {
+                  backgroundColor: Theme.successBg || "#dcfce7",
+                  borderColor: Theme.successBorder || "#bbf7d0",
+                  borderWidth: 1,
+                },
+                !isTablet &&
+                  isLandscape && { height: 32, paddingHorizontal: 8 },
+              ]}
+              onPress={() => setShowLoyaltyModal(true)}
+            >
+              <Ionicons
+                name="ribbon-outline"
+                size={!isTablet && isLandscape ? 16 : 18}
+                color={Theme.success || "#16a34a"}
+              />
+              {isLandscape && (
+                <Text
+                  style={[
+                    styles.actionBtnText,
+                    { color: Theme.success || "#16a34a" },
+                    !isTablet && isLandscape && { fontSize: 10 },
+                  ]}
+                >
+                  Loyalty
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.actionBtn,
+                {
                   backgroundColor: Theme.primaryLight,
                   borderColor: Theme.primaryBorder,
                   borderWidth: 1,
@@ -1171,6 +1250,34 @@ export default function SummaryScreen() {
                   ]}
                 />
 
+                {loyaltyCustomer && (
+                  <View style={{
+                    backgroundColor: Theme.bgNav,
+                    borderColor: Theme.border,
+                    borderWidth: 1,
+                    borderRadius: 10,
+                    padding: 10,
+                    marginBottom: 12,
+                    gap: 4
+                  }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Ionicons name="ribbon-outline" size={14} color={Theme.success || "#16a34a"} />
+                      <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.textPrimary }}>
+                        {loyaltyCustomer.isNew 
+                          ? "Loyalty: Enrolling Customer" 
+                          : `Loyalty Progress: Visit ${loyaltyCustomer.VisitCount}/9`}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: Theme.textSecondary, marginLeft: 20 }}>
+                      {loyaltyCustomer.isNew
+                        ? `Phone: ${loyaltyCustomer.Phone}`
+                        : (loyaltyCustomer.RewardPending === 1 || loyaltyCustomer.VisitCount === 9)
+                          ? "🎉 10th Visit Reward Available!"
+                          : `Next Reward in ${9 - loyaltyCustomer.VisitCount} Visits`}
+                    </Text>
+                  </View>
+                )}
+
                 <View
                   style={[
                     styles.summaryRow,
@@ -1335,138 +1442,7 @@ export default function SummaryScreen() {
                   />
                 </View>
 
-                 {/* LOYALTY CARD SECTION */}
-                 <View style={{ marginBottom: 10, padding: 8, backgroundColor: Theme.bgNav, borderRadius: 12, borderWidth: 1, borderColor: Theme.border, zIndex: 9999 }}>
-                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                     <Ionicons name="gift-outline" size={15} color={Theme.primary} />
-                     <Text style={{ fontFamily: Fonts.bold, fontSize: 12, color: Theme.textPrimary }}>Walk-in Loyalty Program</Text>
-                   </View>
-                   
-                   {loyaltyCustomer && !loyaltyCustomer.isNew && (
-                     <View style={{ marginBottom: 6 }}>
-                       <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: Theme.textSecondary, marginBottom: 1 }}>Customer Name</Text>
-                       <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: Theme.textPrimary, paddingVertical: 2 }}>
-                         {loyaltyCustomer.Name || "Guest"}
-                       </Text>
-                     </View>
-                   )}
 
-                   {loyaltyCustomer && loyaltyCustomer.isNew && (
-                     <View style={{ marginBottom: 8 }}>
-                       <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: Theme.textSecondary, marginBottom: 2 }}>Customer Name</Text>
-                       <TextInput
-                         style={{ height: 34, borderWidth: 1, borderColor: Theme.border, borderRadius: 8, paddingHorizontal: 8, backgroundColor: "#fff", fontSize: 12, fontFamily: Fonts.regular, color: Theme.textPrimary }}
-                         placeholder="Enter Customer Name..."
-                         placeholderTextColor={Theme.textMuted}
-                         value={loyaltyName}
-                         onChangeText={setLoyaltyName}
-                       />
-                     </View>
-                   )}
-
-                   <View style={{ marginBottom: 4, zIndex: 99999 }}>
-                     <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: Theme.textSecondary, marginBottom: 2 }}>Mobile Number</Text>
-                     <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
-                       <TouchableOpacity 
-                         style={{
-                           flexDirection: "row",
-                           alignItems: "center",
-                           justifyContent: "center",
-                           borderWidth: 1,
-                           borderColor: Theme.border,
-                           borderRadius: 8,
-                           width: 52,
-                           height: 34,
-                           backgroundColor: "#fff",
-                           gap: 2
-                         }}
-                         onPress={() => setShowCountryPicker(true)}
-                       >
-                         <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.textPrimary }}>{selectedCountry.code}</Text>
-                         <Ionicons name="chevron-down" size={10} color={Theme.textSecondary} />
-                       </TouchableOpacity>
-
-                       <TextInput
-                         style={{ flex: 1, height: 34, borderWidth: 1, borderColor: Theme.border, borderRadius: 8, paddingHorizontal: 8, backgroundColor: "#fff", fontSize: 12, fontFamily: Fonts.regular, color: Theme.textPrimary }}
-                         placeholder="Phone..."
-                         placeholderTextColor={Theme.textMuted}
-                         keyboardType="phone-pad"
-                         value={loyaltyPhone}
-                         onChangeText={handleSearchPhone}
-                       />
-                       <TouchableOpacity 
-                         style={{ width: 68, height: 34, backgroundColor: Theme.primary, borderRadius: 8, justifyContent: "center", alignItems: "center" }}
-                         onPress={() => handleLoyaltyLookup()}
-                         disabled={isSearchingLoyalty}
-                       >
-                         {isSearchingLoyalty ? (
-                           <ActivityIndicator size="small" color="#fff" />
-                         ) : (
-                           <Text style={{ color: "#fff", fontFamily: Fonts.bold, fontSize: 11 }}>Lookup</Text>
-                         )}
-                       </TouchableOpacity>
-                     </View>
-
-                     {/* Search Dropdown list */}
-                     {searchResults.length > 0 && (
-                       <View style={{
-                         position: "absolute",
-                         top: 52,
-                         left: 0,
-                         right: 0,
-                         backgroundColor: "#fff",
-                         borderRadius: 8,
-                         borderWidth: 1,
-                         borderColor: Theme.border,
-                         shadowColor: "#000",
-                         shadowOffset: { width: 0, height: 2 },
-                         shadowOpacity: 0.1,
-                         shadowRadius: 4,
-                         elevation: 3,
-                         maxHeight: 150,
-                         zIndex: 999999
-                       }}>
-                         <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                           {searchResults.map((cust, index) => (
-                             <TouchableOpacity
-                               key={index}
-                               style={{
-                                 paddingVertical: 8,
-                                 paddingHorizontal: 10,
-                                 borderBottomWidth: index === searchResults.length - 1 ? 0 : 1,
-                                 borderBottomColor: Theme.border,
-                                 flexDirection: "row",
-                                 justifyContent: "space-between",
-                                 alignItems: "center"
-                               }}
-                               onPress={() => handleSelectCustomer(cust)}
-                             >
-                               <Text style={{ fontFamily: Fonts.bold, fontSize: 12, color: Theme.textPrimary }}>{cust.Phone}</Text>
-                               <Text style={{ fontFamily: Fonts.regular, fontSize: 11, color: Theme.textSecondary }}>{cust.Name || "Guest"}</Text>
-                             </TouchableOpacity>
-                           ))}
-                         </ScrollView>
-                       </View>
-                     )}
-                   </View>
-
-                  {loyaltyCustomer && (
-                    <View style={{ marginTop: 4, gap: 4 }}>
-                      <Text style={{ fontSize: 12, color: Theme.textSecondary, fontFamily: Fonts.regular }}>
-                        Status: <Text style={{ fontFamily: Fonts.bold, color: Theme.primary }}>{loyaltyCustomer.isNew ? "Enrolling on checkout" : `Visits: ${loyaltyCustomer.VisitCount}/9`}</Text>
-                      </Text>
-                      {loyaltyCustomer.RewardPending === 1 || loyaltyCustomer.VisitCount === 9 ? (
-                        <View style={{ marginTop: 6, backgroundColor: Theme.successBg || '#dcfce7', padding: 8, borderRadius: 8 }}>
-                          <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: Theme.success || '#16a34a' }}>🎉 10th Visit Reward Available! Customer is eligible for a free food reward.</Text>
-                        </View>
-                      ) : (
-                        <Text style={{ fontSize: 11, color: Theme.textMuted, fontFamily: Fonts.regular }}>
-                          {9 - loyaltyCustomer.VisitCount} visit(s) remaining until free food reward.
-                        </Text>
-                      )}
-                    </View>
-                  )}
-                </View>
 
                 {/* SERVER SELECTION & BILL BUTTON */}
                 <View
@@ -2506,6 +2482,232 @@ export default function SummaryScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* WALK-IN LOYALTY MODAL */}
+      <Modal
+        transparent
+        visible={showLoyaltyModal}
+        animationType="fade"
+        onRequestClose={() => setShowLoyaltyModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { maxWidth: 450, padding: 24 }]}>
+              <View style={styles.modalHeader}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Ionicons name="ribbon-outline" size={24} color={Theme.success || "#16a34a"} />
+                  <Text style={[styles.modalTitle, { marginBottom: 0 }]}>Walk-in Loyalty</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowLoyaltyModal(false)}>
+                  <Ionicons name="close" size={24} color={Theme.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.modalSubTitle, { marginBottom: 15 }]}>
+                Search and select customers, check visit counts, and redeem rewards.
+              </Text>
+
+              {/* Unified Search Input */}
+              <View style={styles.searchWrap}>
+                <Ionicons name="search" size={20} color={Theme.textSecondary} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search by Name or Mobile..."
+                  placeholderTextColor={Theme.textMuted}
+                  value={loyaltySearchText}
+                  onChangeText={handleSearchTextChange}
+                />
+                {loyaltySearchText.length > 0 && (
+                  <TouchableOpacity onPress={() => handleSearchTextChange("")}>
+                    <Ionicons name="close-circle" size={18} color={Theme.textSecondary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Members List */}
+              <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.textSecondary, marginTop: 15, marginBottom: 6 }}>
+                {loyaltySearchText.trim() === "" ? "Existing Members" : "Search Results"}
+              </Text>
+              <View style={{ maxHeight: 150, borderWidth: 1, borderColor: Theme.border, borderRadius: 10, overflow: "hidden", backgroundColor: Theme.bgCard }}>
+                <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                  {(loyaltySearchText.trim() === "" ? defaultLoyaltyMembers : searchResults).map((cust, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={{
+                        paddingVertical: 12,
+                        paddingHorizontal: 15,
+                        borderBottomWidth: index === (loyaltySearchText.trim() === "" ? defaultLoyaltyMembers : searchResults).length - 1 ? 0 : 1,
+                        borderBottomColor: Theme.border,
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center"
+                      }}
+                      onPress={() => {
+                        handleSelectCustomer(cust);
+                        setLoyaltySearchText("");
+                      }}
+                    >
+                      <Text style={{ fontFamily: Fonts.bold, fontSize: 14, color: Theme.textPrimary }}>
+                        {cust.Name || "Guest"} — {cust.Phone}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color={Theme.textSecondary} />
+                    </TouchableOpacity>
+                  ))}
+                  {(loyaltySearchText.trim() !== "" && searchResults.length === 0) && (
+                    <View style={{ padding: 15, alignItems: "center" }}>
+                      <Text style={{ color: Theme.textMuted, fontFamily: Fonts.regular }}>No matching members found</Text>
+                    </View>
+                  )}
+                  {(loyaltySearchText.trim() === "" && defaultLoyaltyMembers.length === 0) && (
+                    <View style={{ padding: 15, alignItems: "center" }}>
+                      <Text style={{ color: Theme.textMuted, fontFamily: Fonts.regular }}>No loyalty members yet</Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+
+              {/* Register New Customer */}
+              <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.textSecondary, marginTop: 15, marginBottom: 6 }}>Register New Customer</Text>
+              <View style={{ gap: 8, padding: 12, borderWidth: 1, borderColor: Theme.border, borderRadius: 10, backgroundColor: Theme.bgNav }}>
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                  <TouchableOpacity 
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: Theme.border,
+                      borderRadius: 8,
+                      width: 52,
+                      height: 38,
+                      backgroundColor: "#fff",
+                      gap: 2
+                    }}
+                    onPress={() => setShowCountryPicker(true)}
+                  >
+                    <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.textPrimary }}>{selectedCountry.code}</Text>
+                    <Ionicons name="chevron-down" size={10} color={Theme.textSecondary} />
+                  </TouchableOpacity>
+
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      height: 38,
+                      borderWidth: 1,
+                      borderColor: Theme.border,
+                      borderRadius: 8,
+                      paddingHorizontal: 8,
+                      backgroundColor: "#fff",
+                      fontSize: 13,
+                      fontFamily: Fonts.regular,
+                      color: Theme.textPrimary
+                    }}
+                    placeholder="Enter Phone Number..."
+                    placeholderTextColor={Theme.textMuted}
+                    keyboardType="phone-pad"
+                    value={loyaltyPhone}
+                    onChangeText={(txt) => {
+                      setLoyaltyPhone(txt);
+                      if (loyaltyCustomer) {
+                        setLoyaltyCustomer(null);
+                      }
+                    }}
+                  />
+                  <TouchableOpacity 
+                    style={{
+                      width: 70,
+                      height: 38,
+                      backgroundColor: Theme.primary,
+                      borderRadius: 8,
+                      justifyContent: "center",
+                      alignItems: "center"
+                    }}
+                    onPress={() => handleLoyaltyLookup()}
+                    disabled={isSearchingLoyalty}
+                  >
+                    {isSearchingLoyalty ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={{ color: "#fff", fontFamily: Fonts.bold, fontSize: 12 }}>Lookup</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {loyaltyCustomer && loyaltyCustomer.isNew && (
+                  <View style={{ marginTop: 4 }}>
+                    <TextInput
+                      style={{
+                        height: 38,
+                        borderWidth: 1,
+                        borderColor: Theme.border,
+                        borderRadius: 8,
+                        paddingHorizontal: 8,
+                        backgroundColor: "#fff",
+                        fontSize: 13,
+                        fontFamily: Fonts.regular,
+                        color: Theme.textPrimary
+                      }}
+                      placeholder="Enter Customer Name (Optional)..."
+                      placeholderTextColor={Theme.textMuted}
+                      value={loyaltyName}
+                      onChangeText={setLoyaltyName}
+                    />
+                  </View>
+                )}
+              </View>
+
+              {/* Selected Customer Info */}
+              {loyaltyCustomer && !loyaltyCustomer.isNew && (
+                <View style={{ marginTop: 15, backgroundColor: Theme.successBg || '#dcfce7', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: Theme.successBorder || '#bbf7d0' }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <Text style={{ fontSize: 14, fontFamily: Fonts.bold, color: Theme.textPrimary }}>
+                      {loyaltyCustomer.Name || "Guest"}
+                    </Text>
+                    <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.success || '#16a34a' }}>
+                      Visit {loyaltyCustomer.VisitCount}/9
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: Theme.textSecondary, fontFamily: Fonts.regular }}>
+                    Mobile: <Text style={{ fontFamily: Fonts.bold, color: Theme.textPrimary }}>{loyaltyCustomer.Phone}</Text>
+                  </Text>
+                  
+                  {loyaltyCustomer.RewardPending === 1 || loyaltyCustomer.VisitCount === 9 ? (
+                    <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: Theme.success || '#16a34a', marginTop: 8 }}>
+                      🎉 Reward Eligible! (10th Visit Reward Available)
+                    </Text>
+                  ) : (
+                    <Text style={{ fontSize: 12, color: Theme.textMuted, fontFamily: Fonts.medium, marginTop: 6 }}>
+                      Next Reward in {9 - loyaltyCustomer.VisitCount} visit(s)
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {/* Actions row */}
+              <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 12, marginTop: 20 }}>
+                {loyaltyCustomer && (
+                  <TouchableOpacity
+                    style={[styles.modalBtnCancel, { backgroundColor: Theme.dangerBg || '#fee2e2', borderColor: Theme.dangerBorder || '#fecaca', marginRight: 'auto' }]}
+                    onPress={() => {
+                      setLoyaltyCustomer(null);
+                      setLoyaltyPhone("");
+                      setLoyaltyName("");
+                    }}
+                  >
+                    <Text style={[styles.modalBtnTextCancel, { color: Theme.danger || '#ef4444' }]}>Clear Customer</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.modalBtnConfirm, { backgroundColor: Theme.primary }]}
+                  onPress={() => setShowLoyaltyModal(false)}
+                >
+                  <Text style={styles.modalBtnTextConfirm}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* COUNTRY PICKER MODAL */}

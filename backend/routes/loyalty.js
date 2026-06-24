@@ -9,16 +9,22 @@ const { poolPromise } = require("../config/db");
 router.get("/search", async (req, res) => {
   try {
     const { q } = req.query;
-    if (!q || q.trim() === "") {
-      return res.json([]);
-    }
     const pool = await poolPromise;
+    if (!q || q.trim() === "") {
+      const result = await pool.request()
+        .query(`
+          SELECT TOP 20 Phone, Name, VisitCount, TotalVisits, RewardPending 
+          FROM LoyaltyCustomer 
+          ORDER BY LastVisitDate DESC, Name ASC
+        `);
+      return res.json(result.recordset);
+    }
     const result = await pool.request()
       .input("Query", sql.NVarChar(50), `%${q.trim()}%`)
       .query(`
         SELECT TOP 10 Phone, Name, VisitCount, TotalVisits, RewardPending 
         FROM LoyaltyCustomer 
-        WHERE Phone LIKE @Query
+        WHERE Phone LIKE @Query OR Name LIKE @Query
       `);
     res.json(result.recordset);
   } catch (err) {
