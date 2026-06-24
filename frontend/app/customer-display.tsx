@@ -2,8 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
+  FlatList,
   Image,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -19,6 +22,7 @@ import { socket } from "../constants/socket";
 import { Theme } from "../constants/theme";
 import { useCompanySettingsStore } from "../stores/companySettingsStore";
 import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
+import { useTerminalStore, Terminal } from "../stores/terminalStore";
 
 interface DisplayState {
   active: boolean;
@@ -91,11 +95,20 @@ export default function CustomerDisplayScreen() {
   const [displayState, setDisplayState] = useState<DisplayState>(DEFAULT_STATE);
   const [floatingFoods, setFloatingFoods] = useState<any[]>([]);
 
+  // ─── TERMINAL PAIRING STATE ───
+  const terminalCode = useTerminalStore((s) => s.terminalCode);
+  const terminalName = useTerminalStore((s) => s.terminalName);
+  const isTerminalConfigured = useTerminalStore((s) => s.isConfigured);
+  const [showTerminalModal, setShowTerminalModal] = useState(!isTerminalConfigured);
+  const [terminals, setTerminals] = useState<Terminal[]>([]);
+  const [terminalsLoading, setTerminalsLoading] = useState(false);
+  const [selectedTerminalCode, setSelectedTerminalCode] = useState<string | null>(null);
+
   // Animation value for success screen fade/scale
   const successScale = useRef(new Animated.Value(0)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
 
-  // 1. Initialize settings & socket listener
+  // 1. Initialize settings, socket listener & terminal room join
   useEffect(() => {
     usePaymentSettingsStore.getState().fetchSettings();
     useCompanySettingsStore.getState().fetchSettings("1");
@@ -110,10 +123,41 @@ export default function CustomerDisplayScreen() {
 
     socket.on("customer_display_sync", handleSync);
 
+    // Auto-rejoin terminal room on every socket connect/reconnect
+    const handleConnect = () => {
+      useTerminalStore.getState().joinSocketRoom();
+    };
+    socket.on("connect", handleConnect);
+    // Also join immediately if already connected
+    if (socket.connected) {
+      useTerminalStore.getState().joinSocketRoom();
+    }
+
     return () => {
       socket.off("customer_display_sync", handleSync);
+      socket.off("connect", handleConnect);
     };
   }, []);
+
+  // Fetch terminals when the modal opens
+  useEffect(() => {
+    if (!showTerminalModal) return;
+    setTerminalsLoading(true);
+    fetch(`${API_URL}/api/settlement/terminals`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setTerminals(data);
+        } else if (Array.isArray(data?.data)) {
+          setTerminals(data.data);
+        } else {
+          setTerminals([]);
+        }
+      })
+      .catch(() => setTerminals([]))
+      .finally(() => setTerminalsLoading(false));
+  }, [showTerminalModal]);
+
 
   // 2. Success screen trigger
   useEffect(() => {
@@ -205,11 +249,121 @@ export default function CustomerDisplayScreen() {
 
   // ─── RENDERS ───
 
+  // ── Terminal Setup Modal helper ──
+  const renderTerminalModal = () => (
+    <Modal
+      visible={showTerminalModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        if (isTerminalConfigured) setShowTerminalModal(false);
+      }}
+    >
+      <View style={styles.terminalModalOverlay}>
+        <View style={styles.terminalModalCard}>
+          {/* Header */}
+          <View style={styles.terminalModalHeader}>
+            <Ionicons name="tv-outline" size={32} color={Theme.primary} />
+            <Text style={styles.terminalModalTitle}>Customer Display Setup</Text>
+            <Text style={styles.terminalModalSubtitle}>
+              Select the counter this screen is paired with.{"\n"}
+              The POS at that counter will sync to this display.
+            </Text>
+          </View>
+
+          {/* Terminal List */}
+          {terminalsLoading ? (
+            <ActivityIndicator
+              color={Theme.primary}
+              size="large"
+              style={{ marginVertical: 32 }}
+            />
+          ) : terminals.length === 0 ? (
+            <View style={{ alignItems: "center", paddingVertical: 24 }}>
+              <Ionicons name="alert-circle-outline" size={40} color={Theme.textMuted} />
+              <Text style={styles.terminalModalEmpty}>
+                No terminals found.{"\n"}Please configure terminals in the backoffice.
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={terminals}
+              keyExtractor={(item) => item.TerminalCode}
+              style={styles.terminalList}
+              renderItem={({ item }) => {
+                const isSelected = selectedTerminalCode === item.TerminalCode;
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.terminalItem,
+                      isSelected && styles.terminalItemSelected,
+                    ]}
+                    activeOpacity={0.75}
+                    onPress={() => setSelectedTerminalCode(item.TerminalCode)}
+                  >
+                    <Ionicons
+                      name={isSelected ? "radio-button-on" : "radio-button-off"}
+                      size={22}
+                      color={isSelected ? Theme.primary : Theme.textMuted}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.terminalItemCode, isSelected && { color: Theme.primary }]}>
+                        {item.TerminalCode}
+                      </Text>
+                      {item.TerminalName ? (
+                        <Text style={styles.terminalItemName}>{item.TerminalName}</Text>
+                      ) : null}
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={20} color={Theme.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          )}
+
+          {/* Action Buttons */}
+          <View style={styles.terminalModalActions}>
+            {isTerminalConfigured && (
+              <TouchableOpacity
+                style={styles.terminalModalBtnCancel}
+                onPress={() => setShowTerminalModal(false)}
+              >
+                <Text style={styles.terminalModalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.terminalModalBtnConfirm,
+                !selectedTerminalCode && { opacity: 0.4 },
+              ]}
+              disabled={!selectedTerminalCode}
+              onPress={() => {
+                if (!selectedTerminalCode) return;
+                const found = terminals.find((t) => t.TerminalCode === selectedTerminalCode);
+                useTerminalStore
+                  .getState()
+                  .setTerminal(selectedTerminalCode, found?.TerminalName || selectedTerminalCode);
+                setShowTerminalModal(false);
+              }}
+            >
+              <Ionicons name="link-outline" size={18} color="#fff" />
+              <Text style={styles.terminalModalBtnConfirmText}>Pair Display</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   // Success view
   if (displayState.paymentSuccess && paymentSettings.customerSideDisplay) {
     return (
       <View style={styles.successContainer}>
+        {renderTerminalModal()}
         {renderBackButton()}
+
         <View style={styles.successMainContent}>
           <Animated.View
             style={[
@@ -287,7 +441,21 @@ export default function CustomerDisplayScreen() {
 
     return (
       <View style={styles.checkoutContainer}>
+        {renderTerminalModal()}
         {renderBackButton()}
+        {/* Change Terminal pill */}
+        {terminalCode ? (
+          <TouchableOpacity
+            style={styles.terminalPill}
+            onPress={() => {
+              setSelectedTerminalCode(terminalCode);
+              setShowTerminalModal(true);
+            }}
+          >
+            <Ionicons name="tv-outline" size={12} color={Theme.primary} />
+            <Text style={styles.terminalPillText}>{terminalName || terminalCode}</Text>
+          </TouchableOpacity>
+        ) : null}
         {/* Top Header Banner */}
         <View style={styles.topHeaderBanner}>
           <Text style={styles.topHeaderText} numberOfLines={1}>
@@ -571,7 +739,29 @@ export default function CustomerDisplayScreen() {
   // Idle attract loop view
   return (
     <View style={styles.idleContainer}>
+      {renderTerminalModal()}
       {renderBackButton()}
+      {/* Change Terminal pill */}
+      {terminalCode ? (
+        <TouchableOpacity
+          style={styles.terminalPill}
+          onPress={() => {
+            setSelectedTerminalCode(terminalCode);
+            setShowTerminalModal(true);
+          }}
+        >
+          <Ionicons name="tv-outline" size={12} color={Theme.primary} />
+          <Text style={styles.terminalPillText}>{terminalName || terminalCode}</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[styles.terminalPill, { borderColor: "#ef444440" }]}
+          onPress={() => setShowTerminalModal(true)}
+        >
+          <Ionicons name="tv-outline" size={12} color="#ef4444" />
+          <Text style={[styles.terminalPillText, { color: "#ef4444" }]}>Set Terminal</Text>
+        </TouchableOpacity>
+      )}
       {/* Floating popping food animations */}
       {floatingFoods.map((item) => (
         <Animated.View
@@ -1196,5 +1386,138 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "rgba(239, 68, 68, 0.3)",
+  },
+  // ─── Terminal pairing pill (corner indicator) ───
+  terminalPill: {
+    position: "absolute",
+    bottom: 16,
+    right: 16,
+    zIndex: 9999,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: Theme.primary + "30",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  terminalPillText: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+    color: Theme.primary,
+  },
+  // ─── Terminal setup modal ───
+  terminalModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  terminalModalCard: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    width: 380,
+    maxWidth: "90%",
+    maxHeight: "80%",
+    padding: 28,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 20,
+  },
+  terminalModalHeader: {
+    alignItems: "center",
+    marginBottom: 24,
+    gap: 8,
+  },
+  terminalModalTitle: {
+    fontSize: 22,
+    fontFamily: Fonts.extraBold,
+    color: Theme.textPrimary,
+    marginTop: 8,
+  },
+  terminalModalSubtitle: {
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+    color: Theme.textSecondary,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  terminalList: {
+    maxHeight: 280,
+  },
+  terminalItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Theme.border,
+    marginBottom: 10,
+    backgroundColor: "#fafafa",
+  },
+  terminalItemSelected: {
+    borderColor: Theme.primary,
+    backgroundColor: Theme.primary + "08",
+  },
+  terminalItemCode: {
+    fontSize: 15,
+    fontFamily: Fonts.bold,
+    color: Theme.textPrimary,
+  },
+  terminalItemName: {
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    color: Theme.textSecondary,
+    marginTop: 2,
+  },
+  terminalModalEmpty: {
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+    color: Theme.textMuted,
+    textAlign: "center",
+    marginTop: 12,
+    lineHeight: 20,
+  },
+  terminalModalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Theme.border,
+  },
+  terminalModalBtnCancel: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Theme.border,
+  },
+  terminalModalBtnCancelText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: Theme.textSecondary,
+  },
+  terminalModalBtnConfirm: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: Theme.primary,
+  },
+  terminalModalBtnConfirmText: {
+    fontSize: 14,
+    fontFamily: Fonts.black,
+    color: "#fff",
   },
 });

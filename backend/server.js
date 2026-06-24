@@ -97,10 +97,28 @@ io.on("connection", (socket) => {
     io.emit("order_status_update", data);
   });
 
-  // 🖥️ CUSTOMER DISPLAY SYNC: Relay cashier cart/checkout states to second monitor
+  // 🖥️ TERMINAL ROOM JOIN: POS devices and Customer Display screens join a shared room
+  // Room name format: terminal_{TerminalCode} (e.g. terminal_COUNTER_1)
+  socket.on("join_terminal", ({ terminalCode }) => {
+    if (!terminalCode) return;
+    const room = `terminal_${terminalCode}`;
+    socket.join(room);
+    console.log(`🖥️ [Server] Socket ${socket.id} joined room: ${room}`);
+  });
+
+  // 🖥️ CUSTOMER DISPLAY SYNC: Route to terminal room so only the paired display receives updates
+  // Falls back to global broadcast if no terminalCode (legacy/unconfigured devices)
   socket.on("customer_display_sync", (data) => {
-    console.log("🖥️ [Server] Customer Display Sync for Table/Register:", data.tableNo || data.registerId);
-    io.emit("customer_display_sync", data);
+    const { terminalCode } = data;
+    if (terminalCode) {
+      const room = `terminal_${terminalCode}`;
+      console.log(`🖥️ [Server] Customer Display Sync → room: ${room} | State: ${data.paymentSuccess ? "SUCCESS" : data.active ? "CART" : "IDLE"}`);
+      io.to(room).emit("customer_display_sync", data);
+    } else {
+      // Legacy fallback: no terminal configured, broadcast to all
+      console.log("🖥️ [Server] Customer Display Sync → BROADCAST (no terminalCode)");
+      io.emit("customer_display_sync", data);
+    }
   });
 
   socket.on("disconnect", () => {

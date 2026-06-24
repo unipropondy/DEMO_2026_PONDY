@@ -1,5 +1,7 @@
 import { socket } from "../constants/socket";
 import { useGeneralSettingsStore } from "../stores/generalSettingsStore";
+import { useAuthStore } from "../stores/authStore";
+import { useTerminalStore } from "../stores/terminalStore";
 
 export interface SyncCartParams {
   orderContext: {
@@ -33,17 +35,42 @@ export interface PaymentSuccessParams {
   method: string;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   ROLE GUARD
+   Only ADMIN users are allowed to trigger Customer Display updates.
+   Waiter, Cashier, KDS, and all other roles are silently blocked.
+   ───────────────────────────────────────────────────────────────────────── */
+const isAllowedRole = (): boolean => {
+  const user = useAuthStore.getState().user;
+  if (!user) return false;
+  return user.role === "ADMIN";
+};
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TERMINAL CODE
+   Read current terminal from terminalStore. Appended to every payload so
+   the server can route to the correct Socket.io room.
+   ───────────────────────────────────────────────────────────────────────── */
+const getTerminalCode = (): string | null => {
+  return useTerminalStore.getState().terminalCode;
+};
+
 export const CustomerDisplaySync = {
   isPaymentActive: false,
 
   syncCart: (params: SyncCartParams) => {
     try {
+      // 🛡️ ROLE GUARD: Only ADMIN users trigger Customer Display updates
+      if (!isAllowedRole()) {
+        console.log("🖥️ [CustomerDisplaySync] syncCart blocked — user role is not ADMIN.");
+        return;
+      }
+
       const isDisplayOn = useGeneralSettingsStore.getState().settings.customerSideDisplay;
       if (!isDisplayOn) return;
 
       const { orderContext, cart, discountInfo, gstPercentage, roundOff, active, orderId, paymentMethod } = params;
       
-      const currencySymbol = "$";
       const gstRate = (gstPercentage || 0) / 100;
 
       // 1. Calculate totals matching cashier formulas
@@ -118,7 +145,7 @@ export const CustomerDisplaySync = {
         };
       });
 
-      // 3. Emit via Socket.io
+      // 3. Emit via Socket.io (room-scoped via terminalCode)
       const payload = {
         active,
         paymentSuccess: false,
@@ -136,9 +163,10 @@ export const CustomerDisplaySync = {
         netTotal,
         waiterName: orderContext.serverName || "",
         paymentMethod,
+        terminalCode: getTerminalCode(), // 🖥️ Room routing key
       };
 
-      console.log("🖥️ [CustomerDisplaySync] Emitting cart update for Table/Takeaway:", payload.tableNo);
+      console.log("🖥️ [CustomerDisplaySync] Emitting cart update for Table/Takeaway:", payload.tableNo, "| Terminal:", payload.terminalCode);
       socket.emit("customer_display_sync", payload);
     } catch (err: any) {
       console.error("🖥️ [CustomerDisplaySync] Failed to sync cart:", err.message);
@@ -147,6 +175,12 @@ export const CustomerDisplaySync = {
 
   syncIdle: () => {
     try {
+      // 🛡️ ROLE GUARD: Only ADMIN users trigger Customer Display updates
+      if (!isAllowedRole()) {
+        console.log("🖥️ [CustomerDisplaySync] syncIdle blocked — user role is not ADMIN.");
+        return;
+      }
+
       const isDisplayOn = useGeneralSettingsStore.getState().settings.customerSideDisplay;
       if (!isDisplayOn) return;
 
@@ -154,10 +188,12 @@ export const CustomerDisplaySync = {
         console.log("🖥️ [CustomerDisplaySync] syncIdle blocked because payment is active");
         return;
       }
-      console.log("🖥️ [CustomerDisplaySync] Emitting idle attract loop");
+
+      console.log("🖥️ [CustomerDisplaySync] Emitting idle attract loop | Terminal:", getTerminalCode());
       socket.emit("customer_display_sync", {
         active: false,
         paymentSuccess: false,
+        terminalCode: getTerminalCode(), // 🖥️ Room routing key
       });
     } catch (err: any) {
       console.error("🖥️ [CustomerDisplaySync] Failed to sync idle state:", err.message);
@@ -166,10 +202,16 @@ export const CustomerDisplaySync = {
 
   syncPaymentSuccess: (params: PaymentSuccessParams) => {
     try {
+      // 🛡️ ROLE GUARD: Only ADMIN users trigger Customer Display updates
+      if (!isAllowedRole()) {
+        console.log("🖥️ [CustomerDisplaySync] syncPaymentSuccess blocked — user role is not ADMIN.");
+        return;
+      }
+
       const isDisplayOn = useGeneralSettingsStore.getState().settings.customerSideDisplay;
       if (!isDisplayOn) return;
 
-      console.log("🖥️ [CustomerDisplaySync] Emitting payment success:", params.orderId);
+      console.log("🖥️ [CustomerDisplaySync] Emitting payment success:", params.orderId, "| Terminal:", getTerminalCode());
       socket.emit("customer_display_sync", {
         active: true,
         paymentSuccess: true,
@@ -178,6 +220,7 @@ export const CustomerDisplaySync = {
         paid: params.paid,
         change: params.change,
         paymentMethod: params.method,
+        terminalCode: getTerminalCode(), // 🖥️ Room routing key
       });
     } catch (err: any) {
       console.error("🖥️ [CustomerDisplaySync] Failed to sync payment success:", err.message);

@@ -43,6 +43,7 @@ import { useOrderContextStore } from "../stores/orderContextStore";
 import { useCompanySettingsStore } from "../stores/companySettingsStore";
 import { useGeneralSettingsStore } from "../stores/generalSettingsStore";
 import { useTableStatusStore } from "../stores/tableStatusStore";
+import { useTerminalStore } from "../stores/terminalStore";
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -1043,13 +1044,41 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
   }, [orderContext?.tableId]);
 
 
+  // 🖥️ CUSTOMER DISPLAY — JOIN TERMINAL ROOM (POS device side)
   useEffect(() => {
-    // 🖥️ CUSTOMER DISPLAY REAL-TIME SYNC (Forces idle attract loop during ordering)
-    CustomerDisplaySync.syncIdle();
+    useTerminalStore.getState().joinSocketRoom();
+  }, []);
+
+  // 🖥️ CUSTOMER DISPLAY — LIVE CART SYNC
+  // Triggers on every cart change: idle when empty, syncCart when items exist.
+  // Only fires if the current user is ADMIN (guard is inside CustomerDisplaySync).
+  useEffect(() => {
+    if (!orderContext) {
+      CustomerDisplaySync.syncIdle();
+      return;
+    }
+
+    const activeCart = cart.filter((i: any) => i.status !== "VOIDED" && i.StatusCode !== 0 && i.statusCode !== 0);
+
+    if (activeCart.length === 0) {
+      CustomerDisplaySync.syncIdle();
+    } else {
+      CustomerDisplaySync.syncCart({
+        orderContext,
+        cart,
+        discountInfo: currentDiscount ?? null,
+        gstPercentage: settings.gstPercentage || 0,
+        roundOff: 0,
+        active: true,
+        orderId: currentTableOrderId ?? undefined,
+      });
+    }
+
     return () => {
+      // On unmount (table deselected / sidebar closed) → return display to idle
       CustomerDisplaySync.syncIdle();
     };
-  }, []);
+  }, [cart, orderContext?.tableId, orderContext?.takeawayNo]);
 
   useEffect(() => {
     // 🔥 If the cart is completely empty (no unsent items AND no active order items),
