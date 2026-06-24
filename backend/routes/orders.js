@@ -13,7 +13,9 @@ const DEFAULT_GUID = "00000000-0000-0000-0000-000000000000";
 async function isQRSettingEnabled() {
   try {
     const pool = await poolPromise;
-    const result = await pool.request().query("SELECT TOP 1 EnableQRCodeSettings FROM AppSettings");
+    const result = await pool
+      .request()
+      .query("SELECT TOP 1 EnableQRCodeSettings FROM AppSettings");
     return Boolean(result.recordset[0]?.EnableQRCodeSettings);
   } catch (err) {
     console.warn("⚠️ [QR] Failed to check QR setting:", err.message);
@@ -68,13 +70,13 @@ function resolveItemTakeaway(item = {}) {
 }
 
 function getSingaporeDateString() {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Singapore',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Singapore",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   });
-  return formatter.format(new Date()).replace(/-/g, '');
+  return formatter.format(new Date()).replace(/-/g, "");
 }
 
 /**
@@ -83,7 +85,11 @@ function getSingaporeDateString() {
  */
 async function getOrGenerateOrderId(req, tableId) {
   const pool = await poolPromise;
-  const isTakeaway = !tableId || tableId === "undefined" || tableId === "null" || String(tableId).startsWith("TAKEAWAY");
+  const isTakeaway =
+    !tableId ||
+    tableId === "undefined" ||
+    tableId === "null" ||
+    String(tableId).startsWith("TAKEAWAY");
 
   if (isTakeaway) {
     try {
@@ -113,7 +119,10 @@ async function getOrGenerateOrderId(req, tableId) {
       dailySequence = seqResult.recordset[0]?.LastNumber || 1;
       return `${datePrefix}-${String(dailySequence).padStart(4, "0")}`;
     } catch (err) {
-      console.error("🔥 [Critical] Takeaway OrderID Generation Failed:", err.message);
+      console.error(
+        "🔥 [Critical] Takeaway OrderID Generation Failed:",
+        err.message,
+      );
       const datePrefix = getSingaporeDateString();
       const countRes = await pool
         .request()
@@ -234,12 +243,16 @@ async function syncToProfessionalTables(
   items,
   userId,
 ) {
-  const isTakeaway = !tableId || tableId === "undefined" || tableId === "null" || String(tableId).startsWith("TAKEAWAY");
+  const isTakeaway =
+    !tableId ||
+    tableId === "undefined" ||
+    tableId === "null" ||
+    String(tableId).startsWith("TAKEAWAY");
   const cleanTableId = isTakeaway
     ? null
     : String(tableId)
-      .replace(/^\{|\}$/g, "")
-      .trim();
+        .replace(/^\{|\}$/g, "")
+        .trim();
   const cleanOrderNo = String(displayOrderId || "PENDING")
     .replace(/^\{|\}$/g, "")
     .trim();
@@ -248,7 +261,9 @@ async function syncToProfessionalTables(
   const bizId = activeOrg.businessUnitId;
 
   const companySettings = await getCompanySettings();
-  const serviceChargePercentage = companySettings ? Number(companySettings.ServiceChargePercentage || 0) : 0;
+  const serviceChargePercentage = companySettings
+    ? Number(companySettings.ServiceChargePercentage || 0)
+    : 0;
 
   // 🚀 OPTIMIZATION 1: Combined Initial Lookups (TableNo, BizId, OrderHeader)
   const initRes = await transaction
@@ -406,12 +421,18 @@ async function syncToProfessionalTables(
     itemRequest.input(p_disc, sql.Decimal(18, 2), item.discount || 0);
     // Use actual discountType from cart item; fall back to 'percentage' if there's a discount but no type,
     // or 'fixed' (i.e. no discount) when discount is 0/null.
-    const resolvedDiscountType = (item.discountType || item.DiscountType)
-      ? (item.discountType || item.DiscountType)
-      : ((item.discount || 0) > 0 ? 'percentage' : 'fixed');
+    const resolvedDiscountType =
+      item.discountType || item.DiscountType
+        ? item.discountType || item.DiscountType
+        : (item.discount || 0) > 0
+          ? "percentage"
+          : "fixed";
     itemRequest.input(p_disctype, sql.NVarChar(50), resolvedDiscountType);
 
-    const isSC = item.isServiceCharge === true || String(item.isServiceCharge) === '1' || String(item.isServiceCharge).toLowerCase() === 'true';
+    const isSC =
+      item.isServiceCharge === true ||
+      String(item.isServiceCharge) === "1" ||
+      String(item.isServiceCharge).toLowerCase() === "true";
     let itemSC = null;
     if (isSC) {
       const qtyVal = Number(item.qty || 1);
@@ -419,13 +440,13 @@ async function syncToProfessionalTables(
       const discVal = Number(item.discount || 0);
       let itemDiscount = 0;
       if (discVal > 0) {
-        if (resolvedDiscountType === 'percentage') {
-          itemDiscount = (priceVal * qtyVal) * (discVal / 100);
+        if (resolvedDiscountType === "percentage") {
+          itemDiscount = priceVal * qtyVal * (discVal / 100);
         } else {
           itemDiscount = discVal * qtyVal;
         }
       }
-      const itemSubtotal = (priceVal * qtyVal) - itemDiscount;
+      const itemSubtotal = priceVal * qtyVal - itemDiscount;
       itemSC = itemSubtotal * (serviceChargePercentage / 100);
     }
     itemRequest.input(p_sc, sql.Decimal(18, 2), itemSC);
@@ -644,7 +665,10 @@ async function syncTableStatus(req, tableId) {
       isOvertime: updated.isOvertime || 0,
       isHoldOvertime: updated.isHoldOvertime || 0,
       entryStatus: updated.entryStatus || null,
-      paymentStatus: updated.paymentStatus !== undefined ? Number(updated.paymentStatus) : null,
+      paymentStatus:
+        updated.paymentStatus !== undefined
+          ? Number(updated.paymentStatus)
+          : null,
       customerName: updated.customerName || null,
       pax: updated.pax || null,
     });
@@ -755,12 +779,10 @@ router.post("/save-cart", async (req, res) => {
         `);
 
       // 🔹 QR ORDER: If entryStatus is 'q' and QR setting is ON, set table to Status 2 (Payment Pending)
-      if (entryStatus === 'q' && hasItems) {
+      if (entryStatus === "q" && hasItems) {
         const qrEnabled = await isQRSettingEnabled();
         if (qrEnabled) {
-          await transaction
-            .request()
-            .input("tid", sql.VarChar(50), cleanId)
+          await transaction.request().input("tid", sql.VarChar(50), cleanId)
             .query(`
               UPDATE TableMaster SET Status = 2, entry_status = 'q', PAYMENT_STATUS = 0 WHERE TableId = @tid
             `);
@@ -781,14 +803,17 @@ router.post("/save-cart", async (req, res) => {
       }
 
       if (!skipTableStatusSync) {
-        syncTableStatus(req, cleanId).catch(() => { });
+        syncTableStatus(req, cleanId).catch(() => {});
       }
     } catch (e) {
       if (transaction._isStarted) await transaction.rollback();
       console.error("❌ SaveCart SQL Error FULL:", e);
       console.error("❌ SaveCart SQL Message:", e.message);
       console.error("❌ SaveCart SQL Stack:", e.stack);
-      require('fs').appendFileSync('error_log.txt', new Date().toISOString() + ' ' + e.stack + '\n');
+      require("fs").appendFileSync(
+        "error_log.txt",
+        new Date().toISOString() + " " + e.stack + "\n",
+      );
       res.status(500).json({
         error: e.message,
         stack: e.stack,
@@ -796,7 +821,10 @@ router.post("/save-cart", async (req, res) => {
     }
   } catch (err) {
     console.error("SAVE CART ERROR:", err);
-    require('fs').appendFileSync('error_log.txt', new Date().toISOString() + ' ' + err.stack + '\n');
+    require("fs").appendFileSync(
+      "error_log.txt",
+      new Date().toISOString() + " " + err.stack + "\n",
+    );
     res.status(500).json({ error: err.message });
   }
 });
@@ -866,7 +894,7 @@ router.post("/send", async (req, res) => {
 
       // 4. Lock Table to the new ID
       // 🔹 QR ORDER: If entry_status is 'q' and QR setting is ON, keep Status 2 (Payment Pending)
-      const isQROrder = req.body.entryStatus === 'q';
+      const isQROrder = req.body.entryStatus === "q";
       let tableStatus = 1; // Default: Dining/Active
       let paymentStatus = null;
       if (isQROrder) {
@@ -883,7 +911,7 @@ router.post("/send", async (req, res) => {
         .input("oid", sql.NVarChar(50), finalOrderId)
         .input("status", sql.Int, tableStatus)
         .input("paymentStatus", sql.Int, paymentStatus)
-        .input("entryStatus", sql.NVarChar(10), isQROrder ? 'q' : null).query(`
+        .input("entryStatus", sql.NVarChar(10), isQROrder ? "q" : null).query(`
           UPDATE TableMaster 
           SET Status = @status, 
               entry_status = CASE WHEN @entryStatus IS NOT NULL THEN @entryStatus ELSE entry_status END,
@@ -940,7 +968,7 @@ router.post("/send", async (req, res) => {
       }
 
       // 5. Refresh totals and notify instantly
-      syncTableStatus(req, cleanId).catch(() => { });
+      syncTableStatus(req, cleanId).catch(() => {});
     } catch (e) {
       await transaction.rollback();
       console.error("❌ SendOrder SQL Error:", e.message);
@@ -1037,12 +1065,12 @@ router.get("/cart/:tableId", async (req, res) => {
       ...i,
       modifiers: i.ModifiersJSON
         ? (() => {
-          try {
-            return JSON.parse(i.ModifiersJSON);
-          } catch {
-            return [];
-          }
-        })()
+            try {
+              return JSON.parse(i.ModifiersJSON);
+            } catch {
+              return [];
+            }
+          })()
         : [],
     }));
 
@@ -1201,13 +1229,14 @@ router.post("/cancel", async (req, res) => {
           UPDATE RestaurantOrderCur SET StatusCode = 4, isOrderClosed = 1, ModifiedOn = GETDATE() WHERE OrderNumber = @oid;
           UPDATE RestaurantOrderDetailCur SET StatusCode = 0, ModifiedOn = GETDATE() WHERE OrderId IN (SELECT OrderId FROM RestaurantOrderCur WHERE OrderNumber = @oid);
         `);
+      //-------------Might Change later entry staus sevred quit order-----------------
 
-      await transaction
-        .request()
-        .input("tid", sql.VarChar(50), cleanTid)
-        .query(
-          "UPDATE TableMaster SET Status = 0, entry_status = NULL, TotalAmount = 0, StartTime = NULL, CurrentOrderId = NULL, CustomerName = NULL, Pax = NULL, ModifiedOn = GETDATE() WHERE TableId = @tid",
-        );
+      // await transaction
+      //   .request()
+      //   .input("tid", sql.VarChar(50), cleanTid)
+      //   .query(
+      //     "UPDATE TableMaster SET Status = 0, entry_status = NULL, TotalAmount = 0, StartTime = NULL, CurrentOrderId = NULL, CustomerName = NULL, Pax = NULL, ModifiedOn = GETDATE() WHERE TableId = @tid",
+      //   );
 
       await transaction.commit();
 
@@ -1381,7 +1410,7 @@ router.post("/remove-item", async (req, res) => {
       await transaction.commit();
 
       // 🚀 Refresh total immediately
-      syncTableStatus(req, tableId).catch(() => { });
+      syncTableStatus(req, tableId).catch(() => {});
 
       req.app.get("io")?.emit("cart_updated", {
         tableId: String(tableId || "").toLowerCase(),
@@ -1433,9 +1462,9 @@ router.post("/update-item-status", async (req, res) => {
 
     // 🌟 Auto-clear QR Table if all items are Served/Voided
     try {
-      const qrCheck = await pool.request()
-        .input("id", sql.UniqueIdentifier, lineItemId)
-        .query(`
+      const qrCheck = await pool
+        .request()
+        .input("id", sql.UniqueIdentifier, lineItemId).query(`
           SELECT tm.TableId, tm.TableNumber, tm.entry_status, tm.PAYMENT_STATUS, h.OrderId
           FROM RestaurantOrderDetailCur d
           JOIN RestaurantOrderCur h ON d.OrderId = h.OrderId
@@ -1445,57 +1474,75 @@ router.post("/update-item-status", async (req, res) => {
 
       if (qrCheck.recordset.length > 0) {
         const row = qrCheck.recordset[0];
-        const isQR = row.entry_status === 'q';
+        const isQR = row.entry_status === "q";
         const isPaid = row.PAYMENT_STATUS === 1;
         const qrEnabled = await isQRSettingEnabled();
 
         if ((isQR && qrEnabled) || isPaid || isQR) {
           // Check if there are any items that are NOT served (4) and NOT voided (0)
-          const pendingItems = await pool.request()
-            .input("orderId", sql.UniqueIdentifier, row.OrderId)
-            .query(`
+          const pendingItems = await pool
+            .request()
+            .input("orderId", sql.UniqueIdentifier, row.OrderId).query(`
               SELECT COUNT(*) as count 
               FROM RestaurantOrderDetailCur 
               WHERE OrderId = @orderId AND StatusCode NOT IN (0, 4)
             `);
 
           if (pendingItems.recordset[0].count === 0) {
-            console.log(`[QR Auto-Clear] Table ${row.TableNumber} has all items served/voided. Auto-clearing.`);
+            console.log(
+              `[QR Auto-Clear] Table ${row.TableNumber} has all items served/voided. Auto-clearing.`,
+            );
 
             // Delete CartItems
-            const cleanTableId = String(row.TableId).replace(/^\{|\}$/g, "").trim();
-            await pool.request()
+            const cleanTableId = String(row.TableId)
+              .replace(/^\{|\}$/g, "")
+              .trim();
+            await pool
+              .request()
               .input("cartId", sql.NVarChar(128), cleanTableId)
               .query("DELETE FROM [dbo].[CartItems] WHERE [CartId] = @cartId");
 
             // Update TableMaster
-            await pool.request()
-              .input("tableId", sql.UniqueIdentifier, row.TableId)
-              .query(`
+            await pool
+              .request()
+              .input("tableId", sql.UniqueIdentifier, row.TableId).query(`
                 UPDATE TableMaster 
                 SET Status = 0, entry_status = NULL, PAYMENT_STATUS = NULL, CurrentOrderId = NULL, StartTime = NULL, TotalAmount = 0
                 WHERE TableId = @tableId
               `);
 
             // Close the current order
-            await pool.request()
-              .input("orderId", sql.UniqueIdentifier, row.OrderId)
-              .query(`
+            await pool
+              .request()
+              .input("orderId", sql.UniqueIdentifier, row.OrderId).query(`
                 UPDATE RestaurantOrderCur 
                 SET isOrderClosed = 1 
                 WHERE OrderId = @orderId
               `);
 
             // Sync status to trigger frontend refresh
-            syncTableStatus(req, row.TableId).catch(() => { });
+            syncTableStatus(req, row.TableId).catch(() => {});
             req.app.get("io")?.emit("tables_updated");
-            req.app.get("io")?.emit("table_status_updated", { tableId: cleanTableId.toLowerCase(), status: 0, totalAmount: 0, entryStatus: null, paymentStatus: null });
-            req.app.get("io")?.emit("cart_updated", { tableId: cleanTableId.toLowerCase() });
+            req.app
+              .get("io")
+              ?.emit("table_status_updated", {
+                tableId: cleanTableId.toLowerCase(),
+                status: 0,
+                totalAmount: 0,
+                entryStatus: null,
+                paymentStatus: null,
+              });
+            req.app
+              .get("io")
+              ?.emit("cart_updated", { tableId: cleanTableId.toLowerCase() });
           }
         }
       }
     } catch (qrErr) {
-      console.error("⚠️ [QR Auto-Clear] Error auto-clearing table:", qrErr.message);
+      console.error(
+        "⚠️ [QR Auto-Clear] Error auto-clearing table:",
+        qrErr.message,
+      );
     }
 
     req.app.get("io")?.emit("item_status_updated", {
@@ -1565,9 +1612,9 @@ router.get("/active-kitchen", async (req, res) => {
             orderType: isTakeaway ? "TAKEAWAY" : "DINE_IN",
             tableId: row.TableId
               ? String(row.TableId)
-                .replace(/^\{|\}$/g, "")
-                .trim()
-                .toLowerCase()
+                  .replace(/^\{|\}$/g, "")
+                  .trim()
+                  .toLowerCase()
               : undefined,
             tableNo: isTakeaway ? null : String(row.tableNo).trim(),
             section: normalizedSection,
@@ -1605,9 +1652,11 @@ router.post("/log-print", async (req, res) => {
   try {
     const { orderId, orderNumber, printType } = req.body;
     const pool = await poolPromise;
-    
+
     const safeOrderId = toGuidOrNull(orderId);
-    const safeOrderNo = orderNumber ? String(orderNumber).substring(0, 50) : 'N/A';
+    const safeOrderNo = orderNumber
+      ? String(orderNumber).substring(0, 50)
+      : "N/A";
     const safePrintType = parseInt(printType, 10) || 1;
 
     await pool
@@ -1934,9 +1983,14 @@ router.post("/payment-status", async (req, res) => {
     if (!tableId) {
       return res.status(400).json({ error: "Missing tableId" });
     }
-    const cleanId = String(tableId).replace(/^\{|\}$/g, "").trim();
+    const cleanId = String(tableId)
+      .replace(/^\{|\}$/g, "")
+      .trim();
     const pool = await poolPromise;
-    await pool.request().input("tid", sql.VarChar(50), cleanId).input("status", sql.Int, paymentStatus).query(`
+    await pool
+      .request()
+      .input("tid", sql.VarChar(50), cleanId)
+      .input("status", sql.Int, paymentStatus).query(`
       UPDATE TableMaster SET PAYMENT_STATUS = @status WHERE TableId = @tid
     `);
     res.json({ success: true });
