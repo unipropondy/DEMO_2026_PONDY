@@ -29,10 +29,11 @@ router.get("/kitchens", async (req, res) => {
 
     const pool = await poolPromise;
     const result = await pool.request().query(`
-      SELECT cm.CategoryId, cm.CategoryName AS KitchenTypeName, ckt.KitchenTypeCode
+      SELECT cm.CategoryId, cm.CategoryName AS KitchenTypeName, ckt.KitchenTypeCode, cm.SortCode
       FROM CategoryMaster cm
       LEFT JOIN CategoryKitchenType ckt ON cm.CategoryId = ckt.CategoryId
       WHERE cm.IsActive = 1
+      ORDER BY cm.SortCode ASC, cm.CategoryName ASC
     `);
     setCache("kitchens", result.recordset);
     res.json(result.recordset);
@@ -55,7 +56,8 @@ router.get("/dishgroups/:CategoryId", async (req, res) => {
       .input("CategoryId", categoryId).query(`
         SELECT DISTINCT
               a.DishGroupId,
-              a.DishGroupName
+              a.DishGroupName,
+              a.SortCode
           FROM DishGroupMaster a
           LEFT JOIN DishGroupKitchentype dkt
               ON a.DishGroupId = dkt.DishGroupId
@@ -66,6 +68,7 @@ router.get("/dishgroups/:CategoryId", async (req, res) => {
                 a.CategoryId = @CategoryId
                 OR dkt.KitchenTypeName = cm.CategoryName
           )
+          ORDER BY a.SortCode ASC, a.DishGroupName ASC
       `);
     setCache(cacheKey, result.recordset);
     res.json(result.recordset);
