@@ -2491,7 +2491,6 @@ export default function SummaryScreen() {
         animationType="fade"
         onRequestClose={() => setShowLoyaltyModal(false)}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { maxWidth: 450, padding: 24 }]}>
               <View style={styles.modalHeader}>
@@ -2705,9 +2704,8 @@ export default function SummaryScreen() {
                   <Text style={styles.modalBtnTextConfirm}>Done</Text>
                 </TouchableOpacity>
               </View>
-            </View>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       {/* COUNTRY PICKER MODAL */}
