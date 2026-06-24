@@ -50,6 +50,23 @@ import { useGeneralSettingsStore } from "../stores/generalSettingsStore";
 
 const EMPTY_ARRAY: any[] = [];
 
+const COUNTRIES = [
+  { code: "+65", flag: "🇸🇬", name: "Singapore" },
+  { code: "+91", flag: "🇮🇳", name: "India" },
+  { code: "+60", flag: "🇲🇾", name: "Malaysia" },
+];
+
+const parsePhone = (fullPhone: string) => {
+  const clean = String(fullPhone || "").trim();
+  for (const c of COUNTRIES) {
+    if (clean.startsWith(c.code)) {
+      const rest = clean.substring(c.code.length).trim();
+      return { country: c, rest };
+    }
+  }
+  return { country: COUNTRIES[0], rest: clean };
+};
+
 const formatSection = (sec: string) => {
   if (!sec) return "";
   if (sec === "TAKEAWAY") return "Takeaway";
@@ -106,17 +123,21 @@ export default function SummaryScreen() {
   const [loyaltyName, setLoyaltyName] = useState("");
   const [loyaltyCustomer, setLoyaltyCustomer] = useState<any | null>(null);
   const [isSearchingLoyalty, setIsSearchingLoyalty] = useState(false);
-  const [isRewardApplied, setIsRewardApplied] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
 
   const tableState = context?.tableId
     ? useTableStatusStore.getState().tableMap[context.tableId.toLowerCase()]
     : null;
 
   const handleLoyaltyLookup = async (phoneToSearch?: string) => {
-    const targetPhone = phoneToSearch || loyaltyPhone;
+    let targetPhone = phoneToSearch || loyaltyPhone;
     if (!targetPhone || targetPhone.trim() === "") {
       showToast({ type: "warning", message: "Enter Phone", subtitle: "Please input a valid phone number" });
       return;
+    }
+    if (!phoneToSearch) {
+      targetPhone = `${selectedCountry.code} ${targetPhone.trim()}`;
     }
     setIsSearchingLoyalty(true);
     try {
@@ -137,6 +158,14 @@ export default function SummaryScreen() {
           message: data.exists ? "Customer Found" : "New Customer Enrolled",
           subtitle: data.exists ? `Visits: ${data.customer.VisitCount}/9` : "First visit recorded upon checkout"
         });
+
+        if (data.customer.RewardPending === 1 || data.customer.VisitCount === 9) {
+          Alert.alert(
+            "Loyalty Reward",
+            "🎉 Customer is eligible for a free food reward.",
+            [{ text: "OK" }]
+          );
+        }
       } else {
         showToast({ type: "error", message: "Lookup Failed", subtitle: data.error || "Failed to search customer" });
       }
@@ -148,39 +177,13 @@ export default function SummaryScreen() {
     }
   };
 
-  const handleApplyLoyaltyReward = () => {
-    const activeItems = cart.filter((i: any) => i.status !== "VOIDED" && i.statusCode !== 0);
-    if (activeItems.length === 0) {
-      showToast({ type: "warning", message: "Cart Empty", subtitle: "Cannot apply reward to an empty cart" });
-      return;
-    }
-    
-    // Find cheapest item
-    let cheapestItem = activeItems[0];
-    for (let i = 1; i < activeItems.length; i++) {
-      if ((activeItems[i].price || 0) < (cheapestItem.price || 0)) {
-        cheapestItem = activeItems[i];
-      }
-    }
-    
-    useCartStore.getState().updateCartItemFull(cheapestItem.lineItemId, {
-      discount: 100,
-      discountType: "percentage"
-    } as any);
-    
-    setIsRewardApplied(true);
-    showToast({
-      type: "success",
-      message: "Reward Applied",
-      subtitle: `Cheapest item ${cheapestItem.name} set to 100% off`
-    });
-  };
-
   useEffect(() => {
     const phone = (activeOrder as any)?.mobileNo || (activeOrder as any)?.MobileNo || (tableState as any)?.mobileNo || (tableState as any)?.MobileNo || "";
     const name = (activeOrder as any)?.customerName || (activeOrder as any)?.CustomerName || (tableState as any)?.customerName || (tableState as any)?.CustomerName || "";
     if (phone && phone.trim() !== "") {
-      setLoyaltyPhone(phone);
+      const parsed = parsePhone(phone);
+      setSelectedCountry(parsed.country);
+      setLoyaltyPhone(parsed.rest);
       handleLoyaltyLookup(phone);
     }
     if (name && name.trim() !== "") {
@@ -1317,6 +1320,25 @@ export default function SummaryScreen() {
                   <View style={{ marginBottom: 12 }}>
                     <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: Theme.textSecondary, marginBottom: 4 }}>Mobile Number</Text>
                     <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                      <TouchableOpacity 
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          borderWidth: 1,
+                          borderColor: Theme.border,
+                          borderRadius: 8,
+                          paddingHorizontal: 8,
+                          height: 38,
+                          backgroundColor: "#fff",
+                          gap: 4
+                        }}
+                        onPress={() => setShowCountryPicker(true)}
+                      >
+                        <Text style={{ fontSize: 16 }}>{selectedCountry.flag}</Text>
+                        <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: Theme.textPrimary }}>{selectedCountry.code}</Text>
+                        <Ionicons name="chevron-down" size={12} color={Theme.textSecondary} />
+                      </TouchableOpacity>
+
                       <TextInput
                         style={{ flex: 1, height: 38, borderWidth: 1, borderColor: Theme.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: "#fff", fontSize: 13, fontFamily: Fonts.regular, color: Theme.textPrimary }}
                         placeholder="Enter Phone Number..."
@@ -1328,7 +1350,6 @@ export default function SummaryScreen() {
                           if (loyaltyCustomer) {
                             setLoyaltyCustomer(null);
                             setLoyaltyName("");
-                            setIsRewardApplied(false);
                           }
                         }}
                       />
@@ -1352,15 +1373,8 @@ export default function SummaryScreen() {
                         Status: <Text style={{ fontFamily: Fonts.bold, color: Theme.primary }}>{loyaltyCustomer.isNew ? "Enrolling on checkout" : `Visits: ${loyaltyCustomer.VisitCount}/9`}</Text>
                       </Text>
                       {loyaltyCustomer.RewardPending === 1 || loyaltyCustomer.VisitCount === 9 ? (
-                        <View style={{ marginTop: 6, backgroundColor: Theme.successBg || '#dcfce7', padding: 8, borderRadius: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                          <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: Theme.success || '#16a34a', flex: 1, marginRight: 6 }}>🎉 10th Visit Reward Available!</Text>
-                          <TouchableOpacity 
-                            style={{ backgroundColor: Theme.success || '#16a34a', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
-                            onPress={handleApplyLoyaltyReward}
-                            disabled={isRewardApplied}
-                          >
-                            <Text style={{ color: "#fff", fontSize: 11, fontFamily: Fonts.bold }}>{isRewardApplied ? "Applied" : "Apply"}</Text>
-                          </TouchableOpacity>
+                        <View style={{ marginTop: 6, backgroundColor: Theme.successBg || '#dcfce7', padding: 8, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: Theme.success || '#16a34a' }}>🎉 10th Visit Reward Available! Customer is eligible for a free food reward.</Text>
                         </View>
                       ) : (
                         <Text style={{ fontSize: 11, color: Theme.textMuted, fontFamily: Fonts.regular }}>
@@ -1609,7 +1623,7 @@ export default function SummaryScreen() {
                     router.push({
                       pathname: "/payment",
                       params: {
-                        mobileNo: loyaltyPhone || "",
+                        mobileNo: loyaltyPhone ? `${selectedCountry.code} ${loyaltyPhone.trim()}` : "",
                         customerName: loyaltyName || "",
                       },
                     });
@@ -2231,7 +2245,7 @@ export default function SummaryScreen() {
                   router.push({
                     pathname: "/payment",
                     params: {
-                      mobileNo: loyaltyPhone || "",
+                      mobileNo: loyaltyPhone ? `${selectedCountry.code} ${loyaltyPhone.trim()}` : "",
                       customerName: loyaltyName || "",
                     },
                   });
@@ -2409,6 +2423,43 @@ export default function SummaryScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* COUNTRY PICKER MODAL */}
+      <Modal transparent visible={showCountryPicker} animationType="fade">
+        <TouchableWithoutFeedback onPress={() => setShowCountryPicker(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { maxWidth: 300, padding: 15 }]}>
+              <Text style={[styles.modalTitle, { fontSize: 16, marginBottom: 15 }]}>Select Country</Text>
+              {COUNTRIES.map((country) => (
+                <TouchableOpacity
+                  key={country.code}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 12,
+                    paddingHorizontal: 8,
+                    borderRadius: 8,
+                    backgroundColor: selectedCountry.code === country.code ? Theme.bgNav : "transparent",
+                    gap: 12
+                  }}
+                  onPress={() => {
+                    setSelectedCountry(country);
+                    setShowCountryPicker(false);
+                    if (loyaltyCustomer) {
+                      setLoyaltyCustomer(null);
+                      setLoyaltyName("");
+                    }
+                  }}
+                >
+                  <Text style={{ fontSize: 20 }}>{country.flag}</Text>
+                  <Text style={{ fontSize: 14, fontFamily: Fonts.bold, color: Theme.textPrimary }}>{country.code}</Text>
+                  <Text style={{ fontSize: 13, fontFamily: Fonts.regular, color: Theme.textSecondary, flex: 1 }}>{country.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </SafeAreaView>
   );
