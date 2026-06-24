@@ -1319,29 +1319,29 @@ export default function SummaryScreen() {
 
                   <View style={{ marginBottom: 12 }}>
                     <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: Theme.textSecondary, marginBottom: 4 }}>Mobile Number</Text>
-                    <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                    <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
                       <TouchableOpacity 
                         style={{
                           flexDirection: "row",
                           alignItems: "center",
+                          justifyContent: "center",
                           borderWidth: 1,
                           borderColor: Theme.border,
                           borderRadius: 8,
-                          paddingHorizontal: 8,
+                          width: 60,
                           height: 38,
                           backgroundColor: "#fff",
-                          gap: 4
+                          gap: 2
                         }}
                         onPress={() => setShowCountryPicker(true)}
                       >
-                        <Text style={{ fontSize: 16 }}>{selectedCountry.flag}</Text>
                         <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: Theme.textPrimary }}>{selectedCountry.code}</Text>
                         <Ionicons name="chevron-down" size={12} color={Theme.textSecondary} />
                       </TouchableOpacity>
 
                       <TextInput
                         style={{ flex: 1, height: 38, borderWidth: 1, borderColor: Theme.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: "#fff", fontSize: 13, fontFamily: Fonts.regular, color: Theme.textPrimary }}
-                        placeholder="Enter Phone Number..."
+                        placeholder="Enter Phone..."
                         placeholderTextColor={Theme.textMuted}
                         keyboardType="phone-pad"
                         value={loyaltyPhone}
@@ -1354,7 +1354,7 @@ export default function SummaryScreen() {
                         }}
                       />
                       <TouchableOpacity 
-                        style={{ paddingHorizontal: 16, height: 38, backgroundColor: Theme.primary, borderRadius: 8, justifyContent: "center", alignItems: "center" }}
+                        style={{ width: 75, height: 38, backgroundColor: Theme.primary, borderRadius: 8, justifyContent: "center", alignItems: "center" }}
                         onPress={() => handleLoyaltyLookup()}
                         disabled={isSearchingLoyalty}
                       >
