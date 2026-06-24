@@ -1148,7 +1148,10 @@ const confirmPayment = async () => {
     try {
       const response = await fetch(`${API_URL}/api/sales/save`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(saleData),
       });
       const result = await response.json();
