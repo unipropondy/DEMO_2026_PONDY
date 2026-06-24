@@ -191,7 +191,7 @@ export default function SummaryScreen() {
     }
     try {
       const token = useAuthStore.getState().token;
-      const query = `${selectedCountry.code} ${cleanText}`;
+      const query = cleanText;
       const res = await fetch(`${API_URL}/api/loyalty/search?q=${encodeURIComponent(query)}`, {
         headers: {
           ...(token ? { "Authorization": `Bearer ${token}` } : {})
