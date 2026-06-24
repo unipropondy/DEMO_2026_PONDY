@@ -1317,9 +1317,9 @@ export default function SummaryScreen() {
                     </View>
                   )}
 
-                  <View style={{ marginBottom: 12 }}>
+                   <View style={{ marginBottom: 12 }}>
                     <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: Theme.textSecondary, marginBottom: 4 }}>Mobile Number</Text>
-                    <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+                    <View style={{ flexDirection: "row", gap: 6, alignItems: "center", marginBottom: 8 }}>
                       <TouchableOpacity 
                         style={{
                           flexDirection: "row",
@@ -1353,18 +1353,18 @@ export default function SummaryScreen() {
                           }
                         }}
                       />
-                      <TouchableOpacity 
-                        style={{ width: 75, height: 38, backgroundColor: Theme.primary, borderRadius: 8, justifyContent: "center", alignItems: "center" }}
-                        onPress={() => handleLoyaltyLookup()}
-                        disabled={isSearchingLoyalty}
-                      >
-                        {isSearchingLoyalty ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Text style={{ color: "#fff", fontFamily: Fonts.bold, fontSize: 13 }}>Lookup</Text>
-                        )}
-                      </TouchableOpacity>
                     </View>
+                    <TouchableOpacity 
+                      style={{ width: "100%", height: 38, backgroundColor: Theme.primary, borderRadius: 8, justifyContent: "center", alignItems: "center" }}
+                      onPress={() => handleLoyaltyLookup()}
+                      disabled={isSearchingLoyalty}
+                    >
+                      {isSearchingLoyalty ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={{ color: "#fff", fontFamily: Fonts.bold, fontSize: 13 }}>Lookup</Text>
+                      )}
+                    </TouchableOpacity>
                   </View>
 
                   {loyaltyCustomer && (
