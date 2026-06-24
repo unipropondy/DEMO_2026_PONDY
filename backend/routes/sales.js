@@ -1301,6 +1301,7 @@ router.post("/save", async (req, res) => {
     let activePaymodes = [];
     let customerType = null;
     let customerRecord = null;
+    let finalBillNo = null;
 
     await runInTransaction(async (transaction) => {
       if (clientSettlementId) {
@@ -1464,7 +1465,7 @@ router.post("/save", async (req, res) => {
         console.log(`[SAVE SALE] Master Sync -> GUID OrderId: ${guidOrderId} (Source: ${guidRes.recordset[0]?.OrderId ? 'Current' : 'Fallback-Settlement'})`);
 
     // Split Bill unique bill/invoice suffix generator
-    let finalBillNo = displayOrderId;
+    finalBillNo = displayOrderId;
     let splitIndexValue = null;
     if (isSplit) {
       const splitCountResult = await transaction.request()
@@ -2258,11 +2259,15 @@ router.post("/save", async (req, res) => {
     // 🚀 POST-SAVE LOYALTY TRIGGER
     const loyaltyPhone = req.body.mobileNo || req.body.MobileNo;
     const loyaltyName = req.body.customerName || req.body.CustomerName;
+    console.log(`[Loyalty Debug] Incoming req.body loyalty details: Phone="${loyaltyPhone}", Name="${loyaltyName}"`);
     if (loyaltyPhone && String(loyaltyPhone).trim() !== "") {
+      console.log(`[Loyalty Debug] Triggering logLoyaltyVisitAsync for phone: ${loyaltyPhone}`);
       setImmediate(async () => {
         const checkPool = await poolPromise;
         await logLoyaltyVisitAsync(checkPool, settlementId, finalBillNo, loyaltyPhone, loyaltyName, items);
       });
+    } else {
+      console.log(`[Loyalty Debug] Loyalty phone was empty or missing. Skipping trigger.`);
     }
 
     res.json({ success: true, settlementId, billNo: displayOrderId, orderId: displayOrderId });
@@ -2610,7 +2615,7 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
       throw txErr;
     }
   } catch (err) {
-    console.error("⚠️ [Loyalty Post-Save Sync Error] Failed:", err.message);
+    console.error("⚠️ [Loyalty Post-Save Sync Error] Failed:", err);
   }
 }
 

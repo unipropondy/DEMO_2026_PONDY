@@ -2228,7 +2228,13 @@ export default function SummaryScreen() {
 
                   useCartStore.getState().setActiveSplitItems(selectedItems);
                   setShowSplitModal(false);
-                  router.push("/payment");
+                  router.push({
+                    pathname: "/payment",
+                    params: {
+                      mobileNo: loyaltyPhone || "",
+                      customerName: loyaltyName || "",
+                    },
+                  });
                 }}
               >
                 <Ionicons name="card-outline" size={22} color="#fff" />
