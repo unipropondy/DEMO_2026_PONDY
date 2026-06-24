@@ -1925,6 +1925,33 @@ export default function Category() {
                           </Text>
                         </TouchableOpacity>
                       )}
+
+                      {/* Terminal Settings */}
+                      {canAccessStoreSettings() && (
+                        <TouchableOpacity
+                          style={styles.subMenuItem}
+                          onPress={() => {
+                            setIsMenuVisible(false);
+                            router.push("/terminal-settings" as any);
+                          }}
+                        >
+                          <View
+                            style={[
+                              styles.menuIconContainer,
+                              { backgroundColor: Theme.primary + "10" },
+                            ]}
+                          >
+                            <Ionicons
+                              name="hardware-chip-outline"
+                              size={18}
+                              color={Theme.primary}
+                            />
+                          </View>
+                          <Text style={styles.subMenuItemText}>
+                            Terminal Management
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   )}
                 </>

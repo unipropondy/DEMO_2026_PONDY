@@ -266,6 +266,8 @@ const cashDrawerRouter = require("./routes/cashDrawer");
 app.use("/api/cash-drawer", cashDrawerRouter);
 const printJobsRouter = require("./routes/printJobs");
 app.use("/api/print-jobs", printJobsRouter);
+const terminalRoutes = require("./routes/terminal");
+app.use("/api/terminal", terminalRoutes);
 // AI Chat Integration
 const aiRouter = require("./ai-service-src/routes/ai.routes");
 const rateLimit = require("express-rate-limit");

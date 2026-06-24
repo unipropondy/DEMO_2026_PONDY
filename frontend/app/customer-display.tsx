@@ -143,7 +143,7 @@ export default function CustomerDisplayScreen() {
   useEffect(() => {
     if (!showTerminalModal) return;
     setTerminalsLoading(true);
-    fetch(`${API_URL}/api/settlement/terminals`)
+    fetch(`${API_URL}/api/terminal`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) {
