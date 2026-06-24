@@ -1354,14 +1354,14 @@ export default function SummaryScreen() {
                          }}
                        />
                        <TouchableOpacity 
-                         style={{ paddingHorizontal: 12, height: 34, backgroundColor: Theme.primary, borderRadius: 8, justifyContent: "center", alignItems: "center" }}
+                         style={{ width: 68, height: 34, backgroundColor: Theme.primary, borderRadius: 8, justifyContent: "center", alignItems: "center" }}
                          onPress={() => handleLoyaltyLookup()}
                          disabled={isSearchingLoyalty}
                        >
                          {isSearchingLoyalty ? (
                            <ActivityIndicator size="small" color="#fff" />
                          ) : (
-                           <Text style={{ color: "#fff", fontFamily: Fonts.bold, fontSize: 12 }}>Lookup</Text>
+                           <Text style={{ color: "#fff", fontFamily: Fonts.bold, fontSize: 11 }}>Lookup</Text>
                          )}
                        </TouchableOpacity>
                      </View>
