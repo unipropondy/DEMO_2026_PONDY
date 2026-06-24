@@ -1231,12 +1231,12 @@ router.post("/cancel", async (req, res) => {
         `);
       //-------------Might Change later entry staus sevred quit order-----------------
 
-      // await transaction
-      //   .request()
-      //   .input("tid", sql.VarChar(50), cleanTid)
-      //   .query(
-      //     "UPDATE TableMaster SET Status = 0, entry_status = NULL, TotalAmount = 0, StartTime = NULL, CurrentOrderId = NULL, CustomerName = NULL, Pax = NULL, ModifiedOn = GETDATE() WHERE TableId = @tid",
-      //   );
+      await transaction
+        .request()
+        .input("tid", sql.VarChar(50), cleanTid)
+        .query(
+          "UPDATE TableMaster SET Status = 0, entry_status = NULL, TotalAmount = 0, StartTime = NULL, CurrentOrderId = NULL, CustomerName = NULL, Pax = NULL, ModifiedOn = GETDATE() WHERE TableId = @tid",
+        );
 
       await transaction.commit();
 
@@ -1476,9 +1476,9 @@ router.post("/update-item-status", async (req, res) => {
         const row = qrCheck.recordset[0];
         const isQR = row.entry_status === "q";
         const isPaid = row.PAYMENT_STATUS === 1;
-        const qrEnabled = await isQRSettingEnabled();
-
-        if ((isQR && qrEnabled) || isPaid || isQR) {
+        // Only auto-clear the table if it is already paid (e.g. pre-paid QR orders).
+        // If it is post-paid (not paid yet), we keep it occupied/payment pending so the cashier can collect payment.
+        if (isPaid) {
           // Check if there are any items that are NOT served (4) and NOT voided (0)
           const pendingItems = await pool
             .request()
@@ -1523,15 +1523,13 @@ router.post("/update-item-status", async (req, res) => {
             // Sync status to trigger frontend refresh
             syncTableStatus(req, row.TableId).catch(() => {});
             req.app.get("io")?.emit("tables_updated");
-            req.app
-              .get("io")
-              ?.emit("table_status_updated", {
-                tableId: cleanTableId.toLowerCase(),
-                status: 0,
-                totalAmount: 0,
-                entryStatus: null,
-                paymentStatus: null,
-              });
+            req.app.get("io")?.emit("table_status_updated", {
+              tableId: cleanTableId.toLowerCase(),
+              status: 0,
+              totalAmount: 0,
+              entryStatus: null,
+              paymentStatus: null,
+            });
             req.app
               .get("io")
               ?.emit("cart_updated", { tableId: cleanTableId.toLowerCase() });
