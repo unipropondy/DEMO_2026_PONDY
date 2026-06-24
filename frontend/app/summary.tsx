@@ -125,6 +125,7 @@ export default function SummaryScreen() {
   const [isSearchingLoyalty, setIsSearchingLoyalty] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
 
   const tableState = context?.tableId
     ? useTableStatusStore.getState().tableMap[context.tableId.toLowerCase()]
@@ -174,6 +175,52 @@ export default function SummaryScreen() {
       showToast({ type: "error", message: "Error connecting to server" });
     } finally {
       setIsSearchingLoyalty(false);
+    }
+  };
+
+  const handleSearchPhone = async (text: string) => {
+    setLoyaltyPhone(text);
+    if (loyaltyCustomer) {
+      setLoyaltyCustomer(null);
+      setLoyaltyName("");
+    }
+    const cleanText = text.trim();
+    if (cleanText.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const token = useAuthStore.getState().token;
+      const query = `${selectedCountry.code} ${cleanText}`;
+      const res = await fetch(`${API_URL}/api/loyalty/search?q=${encodeURIComponent(query)}`, {
+        headers: {
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        }
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setSearchResults(data);
+      }
+    } catch (err) {
+      console.error("Loyalty search error:", err);
+    }
+  };
+
+  const handleSelectCustomer = (cust: any) => {
+    const parsed = parsePhone(cust.Phone);
+    setSelectedCountry(parsed.country);
+    setLoyaltyPhone(parsed.rest);
+    setLoyaltyCustomer(cust);
+    if (cust.Name) {
+      setLoyaltyName(cust.Name);
+    }
+    setSearchResults([]);
+    if (cust.RewardPending === 1 || cust.VisitCount === 9) {
+      Alert.alert(
+        "Loyalty Reward",
+        "🎉 Customer is eligible for a free food reward.",
+        [{ text: "OK" }]
+      );
     }
   };
 
@@ -1289,7 +1336,7 @@ export default function SummaryScreen() {
                 </View>
 
                  {/* LOYALTY CARD SECTION */}
-                 <View style={{ marginBottom: 10, padding: 8, backgroundColor: Theme.bgNav, borderRadius: 12, borderWidth: 1, borderColor: Theme.border }}>
+                 <View style={{ marginBottom: 10, padding: 8, backgroundColor: Theme.bgNav, borderRadius: 12, borderWidth: 1, borderColor: Theme.border, zIndex: 9999 }}>
                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
                      <Ionicons name="gift-outline" size={15} color={Theme.primary} />
                      <Text style={{ fontFamily: Fonts.bold, fontSize: 12, color: Theme.textPrimary }}>Walk-in Loyalty Program</Text>
@@ -1317,7 +1364,7 @@ export default function SummaryScreen() {
                      </View>
                    )}
 
-                   <View style={{ marginBottom: 4 }}>
+                   <View style={{ marginBottom: 4, zIndex: 99999 }}>
                      <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: Theme.textSecondary, marginBottom: 2 }}>Mobile Number</Text>
                      <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
                        <TouchableOpacity 
@@ -1345,13 +1392,7 @@ export default function SummaryScreen() {
                          placeholderTextColor={Theme.textMuted}
                          keyboardType="phone-pad"
                          value={loyaltyPhone}
-                         onChangeText={(val) => {
-                           setLoyaltyPhone(val);
-                           if (loyaltyCustomer) {
-                             setLoyaltyCustomer(null);
-                             setLoyaltyName("");
-                           }
-                         }}
+                         onChangeText={handleSearchPhone}
                        />
                        <TouchableOpacity 
                          style={{ width: 68, height: 34, backgroundColor: Theme.primary, borderRadius: 8, justifyContent: "center", alignItems: "center" }}
@@ -1365,6 +1406,48 @@ export default function SummaryScreen() {
                          )}
                        </TouchableOpacity>
                      </View>
+
+                     {/* Search Dropdown list */}
+                     {searchResults.length > 0 && (
+                       <View style={{
+                         position: "absolute",
+                         top: 52,
+                         left: 0,
+                         right: 0,
+                         backgroundColor: "#fff",
+                         borderRadius: 8,
+                         borderWidth: 1,
+                         borderColor: Theme.border,
+                         shadowColor: "#000",
+                         shadowOffset: { width: 0, height: 2 },
+                         shadowOpacity: 0.1,
+                         shadowRadius: 4,
+                         elevation: 3,
+                         maxHeight: 150,
+                         zIndex: 999999
+                       }}>
+                         <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                           {searchResults.map((cust, index) => (
+                             <TouchableOpacity
+                               key={index}
+                               style={{
+                                 paddingVertical: 8,
+                                 paddingHorizontal: 10,
+                                 borderBottomWidth: index === searchResults.length - 1 ? 0 : 1,
+                                 borderBottomColor: Theme.border,
+                                 flexDirection: "row",
+                                 justifyContent: "space-between",
+                                 alignItems: "center"
+                               }}
+                               onPress={() => handleSelectCustomer(cust)}
+                             >
+                               <Text style={{ fontFamily: Fonts.bold, fontSize: 12, color: Theme.textPrimary }}>{cust.Phone}</Text>
+                               <Text style={{ fontFamily: Fonts.regular, fontSize: 11, color: Theme.textSecondary }}>{cust.Name || "Guest"}</Text>
+                             </TouchableOpacity>
+                           ))}
+                         </ScrollView>
+                       </View>
+                     )}
                    </View>
 
                   {loyaltyCustomer && (

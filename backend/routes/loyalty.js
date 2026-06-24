@@ -5,6 +5,28 @@ router.use(authenticateToken);
 const sql = require("mssql");
 const { poolPromise } = require("../config/db");
 
+// GET /api/loyalty/search?q=query
+router.get("/search", async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim() === "") {
+      return res.json([]);
+    }
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("Query", sql.NVarChar(50), `%${q.trim()}%`)
+      .query(`
+        SELECT TOP 10 Phone, Name, VisitCount, TotalVisits, RewardPending 
+        FROM LoyaltyCustomer 
+        WHERE Phone LIKE @Query
+      `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("[LOYALTY SEARCH ERROR]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/loyalty/status/:phone
 router.get("/status/:phone", async (req, res) => {
   try {
