@@ -108,6 +108,8 @@ export default function PaymentScreen() {
   const pathname = usePathname();
   const params = useLocalSearchParams();
   const memberId = params.memberId as string | undefined;
+  const loyaltyPhone = params.mobileNo as string | undefined;
+  const loyaltyName = params.customerName as string | undefined;
   const collectAmountRaw = params.collectAmount
     ? parseFloat(params.collectAmount as string)
     : undefined;
@@ -1138,7 +1140,8 @@ const confirmPayment = async () => {
       discountRemarks: discount?.label || null,
       orderDiscountAmount: discountAmount,
       itemDiscountAmount: payItemDiscount,
-      customerName: tableState?.customerName || null,
+      customerName: loyaltyName || tableState?.customerName || null,
+      mobileNo: loyaltyPhone || null,
       pax: tableState?.pax || null,
     };
 

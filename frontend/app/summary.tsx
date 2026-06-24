@@ -102,6 +102,88 @@ export default function SummaryScreen() {
   const [splitType, setSplitType] = useState<"items" | "parts">("items");
   const [partCount, setPartCount] = useState<number>(2);
 
+  const [loyaltyPhone, setLoyaltyPhone] = useState("");
+  const [loyaltyName, setLoyaltyName] = useState("");
+  const [loyaltyCustomer, setLoyaltyCustomer] = useState<any | null>(null);
+  const [isSearchingLoyalty, setIsSearchingLoyalty] = useState(false);
+  const [isRewardApplied, setIsRewardApplied] = useState(false);
+
+  const tableState = context?.tableId
+    ? useTableStatusStore.getState().tableMap[context.tableId.toLowerCase()]
+    : null;
+
+  const handleLoyaltyLookup = async (phoneToSearch?: string) => {
+    const targetPhone = phoneToSearch || loyaltyPhone;
+    if (!targetPhone || targetPhone.trim() === "") {
+      showToast({ type: "warning", message: "Enter Phone", subtitle: "Please input a valid phone number" });
+      return;
+    }
+    setIsSearchingLoyalty(true);
+    try {
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`${API_URL}/api/loyalty/status/${encodeURIComponent(targetPhone.trim())}`, {
+        headers: {
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLoyaltyCustomer(data.customer);
+        if (data.customer.Name) {
+          setLoyaltyName(data.customer.Name);
+        }
+        showToast({
+          type: "success",
+          message: data.exists ? "Customer Found" : "New Customer Enrolled",
+          subtitle: data.exists ? `Visits: ${data.customer.VisitCount}/9` : "First visit recorded upon checkout"
+        });
+      } else {
+        showToast({ type: "error", message: "Lookup Failed", subtitle: data.error || "Failed to search customer" });
+      }
+    } catch (err: any) {
+      console.error("Loyalty lookup error:", err);
+      showToast({ type: "error", message: "Error connecting to server" });
+    } finally {
+      setIsSearchingLoyalty(false);
+    }
+  };
+
+  const handleApplyLoyaltyReward = () => {
+    const activeItems = cart.filter((i: any) => i.status !== "VOIDED" && i.statusCode !== 0);
+    if (activeItems.length === 0) {
+      showToast({ type: "warning", message: "Cart Empty", subtitle: "Cannot apply reward to an empty cart" });
+      return;
+    }
+    
+    // Find cheapest item
+    let cheapestItem = activeItems[0];
+    for (let i = 1; i < activeItems.length; i++) {
+      if ((activeItems[i].price || 0) < (cheapestItem.price || 0)) {
+        cheapestItem = activeItems[i];
+      }
+    }
+    
+    useCartStore.getState().updateCartItemFull(cheapestItem.lineItemId, {
+      discount: 100,
+      discountType: "percentage"
+    } as any);
+    
+    setIsRewardApplied(true);
+    showToast({
+      type: "success",
+      message: "Reward Applied",
+      subtitle: `Cheapest item ${cheapestItem.name} set to 100% off`
+    });
+  };
+
+  useEffect(() => {
+    const phone = (activeOrder as any)?.mobileNo || (activeOrder as any)?.MobileNo || (tableState as any)?.mobileNo || (tableState as any)?.MobileNo || "";
+    if (phone && phone.trim() !== "") {
+      setLoyaltyPhone(phone);
+      handleLoyaltyLookup(phone);
+    }
+  }, [activeOrder, tableState]);
+
   const settings = useCompanySettingsStore((state) => state.settings);
   const currencySymbol = settings.currencySymbol || "$";
   const gstRate = (settings.gstPercentage || 0) / 100;
@@ -1199,6 +1281,60 @@ export default function SummaryScreen() {
                   />
                 </View>
 
+                {/* LOYALTY CARD SECTION */}
+                <View style={{ marginBottom: 15, padding: 12, backgroundColor: Theme.bgNav, borderRadius: 12, borderWidth: 1, borderColor: Theme.border }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                    <Ionicons name="gift-outline" size={16} color={Theme.primary} />
+                    <Text style={{ fontFamily: Fonts.bold, fontSize: 13, color: Theme.textPrimary }}>Walk-in Loyalty Program</Text>
+                  </View>
+                  
+                  <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                    <TextInput
+                      style={{ flex: 1, height: 38, borderWidth: 1, borderColor: Theme.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: "#fff", fontSize: 13, fontFamily: Fonts.regular, color: Theme.textPrimary }}
+                      placeholder="Enter Phone Number..."
+                      placeholderTextColor={Theme.textMuted}
+                      keyboardType="phone-pad"
+                      value={loyaltyPhone}
+                      onChangeText={setLoyaltyPhone}
+                    />
+                    <TouchableOpacity 
+                      style={{ paddingHorizontal: 12, height: 38, backgroundColor: Theme.primary, borderRadius: 8, justifyContent: "center", alignItems: "center" }}
+                      onPress={() => handleLoyaltyLookup()}
+                      disabled={isSearchingLoyalty}
+                    >
+                      {isSearchingLoyalty ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={{ color: "#fff", fontFamily: Fonts.bold, fontSize: 12 }}>Lookup</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  {loyaltyCustomer && (
+                    <View style={{ marginTop: 4, gap: 4 }}>
+                      <Text style={{ fontSize: 12, color: Theme.textSecondary, fontFamily: Fonts.regular }}>
+                        Status: <Text style={{ fontFamily: Fonts.bold, color: Theme.primary }}>{loyaltyCustomer.isNew ? "Enrolling on checkout" : `Visits: ${loyaltyCustomer.VisitCount}/9`}</Text>
+                      </Text>
+                      {loyaltyCustomer.RewardPending === 1 || loyaltyCustomer.VisitCount === 9 ? (
+                        <View style={{ marginTop: 6, backgroundColor: Theme.successBg || '#dcfce7', padding: 8, borderRadius: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                          <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: Theme.success || '#16a34a', flex: 1, marginRight: 6 }}>🎉 10th Visit Reward Available!</Text>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: Theme.success || '#16a34a', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
+                            onPress={handleApplyLoyaltyReward}
+                            disabled={isRewardApplied}
+                          >
+                            <Text style={{ color: "#fff", fontSize: 11, fontFamily: Fonts.bold }}>{isRewardApplied ? "Applied" : "Apply"}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <Text style={{ fontSize: 11, color: Theme.textMuted, fontFamily: Fonts.regular }}>
+                          {9 - loyaltyCustomer.VisitCount} visit(s) remaining until free food reward.
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                </View>
+
                 {/* SERVER SELECTION & BILL BUTTON */}
                 <View
                   style={{ marginBottom: isPhone && !isLandscape ? 10 : 15 }}
@@ -1434,7 +1570,13 @@ export default function SummaryScreen() {
                       }
                       return;
                     }
-                    router.push("/payment");
+                    router.push({
+                      pathname: "/payment",
+                      params: {
+                        mobileNo: loyaltyPhone || "",
+                        customerName: loyaltyName || "",
+                      },
+                    });
                   }}
                   activeOpacity={0.8}
                 >

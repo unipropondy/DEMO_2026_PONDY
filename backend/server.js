@@ -57,6 +57,7 @@ const settlementRoutes = require("./routes/settlementRoutes");
 const settlementLegacyRoutes = require("./routes/settlement");
 const config = require('./config');
 const yeahpayRoutes = require('./routes/yeahpay');
+const loyaltyRoutes = require("./routes/loyalty");
 const http = require("http");
 const { Server } = require("socket.io");
 
@@ -262,6 +263,7 @@ app.use("/api/credit-customers", creditCustomerRoutes);
 app.use("/api/settlement", settlementRoutes);
 app.use("/api/settlement", settlementLegacyRoutes);
 app.use('/api/yeahpay', yeahpayRoutes);
+app.use("/api/loyalty", loyaltyRoutes);
 const cashDrawerRouter = require("./routes/cashDrawer");
 app.use("/api/cash-drawer", cashDrawerRouter);
 const printJobsRouter = require("./routes/printJobs");

@@ -657,7 +657,61 @@ async function initDB(pool) {
       END
     `);
 
+    // 24. Create LoyaltyCustomer table
+    await runQuery("Create LoyaltyCustomer table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[LoyaltyCustomer]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[LoyaltyCustomer](
+              [LoyaltyCustomerId] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+              [Phone] NVARCHAR(50) NOT NULL UNIQUE,
+              [Name] NVARCHAR(255) NULL,
+              [VisitCount] INT NOT NULL DEFAULT 0,
+              [TotalVisits] INT NOT NULL DEFAULT 0,
+              [RewardsEarned] INT NOT NULL DEFAULT 0,
+              [RewardsRedeemed] INT NOT NULL DEFAULT 0,
+              [RewardPending] BIT NOT NULL DEFAULT 0,
+              [CreatedOn] DATETIME DEFAULT GETDATE(),
+              [LastVisitDate] DATETIME NULL
+          );
+      END
+    `);
+
+    // Create index on Phone for fast lookup
+    await runQuery("Index - LoyaltyCustomer Phone", `
+      IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_LoyaltyCustomer_Phone' AND object_id = OBJECT_ID('LoyaltyCustomer'))
+      BEGIN
+          CREATE UNIQUE NONCLUSTERED INDEX IX_LoyaltyCustomer_Phone
+          ON [dbo].[LoyaltyCustomer](Phone);
+      END
+    `);
+
+    // 25. Create LoyaltyVisit table
+    await runQuery("Create LoyaltyVisit table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[LoyaltyVisit]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[LoyaltyVisit](
+              [LoyaltyVisitId] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+              [LoyaltyCustomerId] UNIQUEIDENTIFIER FOREIGN KEY REFERENCES LoyaltyCustomer(LoyaltyCustomerId),
+              [SettlementId] UNIQUEIDENTIFIER UNIQUE NOT NULL,
+              [BillNo] NVARCHAR(50) NOT NULL,
+              [VisitDate] DATETIME DEFAULT GETDATE(),
+              [IsRewardVisit] BIT NOT NULL DEFAULT 0,
+              [RewardDishId] UNIQUEIDENTIFIER NULL
+          );
+      END
+    `);
+
+    // Create index on SettlementId
+    await runQuery("Index - LoyaltyVisit SettlementId", `
+      IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_LoyaltyVisit_SettlementId' AND object_id = OBJECT_ID('LoyaltyVisit'))
+      BEGIN
+          CREATE UNIQUE NONCLUSTERED INDEX IX_LoyaltyVisit_SettlementId
+          ON [dbo].[LoyaltyVisit](SettlementId);
+      END
+    `);
+
     console.log("✅ Database schema and performance indexes are up to date.");
+
 
     // 🔄 Auto-sync kitchens to PrintMaster on every startup
     await syncKitchensToPrintMaster(pool);

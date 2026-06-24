@@ -2255,6 +2255,16 @@ router.post("/save", async (req, res) => {
       });
     }
 
+    // 🚀 POST-SAVE LOYALTY TRIGGER
+    const loyaltyPhone = req.body.mobileNo || req.body.MobileNo;
+    const loyaltyName = req.body.customerName || req.body.CustomerName;
+    if (loyaltyPhone && String(loyaltyPhone).trim() !== "") {
+      setImmediate(async () => {
+        const checkPool = await poolPromise;
+        await logLoyaltyVisitAsync(checkPool, settlementId, finalBillNo, loyaltyPhone, loyaltyName, items);
+      });
+    }
+
     res.json({ success: true, settlementId, billNo: displayOrderId, orderId: displayOrderId });
   } catch (err) {
     console.error("SAVE SALE ERROR:", err);
@@ -2467,5 +2477,141 @@ router.get("/reports/combined-collection-summary", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, items) {
+  try {
+    const cleanPhone = String(phone).trim();
+    if (!cleanPhone) return;
+
+    // 1. Idempotency Check
+    const dupCheck = await pool.request()
+      .input("SettlementId", sql.UniqueIdentifier, settlementId)
+      .query("SELECT LoyaltyVisitId FROM LoyaltyVisit WHERE SettlementId = @SettlementId");
+
+    if (dupCheck.recordset.length > 0) {
+      console.log(`[Loyalty Trigger] Duplicate check: SettlementId ${settlementId} already logged.`);
+      return;
+    }
+
+    // 2. Split Bill Check
+    const baseBillNo = String(billNo || "").trim().split("-S")[0];
+    const splitCheck = await pool.request()
+      .input("BaseBillNo", sql.NVarChar(50), baseBillNo)
+      .query("SELECT LoyaltyVisitId FROM LoyaltyVisit WHERE BillNo LIKE @BaseBillNo + '%'");
+
+    const isSplitDuplicate = splitCheck.recordset.length > 0;
+
+    // 3. Determine if reward was claimed on this invoice
+    const itemsList = items || [];
+    const hasRewardClaimed = itemsList.some(item => {
+      const discAmt = Number(item.discountAmount ?? item.discount ?? item.DiscountAmount ?? 0);
+      const discType = item.discountType || item.DiscountType || "percentage";
+      const isPriceZero = Number(item.price || item.Price || 0) === 0;
+      const isDiscount100Percent = discType === "percentage" && discAmt === 100;
+      const isDiscountFullPrice = (discType === "fixed" || discType === "amount") && discAmt === Number(item.price || item.Price || 0);
+      return isPriceZero || isDiscount100Percent || isDiscountFullPrice;
+    });
+
+    const rewardDish = itemsList.find(item => {
+      const discAmt = Number(item.discountAmount ?? item.discount ?? item.DiscountAmount ?? 0);
+      const discType = item.discountType || item.DiscountType || "percentage";
+      const isPriceZero = Number(item.price || item.Price || 0) === 0;
+      const isDiscount100Percent = discType === "percentage" && discAmt === 100;
+      const isDiscountFullPrice = (discType === "fixed" || discType === "amount") && discAmt === Number(item.price || item.Price || 0);
+      return isPriceZero || isDiscount100Percent || isDiscountFullPrice;
+    });
+    const rewardDishId = rewardDish ? toGuidOrNull(rewardDish.dishId || rewardDish.DishId || rewardDish.id) : null;
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      let customerId;
+      const custRes = await transaction.request()
+        .input("Phone", sql.NVarChar(50), cleanPhone)
+        .query("SELECT LoyaltyCustomerId, VisitCount, TotalVisits, RewardPending FROM LoyaltyCustomer WITH (UPDLOCK) WHERE Phone = @Phone");
+
+      if (custRes.recordset.length === 0) {
+        const insertCustRes = await transaction.request()
+          .input("Phone", sql.NVarChar(50), cleanPhone)
+          .input("Name", sql.NVarChar(255), name ? String(name).trim() : null)
+          .input("VisitCount", sql.Int, isSplitDuplicate ? 0 : 1)
+          .input("TotalVisits", sql.Int, isSplitDuplicate ? 0 : 1)
+          .query(`
+            DECLARE @newCustId UNIQUEIDENTIFIER = NEWID();
+            INSERT INTO LoyaltyCustomer (LoyaltyCustomerId, Phone, Name, VisitCount, TotalVisits, LastVisitDate)
+            VALUES (@newCustId, @Phone, @Name, @VisitCount, @TotalVisits, GETDATE());
+            SELECT @newCustId AS LoyaltyCustomerId;
+          `);
+        customerId = insertCustRes.recordset[0].LoyaltyCustomerId;
+      } else {
+        const cust = custRes.recordset[0];
+        customerId = cust.LoyaltyCustomerId;
+
+        if (!isSplitDuplicate) {
+          let newVisitCount = cust.VisitCount;
+          let newTotalVisits = cust.TotalVisits + 1;
+          let newRewardsEarned = 0;
+          let newRewardsRedeemed = 0;
+          let newRewardPending = cust.RewardPending;
+
+          if (hasRewardClaimed) {
+            newVisitCount = 0;
+            newRewardsRedeemed = 1;
+            newRewardPending = 0;
+          } else {
+            newVisitCount = cust.VisitCount + 1;
+            if (newVisitCount === 9) {
+              newRewardPending = 1;
+              newRewardsEarned = 1;
+            } else if (newVisitCount >= 10) {
+              newVisitCount = 1;
+              newRewardPending = 0;
+            }
+          }
+
+          await transaction.request()
+            .input("LoyaltyCustomerId", sql.UniqueIdentifier, customerId)
+            .input("Name", sql.NVarChar(255), name ? String(name).trim() : null)
+            .input("VisitCount", sql.Int, newVisitCount)
+            .input("TotalVisits", sql.Int, newTotalVisits)
+            .input("RewardsRedeemed", sql.Int, newRewardsRedeemed)
+            .input("RewardsEarned", sql.Int, newRewardsEarned)
+            .input("RewardPending", sql.Bit, newRewardPending)
+            .query(`
+              UPDATE LoyaltyCustomer 
+              SET VisitCount = @VisitCount,
+                  TotalVisits = @TotalVisits,
+                  RewardsRedeemed = RewardsRedeemed + @RewardsRedeemed,
+                  RewardsEarned = RewardsEarned + @RewardsEarned,
+                  RewardPending = @RewardPending,
+                  LastVisitDate = GETDATE(),
+                  Name = ISNULL(@Name, Name)
+              WHERE LoyaltyCustomerId = @LoyaltyCustomerId
+            `);
+        }
+      }
+
+      await transaction.request()
+        .input("LoyaltyCustomerId", sql.UniqueIdentifier, customerId)
+        .input("SettlementId", sql.UniqueIdentifier, settlementId)
+        .input("BillNo", sql.NVarChar(50), billNo)
+        .input("IsRewardVisit", sql.Bit, hasRewardClaimed ? 1 : 0)
+        .input("RewardDishId", sql.UniqueIdentifier, rewardDishId)
+        .query(`
+          INSERT INTO LoyaltyVisit (LoyaltyVisitId, LoyaltyCustomerId, SettlementId, BillNo, IsRewardVisit, RewardDishId)
+          VALUES (NEWID(), @LoyaltyCustomerId, @SettlementId, @BillNo, @IsRewardVisit, @RewardDishId)
+        `);
+
+      await transaction.commit();
+      console.log(`[Loyalty Post-Save Sync] Success: Phone=${cleanPhone}, BillNo=${billNo}`);
+    } catch (txErr) {
+      await transaction.rollback();
+      throw txErr;
+    }
+  } catch (err) {
+    console.error("⚠️ [Loyalty Post-Save Sync Error] Failed:", err.message);
+  }
+}
 
 module.exports = router;
