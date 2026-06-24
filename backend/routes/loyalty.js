@@ -208,4 +208,49 @@ router.post("/log-visit", async (req, res) => {
   }
 });
 
+// POST /api/loyalty/register
+// Registers a new loyalty customer (or returns existing) without a bill
+router.post("/register", async (req, res) => {
+  try {
+    const { phone, name } = req.body;
+    if (!phone || phone.trim() === "") {
+      return res.status(400).json({ success: false, error: "Phone number is required" });
+    }
+
+    const pool = await poolPromise;
+    const cleanPhone = phone.trim();
+
+    // Check if already exists
+    const existing = await pool.request()
+      .input("Phone", sql.NVarChar(50), cleanPhone)
+      .query("SELECT LoyaltyCustomerId, Phone, Name, VisitCount, TotalVisits, RewardsEarned, RewardsRedeemed, RewardPending FROM LoyaltyCustomer WHERE Phone = @Phone");
+
+    if (existing.recordset.length > 0) {
+      return res.json({ success: true, exists: true, customer: existing.recordset[0], message: "Customer already registered" });
+    }
+
+    // Insert new customer
+    const insertRes = await pool.request()
+      .input("Phone", sql.NVarChar(50), cleanPhone)
+      .input("Name", sql.NVarChar(255), name ? name.trim() : null)
+      .query(`
+        DECLARE @newId UNIQUEIDENTIFIER = NEWID();
+        INSERT INTO LoyaltyCustomer (LoyaltyCustomerId, Phone, Name, VisitCount, TotalVisits, LastVisitDate)
+        VALUES (@newId, @Phone, @Name, 0, 0, GETDATE());
+        SELECT @newId AS LoyaltyCustomerId;
+      `);
+
+    const newId = insertRes.recordset[0].LoyaltyCustomerId;
+
+    const newCust = await pool.request()
+      .input("LoyaltyCustomerId", sql.UniqueIdentifier, newId)
+      .query("SELECT LoyaltyCustomerId, Phone, Name, VisitCount, TotalVisits, RewardsEarned, RewardsRedeemed, RewardPending FROM LoyaltyCustomer WHERE LoyaltyCustomerId = @LoyaltyCustomerId");
+
+    return res.json({ success: true, exists: false, customer: newCust.recordset[0], message: "Customer registered successfully" });
+  } catch (err) {
+    console.error("[LOYALTY REGISTER ERROR]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
