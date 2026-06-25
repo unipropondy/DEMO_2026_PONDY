@@ -23,9 +23,11 @@ import { Fonts } from "../constants/Fonts";
 import { API_URL } from "@/constants/Config";
 import { formatToSingaporeDate, formatToSingaporeTime } from "../utils/timezoneHelper";
 import { useAuthStore } from "@/stores/authStore";
+import { useToast } from "../components/Toast";
 
 export default function LoyaltyScreen() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [searchText, setSearchText] = useState("");
   const [members, setMembers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,6 +50,11 @@ export default function LoyaltyScreen() {
   const [showOrderDetailModal, setShowOrderDetailModal] = useState(false);
   const [orderDetailData, setOrderDetailData] = useState<any | null>(null);
   const [orderDetailLoading, setOrderDetailLoading] = useState(false);
+
+  // Delete Confirmation States
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [visitorToDelete, setVisitorToDelete] = useState<{ phone: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchMembers = async (query = "") => {
     setIsLoading(true);
@@ -83,7 +90,7 @@ export default function LoyaltyScreen() {
 
   const handleEnroll = async () => {
     if (!enrollPhone.trim()) {
-      Alert.alert("Required", "Please enter a mobile number.");
+      showToast({ type: "error", message: "Please enter a mobile number." });
       return;
     }
     setIsEnrolling(true);
@@ -97,49 +104,49 @@ export default function LoyaltyScreen() {
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to enroll member");
       }
-      Alert.alert("Success", data.message || "Customer enrolled successfully!");
+      showToast({ type: "success", message: data.message || "Customer enrolled successfully!" });
       setShowEnrollModal(false);
       setEnrollPhone("");
       setEnrollName("");
       fetchMembers(searchText);
     } catch (err: any) {
-      Alert.alert("Enrollment Failed", err.message);
+      showToast({ type: "error", message: err.message });
     } finally {
       setIsEnrolling(false);
     }
   };
 
   const handleDeleteMember = (phone: string, name: string) => {
-    Alert.alert(
-      "Delete Visitor",
-      "Are you sure you want to delete this loyalty visitor? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const token = useAuthStore.getState().token;
-              const res = await fetch(`${API_URL}/api/loyalty/customer/${encodeURIComponent(phone)}`, {
-                method: "DELETE",
-                headers: {
-                  "Authorization": `Bearer ${token}`
-                }
-              });
-              const data = await res.json();
-              if (!res.ok || !data.success) {
-                throw new Error(data.error || "Failed to delete visitor");
-              }
-              Alert.alert("Success", "Visitor deleted successfully");
-              fetchMembers(searchText);
-            } catch (err: any) {
-              Alert.alert("Error", err.message);
-            }
-          },
-        },
-      ]
-    );
+    setVisitorToDelete({ phone, name });
+    setShowDeleteConfirm(true);
+  };
+
+  const executeDeleteVisitor = async () => {
+    if (!visitorToDelete) return;
+    setIsDeleting(true);
+    try {
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`${API_URL}/api/loyalty/customer/${encodeURIComponent(visitorToDelete.phone)}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete visitor");
+      }
+      
+      showToast({ type: "success", message: "Visitor deleted successfully" });
+      
+      setShowDeleteConfirm(false);
+      setVisitorToDelete(null);
+      fetchMembers(searchText);
+    } catch (err: any) {
+      showToast({ type: "error", message: err.message });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleOpenHistory = async (visitor: any) => {
@@ -539,6 +546,55 @@ export default function LoyaltyScreen() {
                 <Text style={styles.emptyText}>Failed to load order details</Text>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+      {/* Custom Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteConfirm}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDeleteConfirm(false);
+          setVisitorToDelete(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteModalHeader}>
+              <Text style={styles.deleteModalTitle}>Delete Visitor</Text>
+            </View>
+            
+            <View style={styles.deleteModalBody}>
+              <Text style={styles.deleteModalText}>
+                Are you sure you want to delete this loyalty visitor? This action cannot be undone.
+              </Text>
+            </View>
+
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity 
+                style={styles.deleteCancelBtn}
+                onPress={() => {
+                  setShowDeleteConfirm(false);
+                  setVisitorToDelete(null);
+                }}
+                disabled={isDeleting}
+              >
+                <Text style={styles.deleteCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.deleteConfirmBtn}
+                onPress={executeDeleteVisitor}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.deleteConfirmBtnText}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -946,5 +1002,64 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: Fonts.black,
     color: Theme.primary,
+  },
+  deleteModalContent: {
+    backgroundColor: Theme.bgCard,
+    borderRadius: 16,
+    width: "100%",
+    maxWidth: 360,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: Theme.border,
+    ...Theme.shadowLg,
+  },
+  deleteModalHeader: {
+    paddingBottom: 10,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Theme.border,
+  },
+  deleteModalTitle: {
+    fontSize: 16,
+    fontFamily: Fonts.black,
+    color: Theme.danger,
+  },
+  deleteModalBody: {
+    marginBottom: 20,
+  },
+  deleteModalText: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+    color: Theme.textPrimary,
+    lineHeight: 20,
+  },
+  deleteModalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+  },
+  deleteCancelBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: Theme.bgInput,
+    borderWidth: 1,
+    borderColor: Theme.border,
+  },
+  deleteCancelBtnText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: Theme.textSecondary,
+  },
+  deleteConfirmBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: Theme.danger,
+  },
+  deleteConfirmBtnText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: "#FFF",
   },
 });
