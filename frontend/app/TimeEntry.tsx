@@ -45,6 +45,72 @@ export default function TimeEntryScreen() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
 
+  // Drilldown & filter states
+  const [selectedStaff, setSelectedStaff] = useState<{ id: string; name: string } | null>(null);
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+
+  const getUniqueStaffList = () => {
+    const staffMap: { [key: string]: { id: string; name: string; count: number } } = {};
+    logsList.forEach(log => {
+      if (log.UserId && log.StaffName) {
+        if (!staffMap[log.UserId]) {
+          staffMap[log.UserId] = {
+            id: log.UserId,
+            name: log.StaffName,
+            count: 0
+          };
+        }
+        staffMap[log.UserId].count += 1;
+      }
+    });
+    return Object.values(staffMap);
+  };
+
+  const getFilteredLogs = () => {
+    if (!selectedStaff) return [];
+    let list = logsList.filter(log => log.UserId === selectedStaff.id);
+    const now = new Date();
+
+    const getStartOfDay = (d: Date) => {
+      const copy = new Date(d);
+      copy.setHours(0, 0, 0, 0);
+      return copy;
+    };
+
+    if (dateFilter === 'today') {
+      const todayStart = getStartOfDay(now).getTime();
+      const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
+      list = list.filter(log => {
+        const time = new Date(log.LoginTime).getTime();
+        return time >= todayStart && time < tomorrowStart;
+      });
+    } else if (dateFilter === 'week') {
+      const oneWeekAgo = getStartOfDay(now).getTime() - 7 * 24 * 60 * 60 * 1000;
+      list = list.filter(log => {
+        const time = new Date(log.LoginTime).getTime();
+        return time >= oneWeekAgo;
+      });
+    } else if (dateFilter === 'month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      list = list.filter(log => {
+        const time = new Date(log.LoginTime).getTime();
+        return time >= startOfMonth;
+      });
+    } else if (dateFilter === 'custom') {
+      const start = customStartDate ? getStartOfDay(new Date(customStartDate)).getTime() : 0;
+      const end = customEndDate ? getStartOfDay(new Date(customEndDate)).getTime() + 24 * 60 * 60 * 1000 : Infinity;
+      list = list.filter(log => {
+        const time = new Date(log.LoginTime).getTime();
+        return time >= start && time < end;
+      });
+    }
+
+    return list;
+  };
+
+
   const handleAdminAuth = async () => {
     if (!adminUser.trim() || !adminPin.trim()) {
       Alert.alert("Error", "Please enter Admin ID and PIN");
@@ -423,55 +489,172 @@ export default function TimeEntryScreen() {
         visible={showLogsModal}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowLogsModal(false)}
+        onRequestClose={() => {
+          setShowLogsModal(false);
+          setSelectedStaff(null);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.logsModalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📋 Time Log History</Text>
-              <TouchableOpacity onPress={() => setShowLogsModal(false)}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {selectedStaff && (
+                  <TouchableOpacity 
+                    style={{ marginRight: 8, padding: 4 }} 
+                    onPress={() => {
+                      setSelectedStaff(null);
+                      setDateFilter('all');
+                      setCustomStartDate("");
+                      setCustomEndDate("");
+                    }}
+                  >
+                    <Ionicons name="arrow-back" size={20} color={Theme.primary} />
+                  </TouchableOpacity>
+                )}
+                <Text style={styles.modalTitle}>
+                  {selectedStaff ? `📋 History: ${selectedStaff.name}` : "👥 Staff Directory"}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => {
+                setShowLogsModal(false);
+                setSelectedStaff(null);
+              }}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
 
             {logsLoading ? (
               <ActivityIndicator size="large" color={Theme.primary} style={{ marginVertical: 40 }} />
-            ) : (
+            ) : !selectedStaff ? (
+              /* --- STAFF LIST DIRECTORY VIEW --- */
               <ScrollView style={{ maxHeight: 500, marginVertical: 12 }}>
-                <View style={styles.tableHeader}>
-                  <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Staff Name</Text>
-                  <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Login Time</Text>
-                  <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Logout Time</Text>
-                  <Text style={[styles.tableHeaderCell, { flex: 1.5, textAlign: 'right' }]}>Duration</Text>
-                </View>
-
-                {logsList.length > 0 ? (
-                  logsList.map((log, index) => {
-                    const formattedLogin = log.LoginTime ? formatToSingaporeTime(log.LoginTime) + " " + formatToSingaporeDate(log.LoginTime, { month: 'short', day: 'numeric' }) : "-";
-                    const formattedLogout = log.LogoutTime ? formatToSingaporeTime(log.LogoutTime) + " " + formatToSingaporeDate(log.LogoutTime, { month: 'short', day: 'numeric' }) : "Active";
-                    const durationStr = log.TotalDuration !== null && log.TotalDuration !== undefined ? `${parseFloat(log.TotalDuration).toFixed(2)}h` : "-";
-                    
-                    return (
-                      <View key={index} style={[styles.tableRow, index % 2 === 0 ? styles.rowEven : styles.rowOdd]}>
-                        <Text style={[styles.tableCell, { flex: 2, fontFamily: Fonts.bold }]}>{log.StaffName}</Text>
-                        <Text style={[styles.tableCell, { flex: 2 }]}>{formattedLogin}</Text>
-                        <Text style={[styles.tableCell, { flex: 2 }]}>{formattedLogout}</Text>
-                        <Text style={[styles.tableCell, { flex: 1.5, textAlign: 'right', fontFamily: Fonts.bold, color: Theme.primary }]}>{durationStr}</Text>
+                <Text style={styles.modalSubtitle}>Select a staff member to view their complete attendance history.</Text>
+                {getUniqueStaffList().length > 0 ? (
+                  getUniqueStaffList().map((staff) => (
+                    <TouchableOpacity
+                      key={staff.id}
+                      style={styles.staffListItem}
+                      onPress={() => setSelectedStaff(staff)}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={styles.staffAvatar}>
+                          <Text style={styles.staffAvatarText}>{staff.name.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <View>
+                          <Text style={styles.staffNameText}>{staff.name}</Text>
+                          <Text style={styles.staffLogCount}>{staff.count} logged shift{staff.count !== 1 ? 's' : ''}</Text>
+                        </View>
                       </View>
-                    );
-                  })
+                      <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+                    </TouchableOpacity>
+                  ))
                 ) : (
-                  <Text style={styles.emptyText}>No logs recorded in history</Text>
+                  <Text style={styles.emptyText}>No staff records found</Text>
                 )}
               </ScrollView>
+            ) : (
+              /* --- INDIVIDUAL STAFF LOG HISTORY VIEW --- */
+              <View style={{ flex: 1, maxHeight: 550 }}>
+                {/* Horizontal Date Filter Bar */}
+                <View style={styles.filterBar}>
+                  {[
+                    { id: 'all', label: 'All' },
+                    { id: 'today', label: 'Today' },
+                    { id: 'week', label: 'This Week' },
+                    { id: 'month', label: 'This Month' },
+                    { id: 'custom', label: 'Custom Range' },
+                  ].map((filter) => (
+                    <TouchableOpacity
+                      key={filter.id}
+                      style={[styles.filterTab, dateFilter === filter.id && styles.filterTabActive]}
+                      onPress={() => setDateFilter(filter.id as any)}
+                    >
+                      <Text style={[styles.filterTabText, dateFilter === filter.id && styles.filterTabTextActive]}>
+                        {filter.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Custom Date Range Picker Inputs */}
+                {dateFilter === 'custom' && (
+                  <View style={styles.customDateInputs}>
+                    <View style={styles.dateInputWrapper}>
+                      <Text style={styles.dateLabel}>Start Date</Text>
+                      <TextInput
+                        style={styles.dateTextInput}
+                        placeholder="YYYY-MM-DD"
+                        placeholderTextColor="#9ca3af"
+                        value={customStartDate}
+                        onChangeText={setCustomStartDate}
+                      />
+                    </View>
+                    <View style={styles.dateInputWrapper}>
+                      <Text style={styles.dateLabel}>End Date</Text>
+                      <TextInput
+                        style={styles.dateTextInput}
+                        placeholder="YYYY-MM-DD"
+                        placeholderTextColor="#9ca3af"
+                        value={customEndDate}
+                        onChangeText={setCustomEndDate}
+                      />
+                    </View>
+                  </View>
+                )}
+
+                <ScrollView style={{ flex: 1, marginVertical: 12 }}>
+                  <View style={styles.tableHeader}>
+                    <Text style={[styles.tableHeaderCell, { flex: 1.5 }]}>Date</Text>
+                    <Text style={[styles.tableHeaderCell, { flex: 1.8 }]}>Login Time</Text>
+                    <Text style={[styles.tableHeaderCell, { flex: 1.8 }]}>Logout Time</Text>
+                    <Text style={[styles.tableHeaderCell, { flex: 1.2, textAlign: 'right' }]}>Duration</Text>
+                    <Text style={[styles.tableHeaderCell, { flex: 1.2, textAlign: 'right' }]}>Status</Text>
+                  </View>
+
+                  {getFilteredLogs().length > 0 ? (
+                    getFilteredLogs().map((log, index) => {
+                      const dateStr = log.LoginTime ? formatToSingaporeDate(log.LoginTime, { year: 'numeric', month: 'short', day: 'numeric' }) : "-";
+                      const formattedLogin = log.LoginTime ? formatToSingaporeTime(log.LoginTime) : "-";
+                      const formattedLogout = log.LogoutTime ? formatToSingaporeTime(log.LogoutTime) : "-";
+                      const durationStr = log.TotalDuration !== null && log.TotalDuration !== undefined ? `${parseFloat(log.TotalDuration).toFixed(2)}h` : "-";
+                      const isCompleted = log.LogoutTime !== null;
+                      const statusStr = isCompleted ? "Completed" : "Active";
+                      const statusColor = isCompleted ? "#10b981" : "#3b82f6";
+
+                      return (
+                        <View key={index} style={[styles.tableRow, index % 2 === 0 ? styles.rowEven : styles.rowOdd]}>
+                          <Text style={[styles.tableCell, { flex: 1.5, fontFamily: Fonts.bold }]}>{dateStr}</Text>
+                          <Text style={[styles.tableCell, { flex: 1.8 }]}>{formattedLogin}</Text>
+                          <Text style={[styles.tableCell, { flex: 1.8 }]}>{formattedLogout}</Text>
+                          <Text style={[styles.tableCell, { flex: 1.2, textAlign: 'right', fontFamily: Fonts.bold, color: Theme.primary }]}>{durationStr}</Text>
+                          <View style={{ flex: 1.2, alignItems: 'flex-end' }}>
+                            <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+                              <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusStr}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })
+                  ) : (
+                    <Text style={styles.emptyText}>No logs found for this filter selection</Text>
+                  )}
+                </ScrollView>
+              </View>
             )}
 
-            <TouchableOpacity style={[styles.modalSubmitBtn, { backgroundColor: "#6b7280" }]} onPress={() => setShowLogsModal(false)}>
+            <TouchableOpacity 
+              style={[styles.modalSubmitBtn, { backgroundColor: "#6b7280" }]} 
+              onPress={() => {
+                setShowLogsModal(false);
+                setSelectedStaff(null);
+              }}
+            >
               <Text style={styles.modalSubmitText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
 
       {isLoading && <View style={styles.loader}><ActivityIndicator color={Theme.primary} /></View>}
     </SafeAreaView>
@@ -715,5 +898,107 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Fonts.medium,
     color: '#374151',
+  },
+  staffListItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginBottom: 10,
+  },
+  staffAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Theme.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  staffAvatarText: {
+    fontSize: 16,
+    fontFamily: Fonts.black,
+    color: Theme.primary,
+  },
+  staffNameText: {
+    fontSize: 15,
+    fontFamily: Fonts.bold,
+    color: '#111827',
+  },
+  staffLogCount: {
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    backgroundColor: '#f3f4f6',
+    padding: 4,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 4,
+  },
+  filterTab: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  filterTabActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  filterTabText: {
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+    color: '#4b5563',
+  },
+  filterTabTextActive: {
+    color: Theme.primary,
+  },
+  customDateInputs: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  dateInputWrapper: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  dateTextInput: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+    color: '#111827',
+    backgroundColor: '#f9fafb',
+  },
+  statusBadge: {
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
   },
 });

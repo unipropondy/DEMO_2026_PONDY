@@ -403,16 +403,104 @@ router.get("/logs", authenticateToken, async (req, res) => {
     const pool = await poolPromise;
     const result = await pool.request().query(`
       SELECT 
+        a.Userid,
         u.FullName AS StaffName,
-        a.StartDateTime AS LoginTime,
-        a.EndDateTime AS LogoutTime,
-        a.NoofHours AS TotalDuration
-      FROM DailyAttendance a
-      INNER JOIN Vw_UserMaster u ON a.DeliveryPersonId = u.UserId
-      ORDER BY a.StartDateTime DESC
+        a.status,
+        a.ClockinTime,
+        a.CreatedOn
+      FROM TimeEntry a
+      INNER JOIN Vw_UserMaster u ON a.Userid = u.UserId
+      ORDER BY a.Userid, a.ClockinTime ASC
     `);
 
-    res.json(result.recordset);
+    const rows = result.recordset;
+
+    // Group entries by user
+    const userGroups = {};
+    for (const r of rows) {
+      if (!userGroups[r.Userid]) {
+        userGroups[r.Userid] = {
+          name: r.StaffName,
+          entries: []
+        };
+      }
+      userGroups[r.Userid].entries.push(r);
+    }
+
+    const finalLogs = [];
+    for (const userId in userGroups) {
+      const group = userGroups[userId];
+      const name = group.name;
+      const entries = group.entries;
+
+      let currentIn = null;
+      let breakInTime = null;
+      let totalBreakMs = 0;
+
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        const status = parseInt(entry.status);
+        const entryTime = new Date(entry.ClockinTime).getTime();
+
+        if (status === 1) { // IN
+          if (currentIn) {
+            // Push previous incomplete shift
+            finalLogs.push({
+              UserId: userId,
+              StaffName: name,
+              LoginTime: currentIn,
+              LogoutTime: null,
+              TotalDuration: null
+            });
+          }
+          currentIn = entry.ClockinTime;
+          breakInTime = null;
+          totalBreakMs = 0;
+        } else if (status === 3) { // BREAK IN
+          if (currentIn) {
+            breakInTime = entryTime;
+          }
+        } else if (status === 4) { // BREAK OUT
+          if (currentIn && breakInTime) {
+            totalBreakMs += (entryTime - breakInTime);
+            breakInTime = null;
+          }
+        } else if (status === 0) { // OUT
+          if (currentIn) {
+            const loginTimeMs = new Date(currentIn).getTime();
+            const workMs = entryTime - loginTimeMs - totalBreakMs;
+            const hours = workMs > 0 ? parseFloat((workMs / (1000 * 60 * 60)).toFixed(2)) : 0;
+            
+            finalLogs.push({
+              UserId: userId,
+              StaffName: name,
+              LoginTime: currentIn,
+              LogoutTime: entry.ClockinTime,
+              TotalDuration: hours
+            });
+            currentIn = null;
+            breakInTime = null;
+            totalBreakMs = 0;
+          }
+        }
+      }
+
+      // If finished scanning and user is still clocked in
+      if (currentIn) {
+        finalLogs.push({
+          UserId: userId,
+          StaffName: name,
+          LoginTime: currentIn,
+          LogoutTime: null,
+          TotalDuration: null
+        });
+      }
+    }
+
+    // Sort final logs descending by LoginTime
+    finalLogs.sort((a, b) => new Date(b.LoginTime).getTime() - new Date(a.LoginTime).getTime());
+
+    res.json(finalLogs);
   } catch (err) {
     console.error("GET ALL TIME LOGS ERROR:", err);
     res.status(500).json({ error: err.message });
