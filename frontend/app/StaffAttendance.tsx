@@ -24,7 +24,7 @@ import { Theme } from "../constants/theme";
 import { Fonts } from "../constants/Fonts";
 import { formatToSingaporeDate, formatToSingaporeTime } from "../utils/timezoneHelper";
 
-export default function TimeEntryScreen() {
+export default function StaffAttendanceScreen() {
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
   const [userId, setUserId] = useState("");
@@ -287,10 +287,10 @@ export default function TimeEntryScreen() {
   };
 
   const lastStatus = todaySummary?.lastStatus;
-  const canLogin = (lastStatus === 0 || lastStatus === null || !userId);
-  const canOut = (lastStatus === 1 || lastStatus === 4);
-  const canBreakIn = (lastStatus === 1 || lastStatus === 4);
-  const canBreakOut = (lastStatus === 3);
+  const canLogin = userId ? (todaySummary ? todaySummary.canClockIn : (lastStatus === 0 || lastStatus === null)) : true;
+  const canOut = userId ? (todaySummary ? todaySummary.canClockOut : (lastStatus === 1 || lastStatus === 4)) : false;
+  const canBreakIn = userId ? (todaySummary ? todaySummary.canStartBreak : (lastStatus === 1 || lastStatus === 4)) : false;
+  const canBreakOut = userId ? (todaySummary ? todaySummary.canEndBreak : (lastStatus === 3)) : false;
 
   const getStatus = () => {
     switch (lastStatus) {
@@ -299,6 +299,15 @@ export default function TimeEntryScreen() {
       case 4: return { text: "ACTIVE", color: "#3b82f6" };
       default: return { text: "OFF", color: "#6b7280" };
     }
+  };
+
+  const formatActiveDuration = (hours: number) => {
+    if (hours < 24) {
+      return `${hours.toFixed(2)}h`;
+    }
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    return `${days} day${days > 1 ? 's' : ''} ${remainingHours.toFixed(1)}h`;
   };
 
   return (
@@ -323,7 +332,7 @@ export default function TimeEntryScreen() {
               <Text style={styles.userName}>{staffName || "Select Staff"}</Text>
               <View style={styles.statusRow}>
                 <Text style={[styles.statusText, { color: getStatus().color }]}>● {getStatus().text}</Text>
-                {todaySummary && <Text style={styles.hoursText}> • {todaySummary.netHours.toFixed(2)}h Today</Text>}
+                {todaySummary && <Text style={styles.hoursText}> • {formatActiveDuration(todaySummary.netHours)}</Text>}
               </View>
             </View>
             <View style={styles.avatar}>
@@ -662,64 +671,68 @@ export default function TimeEntryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f3f4f6" },
+  container: { flex: 1, backgroundColor: Theme.bgMain },
   header: { 
     flexDirection: "row", 
     alignItems: "center", 
     justifyContent: "space-between",
     paddingHorizontal: 16, 
     paddingVertical: 12, 
-    backgroundColor: "#fff",
+    backgroundColor: Theme.bgCard,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb"
+    borderBottomColor: Theme.border
   },
   backBtn: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 18, fontFamily: Fonts.black, color: "#111827" },
+  headerTitle: { fontSize: 18, fontFamily: Fonts.black, color: Theme.textPrimary },
   headerTime: { fontSize: 13, fontFamily: Fonts.bold, color: Theme.primary },
   
   content: { padding: 16 },
   
   userCard: {
-    backgroundColor: "#fff",
+    backgroundColor: Theme.bgCard,
     borderRadius: 16,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Theme.border,
+    ...Theme.shadowSm,
   },
-  userName: { fontSize: 18, fontFamily: Fonts.black, color: "#111827" },
+  userName: { fontSize: 18, fontFamily: Fonts.black, color: Theme.textPrimary },
   statusRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   statusText: { fontSize: 13, fontFamily: Fonts.bold },
-  hoursText: { fontSize: 13, fontFamily: Fonts.medium, color: "#6b7280" },
+  hoursText: { fontSize: 13, fontFamily: Fonts.medium, color: Theme.textSecondary },
   avatar: { 
     width: 44, 
     height: 44, 
     borderRadius: 12, 
-    backgroundColor: "#ffedd5", 
+    backgroundColor: Theme.primaryLight, 
     alignItems: "center", 
     justifyContent: "center" 
   },
-  avatarText: { fontSize: 20, fontFamily: Fonts.black, color: "#9a3412" },
+  avatarText: { fontSize: 20, fontFamily: Fonts.black, color: Theme.primary },
 
   inputRow: { flexDirection: "row", gap: 12, marginBottom: 20 },
   inputField: { 
     flex: 1, 
     flexDirection: "row", 
     alignItems: "center", 
-    backgroundColor: "#fff", 
+    backgroundColor: Theme.bgInput, 
     height: 56, 
     borderRadius: 14, 
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: "#e5e7eb"
+    borderColor: Theme.border
   },
-  textInput: { flex: 1, fontSize: 16, fontFamily: Fonts.bold, color: "#111827" },
+  textInput: { 
+    flex: 1, 
+    fontSize: 16, 
+    fontFamily: Fonts.bold, 
+    color: Theme.textPrimary,
+    ...Platform.select({ web: { outlineStyle: "none" } as any })
+  },
 
   grid: { flexDirection: "row", gap: 12, marginBottom: 24 },
   actionBtn: { 
@@ -729,35 +742,31 @@ const styles = StyleSheet.create({
     alignItems: "center", 
     justifyContent: "center",
     paddingVertical: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    ...Theme.shadowMd,
     overflow: 'hidden'
   },
   btnText: { fontSize: 13, fontFamily: Fonts.black, textAlign: "center", includeFontPadding: false },
 
   historySection: { 
-    backgroundColor: "#fff", 
+    backgroundColor: Theme.bgCard, 
     borderRadius: 16, 
     padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Theme.border,
+    ...Theme.shadowSm,
     marginBottom: 40,
   },
   historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sectionTitle: { fontSize: 12, fontFamily: Fonts.black, color: "#9ca3af", textTransform: "uppercase" },
+  sectionTitle: { fontSize: 12, fontFamily: Fonts.black, color: Theme.textSecondary, textTransform: "uppercase" },
   viewLogsHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: Theme.primary + '15',
+    backgroundColor: Theme.primaryLight,
+    borderWidth: 1,
+    borderColor: Theme.primaryBorder,
   },
   viewLogsHeaderText: {
     fontSize: 12,
@@ -772,87 +781,86 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
     paddingVertical: 15,
     marginBottom: 10,
-    backgroundColor: '#f9fafb',
+    backgroundColor: Theme.bgMain,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Theme.border,
   },
   historyDetailLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   historyIconBox: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  historyAction: { fontSize: 15, fontFamily: Fonts.bold, color: "#111827", includeFontPadding: false },
-  historyStatusText: { fontSize: 11, fontFamily: Fonts.medium, color: "#9ca3af", marginTop: 2 },
+  historyAction: { fontSize: 15, fontFamily: Fonts.bold, color: Theme.textPrimary, includeFontPadding: false },
+  historyStatusText: { fontSize: 11, fontFamily: Fonts.medium, color: Theme.textSecondary, marginTop: 2 },
   historyDetailRight: { alignItems: 'flex-end' },
-  historyTime: { fontSize: 14, fontFamily: Fonts.black, color: "#111827", includeFontPadding: false },
-  historyDate: { fontSize: 11, fontFamily: Fonts.medium, color: "#9ca3af", marginTop: 2 },
-  emptyText: { textAlign: "center", color: "#9ca3af", fontSize: 13, fontFamily: Fonts.medium, paddingVertical: 20 },
+  historyTime: { fontSize: 14, fontFamily: Fonts.black, color: Theme.textPrimary, includeFontPadding: false },
+  historyDate: { fontSize: 11, fontFamily: Fonts.medium, color: Theme.textSecondary, marginTop: 2 },
+  emptyText: { textAlign: "center", color: Theme.textSecondary, fontSize: 13, fontFamily: Fonts.medium, paddingVertical: 20 },
 
-  loader: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.7)", alignItems: "center", justifyContent: "center" },
+  loader: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(250,247,242,0.7)", alignItems: "center", justifyContent: "center" },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.4)', // Slate overlay
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   loginModalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: Theme.bgCard,
     borderRadius: 16,
     width: '100%',
     maxWidth: 400,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: Theme.border,
+    ...Theme.shadowLg,
   },
   logsModalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: Theme.bgCard,
     borderRadius: 16,
     width: '100%',
     maxWidth: 800,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: Theme.border,
+    ...Theme.shadowLg,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: Theme.border,
     paddingBottom: 12,
     marginBottom: 12,
   },
   modalTitle: {
     fontSize: 18,
     fontFamily: Fonts.black,
-    color: '#111827',
+    color: Theme.textPrimary,
   },
   modalSubtitle: {
     fontSize: 14,
     fontFamily: Fonts.medium,
-    color: '#6b7280',
+    color: Theme.textSecondary,
     marginBottom: 16,
   },
   modalInputBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f9fafb',
+    backgroundColor: Theme.bgInput,
     borderRadius: 10,
     paddingHorizontal: 12,
     height: 48,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: Theme.border,
     marginBottom: 12,
   },
   modalInput: {
     flex: 1,
     fontSize: 15,
     fontFamily: Fonts.medium,
-    color: '#111827',
+    color: Theme.textPrimary,
+    ...Platform.select({ web: { outlineStyle: "none" } as any })
   },
   modalSubmitBtn: {
     backgroundColor: Theme.primary,
@@ -869,7 +877,7 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: Theme.bgMuted,
     paddingVertical: 10,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -878,26 +886,26 @@ const styles = StyleSheet.create({
   tableHeaderCell: {
     fontSize: 13,
     fontFamily: Fonts.black,
-    color: '#374151',
+    color: Theme.textSecondary,
   },
   tableRow: {
     flexDirection: 'row',
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: Theme.border,
     alignItems: 'center',
   },
   rowEven: {
-    backgroundColor: '#fff',
+    backgroundColor: Theme.bgCard,
   },
   rowOdd: {
-    backgroundColor: '#f9fafb',
+    backgroundColor: Theme.bgMain,
   },
   tableCell: {
     fontSize: 13,
     fontFamily: Fonts.medium,
-    color: '#374151',
+    color: Theme.textPrimary,
   },
   staffListItem: {
     flexDirection: 'row',
@@ -905,17 +913,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: '#f9fafb',
+    backgroundColor: Theme.bgMain,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: Theme.border,
     marginBottom: 10,
   },
   staffAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Theme.primary + '15',
+    backgroundColor: Theme.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
@@ -928,17 +936,17 @@ const styles = StyleSheet.create({
   staffNameText: {
     fontSize: 15,
     fontFamily: Fonts.bold,
-    color: '#111827',
+    color: Theme.textPrimary,
   },
   staffLogCount: {
     fontSize: 12,
     fontFamily: Fonts.medium,
-    color: '#6b7280',
+    color: Theme.textSecondary,
     marginTop: 2,
   },
   filterBar: {
     flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: Theme.bgMuted,
     padding: 4,
     borderRadius: 10,
     marginBottom: 16,
@@ -952,17 +960,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   filterTabActive: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: Theme.bgCard,
+    ...Theme.shadowSm,
   },
   filterTabText: {
     fontSize: 12,
     fontFamily: Fonts.bold,
-    color: '#4b5563',
+    color: Theme.textSecondary,
   },
   filterTabTextActive: {
     color: Theme.primary,
@@ -978,19 +982,20 @@ const styles = StyleSheet.create({
   dateLabel: {
     fontSize: 11,
     fontFamily: Fonts.bold,
-    color: '#6b7280',
+    color: Theme.textSecondary,
     marginBottom: 4,
   },
   dateTextInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: Theme.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     fontSize: 13,
     fontFamily: Fonts.medium,
-    color: '#111827',
-    backgroundColor: '#f9fafb',
+    color: Theme.textPrimary,
+    backgroundColor: Theme.bgInput,
+    ...Platform.select({ web: { outlineStyle: "none" } as any })
   },
   statusBadge: {
     paddingVertical: 2,

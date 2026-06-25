@@ -2673,7 +2673,7 @@ export default function SummaryScreen() {
                           <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: Theme.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: Theme.bgCard, gap: 8, marginBottom: 14 }}>
                             <Ionicons name="search-outline" size={18} color={Theme.textSecondary} />
                             <TextInput
-                              style={{ flex: 1, fontSize: 14, fontFamily: Fonts.regular, color: Theme.textPrimary, paddingVertical: 2 }}
+                              style={{ flex: 1, fontSize: 14, fontFamily: Fonts.regular, color: Theme.textPrimary, paddingVertical: 2, ...Platform.select({ web: { outlineStyle: "none" } as any }) }}
                               placeholder="Search by Name or Mobile..."
                               placeholderTextColor={Theme.textMuted}
                               value={loyaltySearchText}

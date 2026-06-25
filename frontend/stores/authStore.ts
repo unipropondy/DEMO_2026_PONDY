@@ -48,7 +48,7 @@ export const FORM_CODES = {
   ORDERING:     "OPRORD",  // Tables and ordering
   SALES_REPORT: "RPTSAL",  // Sales Report
   MEMBERS:      "OPRMBR",  // Members
-  TIME_ENTRY:   "OPRTEN",  // Time Entry
+  STAFF_ATTENDANCE: "OPRTEN",  // Staff Attendance
   TABLES:       "MSTTBL",  // Lock Tables
   KDS:          "OPRSTK",  // Kitchen Display / Stock
   HELD_ORDERS:  "OPROLS",  // Held Orders
@@ -76,7 +76,7 @@ export type AuthState = {
   canAccessOrdering: () => boolean;
   canAccessSalesReport: () => boolean;
   canAccessMembers: () => boolean;
-  canAccessTimeEntry: () => boolean;
+  canAccessStaffAttendance: () => boolean;
   canAccessLockTables: () => boolean;
   canAccessKDS: () => boolean;
   canAccessHeldOrders: () => boolean;
@@ -146,7 +146,7 @@ export const useAuthStore = create<AuthState>()(
       canAccessOrdering:    () => get().can(FORM_CODES.ORDERING),
       canAccessSalesReport: () => get().can(FORM_CODES.SALES_REPORT),
       canAccessMembers:     () => get().can(FORM_CODES.MEMBERS),
-      canAccessTimeEntry:   () => get().can(FORM_CODES.TIME_ENTRY),
+      canAccessStaffAttendance:   () => get().can(FORM_CODES.STAFF_ATTENDANCE),
       canAccessLockTables:  () => get().can(FORM_CODES.TABLES),
       canAccessKDS:         () => get().can(FORM_CODES.KDS),
       canAccessHeldOrders:  () => get().can(FORM_CODES.HELD_ORDERS),

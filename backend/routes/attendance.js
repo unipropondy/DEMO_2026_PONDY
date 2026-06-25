@@ -45,7 +45,7 @@ router.post("/getUser", async (req, res) => {
 
 // Unused validatePassword endpoint removed
 
-// ================= GET TODAY'S SUMMARY =================
+// ================= GET SUMMARY =================
 router.get("/summary/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -56,19 +56,86 @@ router.get("/summary/:userId", async (req, res) => {
 
     const pool = await poolPromise;
 
-    const entries = await pool
+    // 1. Get the last entry to determine current status
+    const lastEntryRes = await pool
       .request()
       .input("UserId", sql.UniqueIdentifier, userId)
       .query(`
-        SELECT 
-          status,
-          ClockinTime,
-          CreatedOn
+        SELECT TOP 1 status, ClockinTime
         FROM TimeEntry
-        WHERE Userid = @UserId 
-        AND CreatedOn >= CAST(GETDATE() AS DATE)
-        AND CreatedOn < DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
-        ORDER BY CreatedOn ASC
+        WHERE Userid = @UserId
+        ORDER BY ClockinTime DESC, CreatedOn DESC
+      `);
+
+    const lastEntry = lastEntryRes.recordset[0];
+    const lastStatusValue = lastEntry ? parseInt(lastEntry.status) : null;
+
+    if (lastStatusValue === null || lastStatusValue === 0) {
+      // User is completely offline (either never clocked in, or clocked out)
+      return res.json({
+        summary: {
+          clockedIn: false,
+          shiftCompleted: lastStatusValue === 0,
+          lastStatus: lastStatusValue,
+          clockInTime: null,
+          clockOutTime: lastEntry ? new Date(lastEntry.ClockinTime).toISOString() : null,
+          totalHours: 0,
+          totalBreakMinutes: 0,
+          netHours: 0,
+          isOnBreak: false,
+          canClockIn: true,
+          canClockOut: false,
+          canStartBreak: false,
+          canEndBreak: false
+        }
+      });
+    }
+
+    // User is clocked in (either active, break in, or break out)
+    // 2. Find when the active session started (most recent IN)
+    const activeStartRes = await pool
+      .request()
+      .input("UserId", sql.UniqueIdentifier, userId)
+      .query(`
+        SELECT TOP 1 ClockinTime
+        FROM TimeEntry
+        WHERE Userid = @UserId AND status = 1
+        ORDER BY ClockinTime DESC, CreatedOn DESC
+      `);
+
+    const activeStart = activeStartRes.recordset[0];
+    if (!activeStart) {
+      return res.json({
+        summary: {
+          clockedIn: false,
+          shiftCompleted: false,
+          lastStatus: null,
+          clockInTime: null,
+          clockOutTime: null,
+          totalHours: 0,
+          totalBreakMinutes: 0,
+          netHours: 0,
+          isOnBreak: false,
+          canClockIn: true,
+          canClockOut: false,
+          canStartBreak: false,
+          canEndBreak: false
+        }
+      });
+    }
+
+    const firstClockInTime = activeStart.ClockinTime;
+
+    // 3. Fetch all entries since the session started
+    const entries = await pool
+      .request()
+      .input("UserId", sql.UniqueIdentifier, userId)
+      .input("StartTime", sql.DateTime, firstClockInTime)
+      .query(`
+        SELECT status, ClockinTime, CreatedOn
+        FROM TimeEntry
+        WHERE Userid = @UserId AND ClockinTime >= @StartTime
+        ORDER BY ClockinTime ASC, CreatedOn ASC
       `);
 
     let totalWorkMs = 0;
@@ -78,40 +145,32 @@ router.get("/summary/:userId", async (req, res) => {
     let isOnBreak = false;
     let hasClockIn = false;
     let lastClockOutTime = null;
-    let firstClockInTime = null;
 
     for (const entry of entries.recordset) {
       const entryTime = new Date(entry.ClockinTime).getTime();
-      
-      if (entry.status === 1) {
-        // IN
+      const status = parseInt(entry.status);
+
+      if (status === 1) {
         lastClockIn = entryTime;
-        if (!firstClockInTime) firstClockInTime = entry.ClockinTime;
         hasClockIn = true;
         isOnBreak = false;
         lastClockOutTime = null;
-      } else if (entry.status === 0 && lastClockIn) {
-        // OUT
+      } else if (status === 0 && lastClockIn) {
         totalWorkMs += (entryTime - lastClockIn);
         lastClockIn = null;
         lastClockOutTime = entry.ClockinTime;
-      } else if (entry.status === 3) {
-        // BREAK IN
+      } else if (status === 3) {
         lastBreakIn = entryTime;
         isOnBreak = true;
-      } else if (entry.status === 4 && lastBreakIn) {
-        // BREAK OUT
+      } else if (status === 4 && lastBreakIn) {
         totalBreakMs += (entryTime - lastBreakIn);
         lastBreakIn = null;
         isOnBreak = false;
       }
     }
 
-    // If currently clocked in (no closing OUT entry for the last IN), 
-    // add elapsed time to totalWorkMs for real-time netHours calc
     let activeWorkMs = totalWorkMs;
     if (lastClockIn && !lastClockOutTime) {
-      // Use DB time if possible, or current time
       const now = new Date().getTime();
       if (now > lastClockIn) {
         activeWorkMs += (now - lastClockIn);
@@ -120,7 +179,6 @@ router.get("/summary/:userId", async (req, res) => {
 
     const totalHoursResult = activeWorkMs / (1000 * 60 * 60);
     const netHoursResult = (activeWorkMs - totalBreakMs) / (1000 * 60 * 60);
-    const lastStatusValue = entries.recordset.length > 0 ? entries.recordset[entries.recordset.length - 1].status : null;
 
     res.json({
       summary: {
@@ -132,11 +190,11 @@ router.get("/summary/:userId", async (req, res) => {
         totalHours: parseFloat(totalHoursResult.toFixed(2)),
         totalBreakMinutes: Math.round(totalBreakMs / (1000 * 60)),
         netHours: parseFloat(netHoursResult.toFixed(2)),
-        isOnBreak: isOnBreak,
-        canClockIn: !hasClockIn || (lastStatusValue === 0), 
-        canClockOut: hasClockIn && !lastClockOutTime && !isOnBreak,
-        canStartBreak: hasClockIn && !lastClockOutTime && !isOnBreak,
-        canEndBreak: isOnBreak
+        isOnBreak: lastStatusValue === 3,
+        canClockIn: false, 
+        canClockOut: lastStatusValue !== 3,
+        canStartBreak: lastStatusValue !== 3,
+        canEndBreak: lastStatusValue === 3
       },
     });
   } catch (err) {
@@ -186,88 +244,47 @@ router.post("/save", async (req, res) => {
       return res.status(401).json({ message: "Invalid password" });
     }
 
-    // Get today's entries using server-side date (avoids timezone drift)
-    const existingEntries = await pool
+    // Get last entry to check current status
+    const lastEntryRes = await pool
       .request()
       .input("UserId", sql.UniqueIdentifier, userId)
       .query(`
-        SELECT status, ClockinTime
-        FROM TimeEntry
-        WHERE Userid = @UserId 
-        AND CreatedOn >= CAST(GETDATE() AS DATE)
-        AND CreatedOn < DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
-        ORDER BY CreatedOn ASC
+        SELECT TOP 1 status FROM TimeEntry WHERE Userid = @UserId ORDER BY ClockinTime DESC, CreatedOn DESC
       `);
 
-    const entries = existingEntries.recordset;
-    let hasClockIn = false;
-    let hasClockOut = false;
-    let isOnBreak = false;
-    let lastBreakIn = null;
+    const lastEntry = lastEntryRes.recordset[0];
+    const lastStatus = lastEntry ? parseInt(lastEntry.status) : null;
 
-    for (const entry of entries) {
-      const s = parseInt(entry.status);
-      if (s == 1) {
-        hasClockIn = true;
-        isOnBreak = false;
-      } else if (s == 0) {
-        hasClockOut = true;
-        isOnBreak = false;
-      } else if (s == 3) {
-        isOnBreak = true;
-        lastBreakIn = entry.ClockinTime;
-      } else if (s == 4) {
-        isOnBreak = false;
-        lastBreakIn = null;
-      }
-    }
-
-    // Validation based on action
+    // Validation based on status transition
     if (status == 1) {
       // IN
-      if (hasClockIn && !hasClockOut) {
+      if (lastStatus !== null && lastStatus !== 0) {
         return res.status(400).json({
-          message: "Already clocked in today. Please clock out first.",
+          message: "Already clocked in. Please clock out first.",
         });
-      }
-      if (hasClockOut) {
-        return res
-          .status(400)
-          .json({ message: "Already completed your shift today." });
       }
     } else if (status == 0) {
       // OUT
-      if (!hasClockIn) {
-        return res
-          .status(400)
-          .json({ message: "No clock in found. Please clock in first." });
+      if (lastStatus === null || lastStatus === 0) {
+        return res.status(400).json({ message: "No clock in found. Please clock in first." });
       }
-      if (hasClockOut) {
-        return res.status(400).json({ message: "Already clocked out today." });
-      }
-      if (isOnBreak) {
+      if (lastStatus === 3) {
         return res.status(400).json({
           message: "Cannot clock out while on break. Please end break first.",
         });
       }
     } else if (status == 3) {
       // BREAK IN
-      if (!hasClockIn || hasClockOut) {
-        return res
-          .status(400)
-          .json({ message: "Must be clocked in to take a break." });
+      if (lastStatus === null || lastStatus === 0) {
+        return res.status(400).json({ message: "Must be clocked in to take a break." });
       }
-      if (isOnBreak) {
-        return res
-          .status(400)
-          .json({ message: "Already on break. Please end break first." });
+      if (lastStatus === 3) {
+        return res.status(400).json({ message: "Already on break. Please end break first." });
       }
     } else if (status == 4) {
       // BREAK OUT
-      if (!isOnBreak) {
-        return res
-          .status(400)
-          .json({ message: "Not on break. Please start break first." });
+      if (lastStatus !== 3) {
+        return res.status(400).json({ message: "Not on break. Please start break first." });
       }
     }
 
@@ -294,14 +311,14 @@ router.post("/save", async (req, res) => {
           .input("Now", sql.DateTime, currentTime)
           .input("BusinessUnitId", sql.UniqueIdentifier, businessUnitId)
           .query(`
-            IF NOT EXISTS (SELECT 1 FROM DailyAttendance WHERE DeliveryPersonId = @UserId AND CAST(CreatedOn AS DATE) = CAST(GETDATE() AS DATE))
+            IF NOT EXISTS (SELECT 1 FROM DailyAttendance WHERE DeliveryPersonId = @UserId AND EndDateTime IS NULL)
             BEGIN
               INSERT INTO DailyAttendance (DeliveryPersonId, StartDateTime, BusinessUnitId, CreatedBy, CreatedOn)
               VALUES (@UserId, @Now, @BusinessUnitId, @UserId, GETDATE())
             END
             ELSE
             BEGIN
-              UPDATE DailyAttendance SET StartDateTime = @Now, EndDateTime = NULL WHERE DeliveryPersonId = @UserId AND CAST(CreatedOn AS DATE) = CAST(GETDATE() AS DATE)
+              UPDATE DailyAttendance SET StartDateTime = @Now WHERE DeliveryPersonId = @UserId AND EndDateTime IS NULL
             END
           `);
       } else if (status == 3) {
@@ -309,13 +326,13 @@ router.post("/save", async (req, res) => {
         await pool.request()
           .input("UserId", sql.UniqueIdentifier, userId)
           .input("Now", sql.DateTime, currentTime)
-          .query(`UPDATE DailyAttendance SET BreakInTime = @Now WHERE DeliveryPersonId = @UserId AND CAST(CreatedOn AS DATE) = CAST(GETDATE() AS DATE)`);
+          .query(`UPDATE DailyAttendance SET BreakInTime = @Now WHERE DeliveryPersonId = @UserId AND EndDateTime IS NULL`);
       } else if (status == 4) {
         // BREAK OUT
         await pool.request()
           .input("UserId", sql.UniqueIdentifier, userId)
           .input("Now", sql.DateTime, currentTime)
-          .query(`UPDATE DailyAttendance SET BreakOutTime = @Now WHERE DeliveryPersonId = @UserId AND CAST(CreatedOn AS DATE) = CAST(GETDATE() AS DATE)`);
+          .query(`UPDATE DailyAttendance SET BreakOutTime = @Now WHERE DeliveryPersonId = @UserId AND EndDateTime IS NULL`);
       } else if (status == 0) {
         // OUT
         await pool.request()
@@ -325,7 +342,7 @@ router.post("/save", async (req, res) => {
             UPDATE DailyAttendance 
             SET EndDateTime = @Now,
                 NoofHours = DATEDIFF(SECOND, StartDateTime, @Now) / 3600.0
-            WHERE DeliveryPersonId = @UserId AND CAST(CreatedOn AS DATE) = CAST(GETDATE() AS DATE)
+            WHERE DeliveryPersonId = @UserId AND EndDateTime IS NULL
           `);
       }
     } catch (syncErr) {

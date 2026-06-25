@@ -457,7 +457,7 @@ export default function Category() {
   const logout = useAuthStore((s: any) => s.logout);
   const canAccessSalesReport = useAuthStore((s: any) => s.canAccessSalesReport);
   const canAccessMembers = useAuthStore((s: any) => s.canAccessMembers);
-  const canAccessTimeEntry = useAuthStore((s: any) => s.canAccessTimeEntry);
+  const canAccessStaffAttendance = useAuthStore((s: any) => s.canAccessStaffAttendance);
   const canAccessLockTables = useAuthStore((s: any) => s.canAccessLockTables);
   const canAccessKDS = useAuthStore((s: any) => s.canAccessKDS);
   const canAccessDayEnd = useAuthStore((s: any) => s.canAccessDayEnd);
@@ -1627,12 +1627,12 @@ export default function Category() {
                 <Text style={styles.menuItemText}>Waiters</Text>
               </TouchableOpacity>
 
-              {canAccessTimeEntry() && (
+              {canAccessStaffAttendance() && (
                 <TouchableOpacity
                   style={styles.menuItem}
                   onPress={() => {
                     setIsMenuVisible(false);
-                    router.push("/TimeEntry");
+                    router.push("/StaffAttendance");
                   }}
                 >
                   <View
@@ -1641,13 +1641,13 @@ export default function Category() {
                       { backgroundColor: Theme.primary + "10" },
                     ]}
                   >
-                    <Ionicons
-                      name="time-outline"
+                    <MaterialCommunityIcons
+                      name="calendar-clock"
                       size={18}
                       color={Theme.primary}
                     />
                   </View>
-                  <Text style={styles.menuItemText}>Time Entry</Text>
+                  <Text style={styles.menuItemText}>Staff Attendance</Text>
                 </TouchableOpacity>
               )}
 
