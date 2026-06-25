@@ -17,6 +17,7 @@ import {
   View,
   StatusBar,
   Animated,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Theme } from "../constants/theme";
@@ -34,6 +35,72 @@ export default function TimeEntryScreen() {
   const [todaySummary, setTodaySummary] = useState<any>(null);
   const [todayLogs, setTodayLogs] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Admin Logs feature states
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminUser, setAdminUser] = useState("");
+  const [adminPin, setAdminPin] = useState("");
+  const [showLogsModal, setShowLogsModal] = useState(false);
+  const [logsList, setLogsList] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [adminToken, setAdminToken] = useState<string | null>(null);
+
+  const handleAdminAuth = async () => {
+    if (!adminUser.trim() || !adminPin.trim()) {
+      Alert.alert("Error", "Please enter Admin ID and PIN");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userName: adminUser.trim(), password: adminPin.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Authentication failed");
+      }
+      
+      if (data.user.role !== "ADMIN") {
+        throw new Error("Access denied. Only Admin users can view logs.");
+      }
+
+      setAdminToken(data.token);
+      setShowAdminLogin(false);
+      setAdminUser("");
+      setAdminPin("");
+      
+      fetchLogs(data.token);
+    } catch (err: any) {
+      Alert.alert("Authentication Failed", err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchLogs = async (token: string) => {
+    setLogsLoading(true);
+    setShowLogsModal(true);
+    try {
+      const res = await fetch(`${API_URL}/api/attendance/logs`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to fetch time logs");
+      }
+      setLogsList(data);
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+      setShowLogsModal(false);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
 
   // Animation values for hover/press effect
   const btnScales: { [key: number]: Animated.Value } = {
@@ -257,7 +324,13 @@ export default function TimeEntryScreen() {
           <View style={styles.historySection}>
             <View style={styles.historyHeader}>
               <Text style={styles.sectionTitle}>RECENT RECORDS</Text>
-              <Ionicons name="list" size={16} color="#9ca3af" />
+              <TouchableOpacity 
+                style={styles.viewLogsHeaderBtn} 
+                onPress={() => setShowAdminLogin(true)}
+              >
+                <Ionicons name="eye-outline" size={16} color={Theme.primary} style={{ marginRight: 4 }} />
+                <Text style={styles.viewLogsHeaderText}>View Time Logs</Text>
+              </TouchableOpacity>
             </View>
             
             {todayLogs.length > 0 ? (
@@ -296,6 +369,109 @@ export default function TimeEntryScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Admin Login Modal */}
+      <Modal
+        visible={showAdminLogin}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowAdminLogin(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.loginModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🔑 Admin Authentication</Text>
+              <TouchableOpacity onPress={() => setShowAdminLogin(false)}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.modalSubtitle}>Enter admin credentials to view history</Text>
+
+            <View style={styles.modalInputBox}>
+              <Ionicons name="person-outline" size={18} color="#9ca3af" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Admin User ID"
+                value={adminUser}
+                onChangeText={setAdminUser}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.modalInputBox}>
+              <Ionicons name="lock-closed-outline" size={18} color="#9ca3af" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Admin PIN"
+                value={adminPin}
+                onChangeText={setAdminPin}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </View>
+
+            <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleAdminAuth}>
+              <Text style={styles.modalSubmitText}>Authenticate</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Logs View Modal */}
+      <Modal
+        visible={showLogsModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLogsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.logsModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📋 Time Log History</Text>
+              <TouchableOpacity onPress={() => setShowLogsModal(false)}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            {logsLoading ? (
+              <ActivityIndicator size="large" color={Theme.primary} style={{ marginVertical: 40 }} />
+            ) : (
+              <ScrollView style={{ maxHeight: 500, marginVertical: 12 }}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Staff Name</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Login Time</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Logout Time</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 1.5, textAlign: 'right' }]}>Duration</Text>
+                </View>
+
+                {logsList.length > 0 ? (
+                  logsList.map((log, index) => {
+                    const formattedLogin = log.LoginTime ? formatToSingaporeTime(log.LoginTime) + " " + formatToSingaporeDate(log.LoginTime, { month: 'short', day: 'numeric' }) : "-";
+                    const formattedLogout = log.LogoutTime ? formatToSingaporeTime(log.LogoutTime) + " " + formatToSingaporeDate(log.LogoutTime, { month: 'short', day: 'numeric' }) : "Active";
+                    const durationStr = log.TotalDuration !== null && log.TotalDuration !== undefined ? `${parseFloat(log.TotalDuration).toFixed(2)}h` : "-";
+                    
+                    return (
+                      <View key={index} style={[styles.tableRow, index % 2 === 0 ? styles.rowEven : styles.rowOdd]}>
+                        <Text style={[styles.tableCell, { flex: 2, fontFamily: Fonts.bold }]}>{log.StaffName}</Text>
+                        <Text style={[styles.tableCell, { flex: 2 }]}>{formattedLogin}</Text>
+                        <Text style={[styles.tableCell, { flex: 2 }]}>{formattedLogout}</Text>
+                        <Text style={[styles.tableCell, { flex: 1.5, textAlign: 'right', fontFamily: Fonts.bold, color: Theme.primary }]}>{durationStr}</Text>
+                      </View>
+                    );
+                  })
+                ) : (
+                  <Text style={styles.emptyText}>No logs recorded in history</Text>
+                )}
+              </ScrollView>
+            )}
+
+            <TouchableOpacity style={[styles.modalSubmitBtn, { backgroundColor: "#6b7280" }]} onPress={() => setShowLogsModal(false)}>
+              <Text style={styles.modalSubmitText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {isLoading && <View style={styles.loader}><ActivityIndicator color={Theme.primary} /></View>}
     </SafeAreaView>
@@ -392,6 +568,19 @@ const styles = StyleSheet.create({
   },
   historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   sectionTitle: { fontSize: 12, fontFamily: Fonts.black, color: "#9ca3af", textTransform: "uppercase" },
+  viewLogsHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: Theme.primary + '15',
+  },
+  viewLogsHeaderText: {
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+    color: Theme.primary,
+  },
   historyRow: { 
     flexDirection: "row", 
     justifyContent: "space-between", 
@@ -412,5 +601,119 @@ const styles = StyleSheet.create({
   historyDate: { fontSize: 11, fontFamily: Fonts.medium, color: "#9ca3af", marginTop: 2 },
   emptyText: { textAlign: "center", color: "#9ca3af", fontSize: 13, fontFamily: Fonts.medium, paddingVertical: 20 },
 
-  loader: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.7)", alignItems: "center", justifyContent: "center" }
+  loader: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.7)", alignItems: "center", justifyContent: "center" },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loginModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 400,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  logsModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 800,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    paddingBottom: 12,
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.black,
+    color: '#111827',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+    color: '#6b7280',
+    marginBottom: 16,
+  },
+  modalInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginBottom: 12,
+  },
+  modalInput: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: Fonts.medium,
+    color: '#111827',
+  },
+  modalSubmitBtn: {
+    backgroundColor: Theme.primary,
+    borderRadius: 10,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  modalSubmitText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#f3f4f6',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  tableHeaderCell: {
+    fontSize: 13,
+    fontFamily: Fonts.black,
+    color: '#374151',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    alignItems: 'center',
+  },
+  rowEven: {
+    backgroundColor: '#fff',
+  },
+  rowOdd: {
+    backgroundColor: '#f9fafb',
+  },
+  tableCell: {
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+    color: '#374151',
+  },
 });

@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const { sql, poolPromise } = require("../config/db");
 const { getActiveOrganization } = require("../utils/organizationHelper");
+const { authenticateToken } = require("../middleware/auth");
+
 
 // ================= GET USER =================
 router.post("/getUser", async (req, res) => {
@@ -387,6 +389,32 @@ router.get("/today/:userId", async (req, res) => {
     res.json(result.recordset);
   } catch (err) {
     console.error("GET TODAY ENTRIES ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= GET ALL TIME LOGS (ADMIN ONLY) =================
+router.get("/logs", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Access denied. Admin role required." });
+    }
+
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT 
+        u.FullName AS StaffName,
+        a.StartDateTime AS LoginTime,
+        a.EndDateTime AS LogoutTime,
+        a.NoofHours AS TotalDuration
+      FROM DailyAttendance a
+      INNER JOIN Vw_UserMaster u ON a.DeliveryPersonId = u.UserId
+      ORDER BY a.StartDateTime DESC
+    `);
+
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("GET ALL TIME LOGS ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
