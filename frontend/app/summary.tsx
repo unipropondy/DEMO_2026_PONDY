@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -807,18 +807,79 @@ export default function SummaryScreen() {
     }
   };
 
+  const [loyaltyDiscountItems, setLoyaltyDiscountItems] = useState<any[]>([]);
+  const [loyaltyDiscountAmount, setLoyaltyDiscountAmount] = useState(0);
+  const [appliedDishRewards, setAppliedDishRewards] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchDishLoyaltyRewards = async () => {
+      const phone = loyaltyPhone ? `${selectedCountry.code} ${loyaltyPhone.trim()}` : "";
+      if (!phone || cart.length === 0) {
+        setLoyaltyDiscountItems([]);
+        setLoyaltyDiscountAmount(0);
+        setAppliedDishRewards([]);
+        return;
+      }
+      try {
+        const token = useAuthStore.getState().token;
+        const mappedItems = cart.map((i: any) => ({
+          DishId: i.DishId || i.dishId || i.id,
+          Qty: i.qty,
+          Price: i.price,
+          isDishReward: false
+        }));
+
+        const res = await fetch(`${API_URL}/api/loyalty/calculate-bill-rewards`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ phone, items: mappedItems })
+        });
+        const data = await res.json();
+        if (data.success) {
+          const processed = (data.items || []).map((i: any) => ({
+            ...i,
+            qty: i.Qty !== undefined ? i.Qty : i.qty,
+            price: i.Price !== undefined ? i.Price : i.price,
+            name: i.name || cart.find((raw: any) => String(raw.id || raw.DishId || raw.dishId).toLowerCase() === String(i.DishId || i.id).toLowerCase())?.name || "Dish"
+          }));
+          setLoyaltyDiscountItems(processed);
+          setLoyaltyDiscountAmount(data.totalDiscount || 0);
+          setAppliedDishRewards(data.appliedRewards || []);
+        } else {
+          setLoyaltyDiscountItems([]);
+          setLoyaltyDiscountAmount(0);
+          setAppliedDishRewards([]);
+        }
+      } catch (err) {
+        console.error("Calculate dish loyalty rewards error in summary:", err);
+        setLoyaltyDiscountItems([]);
+        setLoyaltyDiscountAmount(0);
+        setAppliedDishRewards([]);
+      }
+    };
+
+    fetchDishLoyaltyRewards();
+  }, [loyaltyPhone, selectedCountry, cart]);
+
+  const finalItems = useMemo(() => {
+    return loyaltyDiscountItems.length > 0 ? loyaltyDiscountItems : cart;
+  }, [loyaltyDiscountItems, cart]);
+
   const totalItems = useMemo(
     () =>
-      cart.reduce((sum: number, item: any) => {
+      finalItems.reduce((sum: number, item: any) => {
         const isVoided = "status" in item && (item as any).status === "VOIDED";
         if (isVoided) return sum;
         return sum + item.qty;
       }, 0),
-    [cart],
+    [finalItems],
   );
 
   const { grossTotal, totalItemDiscount, scEligibleSubtotal } = useMemo(() => {
-    return cart.reduce((acc: any, item: any) => {
+    return finalItems.reduce((acc: any, item: any) => {
       const isVoided = (item as any).status === "VOIDED";
       if (isVoided) return acc;
       
@@ -844,13 +905,13 @@ export default function SummaryScreen() {
         scEligibleSubtotal: acc.scEligibleSubtotal + (isSC ? itemSubtotal : 0),
       };
     }, { grossTotal: 0, totalItemDiscount: 0, scEligibleSubtotal: 0 });
-  }, [cart]);
+  }, [finalItems]);
 
   const subtotal = useMemo(() => grossTotal - totalItemDiscount, [grossTotal, totalItemDiscount]);
   const allItemsHaveSC = useMemo(() => {
-    const activeItems = cart.filter((i: any) => i.status !== "VOIDED" && i.statusCode !== 0);
+    const activeItems = finalItems.filter((i: any) => i.status !== "VOIDED" && i.statusCode !== 0);
     return activeItems.length > 0 && activeItems.every((item: any) => Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
-  }, [cart]);
+  }, [finalItems]);
 
   const discountAmount = useMemo(() => {
     if (!discountInfo?.applied) return 0;
@@ -1117,7 +1178,7 @@ export default function SummaryScreen() {
             ]}
           >
             <FlatList
-              data={cart}
+              data={finalItems}
               showsVerticalScrollIndicator={false}
               keyExtractor={(item, index) => `item-${index}-${item.lineItemId || item.id}`}
               contentContainerStyle={{ paddingBottom: 20 }}
@@ -1150,6 +1211,7 @@ export default function SummaryScreen() {
                       numberOfLines={2}
                     >
                       {item.name}
+                      {item.isDishReward && " (Loyalty Reward 🎁)"}
                       {(item as any).status === "VOIDED" && " (VOIDED)"}
                     </Text>
                     {(item.spicy && item.spicy !== "Medium") ||
@@ -1331,6 +1393,14 @@ export default function SummaryScreen() {
                           ? "Reward Available! 🎉"
                           : `Next Reward in ${9 - loyaltyCustomer.VisitCount} Visits`}
                     </Text>
+                    {loyaltyDiscountAmount > 0 && (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, padding: 8, backgroundColor: Theme.successBg || '#dcfce7', borderRadius: 8, marginLeft: 22 }}>
+                        <MaterialCommunityIcons name="gift" size={14} color={Theme.success || "#16a34a"} />
+                        <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.success || "#16a34a", flex: 1 }}>
+                          Dish Loyalty Applied: Saved {currencySymbol}{loyaltyDiscountAmount.toFixed(2)} 🎉
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 )}
 

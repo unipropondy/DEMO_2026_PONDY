@@ -446,9 +446,65 @@ const [paymentMessage, setPaymentMessage] = useState("");
     }, 0);
   };
 
-  const finalItems = useMemo(() => {
+  const finalItemsRaw = useMemo(() => {
     return splitItems || cart;
   }, [splitItems, cart]);
+
+  const [loyaltyDiscountItems, setLoyaltyDiscountItems] = useState<any[]>([]);
+  const [loyaltyDiscountAmount, setLoyaltyDiscountAmount] = useState(0);
+
+  useEffect(() => {
+    const fetchDishLoyaltyRewards = async () => {
+      const phone = loyaltyPhone ? loyaltyPhone.trim() : "";
+      if (!phone || finalItemsRaw.length === 0 || isLedgerCollection) {
+        setLoyaltyDiscountItems([]);
+        setLoyaltyDiscountAmount(0);
+        return;
+      }
+      try {
+        const token = useAuthStore.getState().token;
+        const mappedItems = finalItemsRaw.map((i: any) => ({
+          DishId: i.DishId || i.dishId || i.id,
+          Qty: i.qty,
+          Price: i.price,
+          isDishReward: false
+        }));
+
+        const res = await fetch(`${API_URL}/api/loyalty/calculate-bill-rewards`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ phone, items: mappedItems })
+        });
+        const data = await res.json();
+        if (data.success) {
+          const processed = (data.items || []).map((i: any) => ({
+            ...i,
+            qty: i.Qty !== undefined ? i.Qty : i.qty,
+            price: i.Price !== undefined ? i.Price : i.price,
+            name: i.name || finalItemsRaw.find((raw: any) => String(raw.id || raw.DishId || raw.dishId).toLowerCase() === String(i.DishId || i.id).toLowerCase())?.name || "Dish"
+          }));
+          setLoyaltyDiscountItems(processed);
+          setLoyaltyDiscountAmount(data.totalDiscount || 0);
+        } else {
+          setLoyaltyDiscountItems([]);
+          setLoyaltyDiscountAmount(0);
+        }
+      } catch (err) {
+        console.error("Calculate dish loyalty rewards error in payment:", err);
+        setLoyaltyDiscountItems([]);
+        setLoyaltyDiscountAmount(0);
+      }
+    };
+
+    fetchDishLoyaltyRewards();
+  }, [loyaltyPhone, finalItemsRaw, isLedgerCollection]);
+
+  const finalItems = useMemo(() => {
+    return loyaltyDiscountItems.length > 0 ? loyaltyDiscountItems : finalItemsRaw;
+  }, [loyaltyDiscountItems, finalItemsRaw]);
 
   useEffect(() => {
     const init = async () => {

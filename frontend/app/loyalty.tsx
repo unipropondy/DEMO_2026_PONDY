@@ -53,6 +53,8 @@ export default function LoyaltyScreen() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [dishProgress, setDishProgress] = useState<any[]>([]);
+  const [dishProgressLoading, setDishProgressLoading] = useState(false);
 
   // Order Details States
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -159,10 +161,29 @@ export default function LoyaltyScreen() {
     }
   };
 
+  const fetchDishProgress = async (phone: string) => {
+    setDishProgressLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/loyalty/customer/${encodeURIComponent(phone)}/dish-progress`);
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) {
+        setDishProgress(data);
+      } else {
+        setDishProgress([]);
+      }
+    } catch (err) {
+      console.error("Fetch dish progress error:", err);
+      setDishProgress([]);
+    } finally {
+      setDishProgressLoading(false);
+    }
+  };
+
   const handleOpenHistory = async (visitor: any) => {
     setSelectedVisitor(visitor);
     setShowHistoryModal(true);
     setOrdersLoading(true);
+    fetchDishProgress(visitor.Phone);
     try {
       const res = await fetch(`${API_URL}/api/loyalty/customer/${encodeURIComponent(visitor.Phone)}/orders`);
       const data = await res.json();
@@ -266,13 +287,22 @@ export default function LoyaltyScreen() {
           <Ionicons name="arrow-back" size={20} color={Theme.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Loyalty Visitors</Text>
-        <TouchableOpacity 
-          style={styles.enrollBtnHeader}
-          onPress={() => setShowEnrollModal(true)}
-        >
-          <Ionicons name="add-circle-outline" size={18} color="#FFF" style={{ marginRight: 4 }} />
-          <Text style={styles.enrollBtnHeaderText}>Enroll</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+          <TouchableOpacity 
+            style={[styles.enrollBtnHeader, { backgroundColor: Theme.bgInput, borderWidth: 1, borderColor: Theme.border }]}
+            onPress={() => router.push("/loyaltyConfig" as any)}
+          >
+            <Ionicons name="settings-outline" size={16} color={Theme.textPrimary} style={{ marginRight: 4 }} />
+            <Text style={[styles.enrollBtnHeaderText, { color: Theme.textPrimary }]}>Config</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.enrollBtnHeader}
+            onPress={() => setShowEnrollModal(true)}
+          >
+            <Ionicons name="add-circle-outline" size={18} color="#FFF" style={{ marginRight: 4 }} />
+            <Text style={styles.enrollBtnHeaderText}>Enroll</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search Bar */}
@@ -416,6 +446,42 @@ export default function LoyaltyScreen() {
                 data={orders}
                 keyExtractor={(item) => item.SettlementID}
                 contentContainerStyle={styles.historyList}
+                ListHeaderComponent={
+                  dishProgress.length > 0 ? (
+                    <View style={styles.dishProgressSection}>
+                      <Text style={styles.sectionLabel}>🍽️ DISH LOYALTY PROGRESS</Text>
+                      {dishProgress.map((prog) => {
+                        const progressPercent = Math.min(100, Math.round((prog.CurrentCount / prog.RequiredBills) * 100));
+                        return (
+                          <View key={prog.RuleId} style={styles.dishProgressCard}>
+                            <View style={styles.dishProgressHeader}>
+                              <Text style={styles.dishProgressName}>{prog.CampaignName} ({prog.PurchaseDishName})</Text>
+                              {prog.RewardsAvailable > 0 && (
+                                <View style={styles.dishRewardBadge}>
+                                  <MaterialCommunityIcons name="gift" size={12} color="#FFF" style={{ marginRight: 3 }} />
+                                  <Text style={styles.dishRewardBadgeText}>{prog.RewardsAvailable} Free</Text>
+                                </View>
+                              )}
+                            </View>
+                            <View style={styles.progressBarBg}>
+                              <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+                            </View>
+                            <View style={styles.dishProgressFooter}>
+                              <Text style={styles.dishProgressText}>
+                                {prog.CurrentCount} / {prog.RequiredBills} bills completed
+                              </Text>
+                              <Text style={styles.dishRewardTarget}>
+                                Reward: Free {prog.RewardDishName}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                      <View style={[styles.detailsDivider, { marginVertical: 16 }]} />
+                      <Text style={styles.sectionLabel}>📜 ORDER HISTORY</Text>
+                    </View>
+                  ) : null
+                }
                 renderItem={({ item }) => {
                   const isCancelled = item.IsCancelled === 1 || item.IsCancelled === true;
                   return (
@@ -660,6 +726,69 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Theme.bgMain,
+  },
+  dishProgressSection: {
+    paddingHorizontal: 8,
+    marginBottom: 12,
+  },
+  dishProgressCard: {
+    backgroundColor: Theme.bgCard,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Theme.border,
+  },
+  dishProgressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  dishProgressName: {
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+    color: Theme.textPrimary,
+  },
+  dishRewardBadge: {
+    flexDirection: "row",
+    backgroundColor: Theme.success,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+    alignItems: "center",
+  },
+  dishRewardBadgeText: {
+    color: "#FFF",
+    fontSize: 10,
+    fontFamily: Fonts.bold,
+  },
+  progressBarBg: {
+    height: 8,
+    backgroundColor: Theme.bgInput,
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: 6,
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: Theme.primary,
+    borderRadius: 4,
+  },
+  dishProgressFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  dishProgressText: {
+    fontSize: 11,
+    fontFamily: Fonts.medium,
+    color: Theme.textSecondary,
+  },
+  dishRewardTarget: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+    color: Theme.primary,
   },
   header: {
     flexDirection: "row",
