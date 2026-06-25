@@ -253,4 +253,129 @@ router.post("/register", async (req, res) => {
   }
 });
 
+// DELETE /api/loyalty/customer/:phone
+router.delete("/customer/:phone", async (req, res) => {
+  try {
+    const { phone } = req.params;
+    if (!phone || phone.trim() === "") {
+      return res.status(400).json({ success: false, error: "Phone number is required" });
+    }
+    const pool = await poolPromise;
+    
+    const custRes = await pool.request()
+      .input("Phone", sql.NVarChar(50), phone.trim())
+      .query("SELECT LoyaltyCustomerId FROM LoyaltyCustomer WHERE Phone = @Phone");
+       
+    if (custRes.recordset.length === 0) {
+      return res.status(404).json({ success: false, error: "Loyalty customer not found" });
+    }
+    
+    const customerId = custRes.recordset[0].LoyaltyCustomerId;
+    
+    await pool.request()
+      .input("LoyaltyCustomerId", sql.UniqueIdentifier, customerId)
+      .query("DELETE FROM LoyaltyVisit WHERE LoyaltyCustomerId = @LoyaltyCustomerId");
+       
+    await pool.request()
+      .input("Phone", sql.NVarChar(50), phone.trim())
+      .query("DELETE FROM LoyaltyCustomer WHERE Phone = @Phone");
+       
+    res.json({ success: true, message: "Loyalty visitor deleted successfully" });
+  } catch (err) {
+    console.error("[LOYALTY DELETE ERROR]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/loyalty/customer/:phone/orders
+router.get("/customer/:phone/orders", async (req, res) => {
+  try {
+    const { phone } = req.params;
+    if (!phone || phone.trim() === "") {
+      return res.status(400).json({ error: "Phone number is required" });
+    }
+    const pool = await poolPromise;
+    const phoneValue = phone.trim();
+    
+    const query = `
+      SELECT 
+        sh.SettlementID,
+        sh.BillNo,
+        sh.CreatedOn AS OrderDateTime,
+        sh.SysAmount AS TotalAmount,
+        sh.IsCancelled,
+        (
+          SELECT TOP 1 UPPER(LTRIM(RTRIM(sts.PayMode)))
+          FROM SettlementTotalSales sts
+          WHERE sts.SettlementID = sh.SettlementID
+        ) AS PayMode
+      FROM SettlementHeader sh
+      WHERE sh.MobileNo = @Phone OR REPLACE(sh.MobileNo, ' ', '') = REPLACE(@Phone, ' ', '')
+      ORDER BY sh.CreatedOn DESC
+    `;
+    
+    const result = await pool.request()
+      .input("Phone", sql.NVarChar(50), phoneValue)
+      .query(query);
+       
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("[LOYALTY CUSTOMER ORDERS ERROR]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/loyalty/order/:settlementId
+router.get("/order/:settlementId", async (req, res) => {
+  try {
+    const { settlementId } = req.params;
+    if (!settlementId || settlementId.trim() === "") {
+      return res.status(400).json({ error: "Settlement ID is required" });
+    }
+    const pool = await poolPromise;
+    
+    const headerRes = await pool.request()
+      .input("Id", sql.UniqueIdentifier, settlementId)
+      .query(`
+        SELECT 
+          sh.SettlementID,
+          sh.BillNo,
+          sh.CreatedOn AS OrderDateTime,
+          sh.SysAmount AS TotalAmount,
+          sh.SubTotal,
+          sh.TotalTax,
+          sh.DiscountAmount,
+          sh.ServiceCharge,
+          sh.IsCancelled
+        FROM SettlementHeader sh
+        WHERE sh.SettlementID = @Id
+      `);
+      
+    if (headerRes.recordset.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+    
+    const itemsRes = await pool.request()
+      .input("Id", sql.UniqueIdentifier, settlementId)
+      .query(`
+        SELECT 
+          DishId,
+          DishName,
+          Qty,
+          Price,
+          DiscountAmount
+        FROM SettlementItemDetail
+        WHERE SettlementID = @Id
+      `);
+      
+    res.json({
+      order: headerRes.recordset[0],
+      items: itemsRes.recordset || []
+    });
+  } catch (err) {
+    console.error("[LOYALTY ORDER DETAILS ERROR]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

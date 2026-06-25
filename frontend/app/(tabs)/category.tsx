@@ -1651,6 +1651,28 @@ export default function Category() {
                 </TouchableOpacity>
               )}
 
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuVisible(false);
+                  router.push("/loyalty");
+                }}
+              >
+                <View
+                  style={[
+                    styles.menuIconContainer,
+                    { backgroundColor: Theme.primary + "10" },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="card-outline"
+                    size={18}
+                    color={Theme.primary}
+                  />
+                </View>
+                <Text style={styles.menuItemText}>Loyalty</Text>
+              </TouchableOpacity>
+
               {canAccessMembers() && (
                 <TouchableOpacity
                   style={styles.menuItem}
