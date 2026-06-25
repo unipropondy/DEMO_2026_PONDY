@@ -61,10 +61,10 @@ router.get("/summary/:userId", async (req, res) => {
       .request()
       .input("UserId", sql.UniqueIdentifier, userId)
       .query(`
-        SELECT TOP 1 status, ClockinTime
+        SELECT TOP 1 status, CreatedOn as ClockinTime
         FROM TimeEntry
         WHERE Userid = @UserId
-        ORDER BY ClockinTime DESC, CreatedOn DESC
+        ORDER BY CreatedOn DESC
       `);
 
     const lastEntry = lastEntryRes.recordset[0];
@@ -97,10 +97,10 @@ router.get("/summary/:userId", async (req, res) => {
       .request()
       .input("UserId", sql.UniqueIdentifier, userId)
       .query(`
-        SELECT TOP 1 ClockinTime
+        SELECT TOP 1 CreatedOn as ClockinTime
         FROM TimeEntry
         WHERE Userid = @UserId AND status = 1
-        ORDER BY ClockinTime DESC, CreatedOn DESC
+        ORDER BY CreatedOn DESC
       `);
 
     const activeStart = activeStartRes.recordset[0];
@@ -132,10 +132,10 @@ router.get("/summary/:userId", async (req, res) => {
       .input("UserId", sql.UniqueIdentifier, userId)
       .input("StartTime", sql.DateTime, firstClockInTime)
       .query(`
-        SELECT status, ClockinTime, CreatedOn
+        SELECT status, CreatedOn as ClockinTime, CreatedOn
         FROM TimeEntry
-        WHERE Userid = @UserId AND ClockinTime >= @StartTime
-        ORDER BY ClockinTime ASC, CreatedOn ASC
+        WHERE Userid = @UserId AND CreatedOn >= @StartTime
+        ORDER BY CreatedOn ASC
       `);
 
     let totalWorkMs = 0;
@@ -249,7 +249,7 @@ router.post("/save", async (req, res) => {
       .request()
       .input("UserId", sql.UniqueIdentifier, userId)
       .query(`
-        SELECT TOP 1 status FROM TimeEntry WHERE Userid = @UserId ORDER BY ClockinTime DESC, CreatedOn DESC
+        SELECT TOP 1 status FROM TimeEntry WHERE Userid = @UserId ORDER BY CreatedOn DESC
       `);
 
     const lastEntry = lastEntryRes.recordset[0];
@@ -388,7 +388,7 @@ router.get("/today/:userId", async (req, res) => {
       .input("EndDate", sql.DateTime, tomorrow).query(`
         SELECT 
           status,
-          ClockinTime,
+          CreatedOn as ClockinTime,
           CreatedOn,
           CASE 
             WHEN status = 1 THEN 'IN'
@@ -423,11 +423,11 @@ router.get("/logs", authenticateToken, async (req, res) => {
         a.Userid,
         u.FullName AS StaffName,
         a.status,
-        a.ClockinTime,
+        a.CreatedOn as ClockinTime,
         a.CreatedOn
       FROM TimeEntry a
       INNER JOIN Vw_UserMaster u ON a.Userid = u.UserId
-      ORDER BY a.Userid, a.ClockinTime ASC
+      ORDER BY a.Userid, a.CreatedOn ASC
     `);
 
     const rows = result.recordset;

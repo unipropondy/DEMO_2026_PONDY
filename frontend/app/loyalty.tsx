@@ -14,6 +14,7 @@ import {
   RefreshControl,
   StatusBar,
   ScrollView,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -24,6 +25,12 @@ import { API_URL } from "@/constants/Config";
 import { formatToSingaporeDate, formatToSingaporeTime } from "../utils/timezoneHelper";
 import { useAuthStore } from "@/stores/authStore";
 import { useToast } from "../components/Toast";
+
+const COUNTRIES = [
+  { code: "+65", name: "Singapore" },
+  { code: "+91", name: "India" },
+  { code: "+60", name: "Malaysia" },
+];
 
 export default function LoyaltyScreen() {
   const router = useRouter();
@@ -38,6 +45,8 @@ export default function LoyaltyScreen() {
   const [enrollPhone, setEnrollPhone] = useState("");
   const [enrollName, setEnrollName] = useState("");
   const [isEnrolling, setIsEnrolling] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
 
   // Visitor Details & Order History States
   const [selectedVisitor, setSelectedVisitor] = useState<any | null>(null);
@@ -95,10 +104,11 @@ export default function LoyaltyScreen() {
     }
     setIsEnrolling(true);
     try {
+      const fullPhone = `${selectedCountry.code} ${enrollPhone.trim()}`;
       const res = await fetch(`${API_URL}/api/loyalty/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: enrollPhone.trim(), name: enrollName.trim() }),
+        body: JSON.stringify({ phone: fullPhone, name: enrollName.trim() }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -330,10 +340,17 @@ export default function LoyaltyScreen() {
             <View style={styles.modalBody}>
               <Text style={styles.inputLabel}>Mobile Number *</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="call-outline" size={18} color={Theme.textSecondary} style={{ marginRight: 8 }} />
+                <TouchableOpacity
+                  style={styles.countrySelectorBtn}
+                  onPress={() => setShowCountryPicker(true)}
+                >
+                  <Text style={styles.countryCodeText}>{selectedCountry.code}</Text>
+                  <Ionicons name="chevron-down" size={12} color={Theme.textSecondary} />
+                </TouchableOpacity>
+                <View style={styles.verticalDivider} />
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. +65 91234567"
+                  placeholder="91234567"
                   value={enrollPhone}
                   onChangeText={setEnrollPhone}
                   keyboardType="phone-pad"
@@ -408,28 +425,33 @@ export default function LoyaltyScreen() {
                       activeOpacity={0.7}
                     >
                       <View style={styles.orderRowHeader}>
-                        <View>
+                        {/* Left: Order Info */}
+                        <View style={{ flex: 1.5 }}>
                           <Text style={styles.orderNumberText}>Order: {item.BillNo}</Text>
                           <Text style={styles.orderTimeText}>
                             {formatToSingaporeDate(item.OrderDateTime)} • {formatToSingaporeTime(item.OrderDateTime)}
                           </Text>
                         </View>
-                        <View style={styles.orderRightBox}>
+
+                        {/* Center: Status Badge */}
+                        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                          <View style={[styles.statusBadge, { backgroundColor: isCancelled ? Theme.danger : Theme.success }]}>
+                            <Text style={styles.statusBadgeText}>
+                              {isCancelled ? "Cancelled" : "Completed"}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Right: Price & PayMode */}
+                        <View style={{ flex: 1.2, alignItems: "flex-end" }}>
                           <Text style={styles.orderAmountText}>
                             ${parseFloat(item.TotalAmount || 0).toFixed(2)}
                           </Text>
-                          <View style={styles.badgeRow}>
-                            <View style={[styles.statusBadge, { backgroundColor: isCancelled ? Theme.danger : Theme.success }]}>
-                              <Text style={styles.statusBadgeText}>
-                                {isCancelled ? "Cancelled" : "Completed"}
-                              </Text>
+                          {item.PayMode && (
+                            <View style={[styles.payModeBadge, { backgroundColor: Theme.primaryLight, marginTop: 6 }]}>
+                              <Text style={styles.payModeBadgeText}>{item.PayMode}</Text>
                             </View>
-                            {item.PayMode && (
-                              <View style={[styles.payModeBadge, { backgroundColor: Theme.primaryLight }]}>
-                                <Text style={styles.payModeBadgeText}>{item.PayMode}</Text>
-                              </View>
-                            )}
-                          </View>
+                          )}
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -597,6 +619,38 @@ export default function LoyaltyScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* COUNTRY PICKER MODAL */}
+      <Modal transparent visible={showCountryPicker} animationType="fade">
+        <TouchableWithoutFeedback onPress={() => setShowCountryPicker(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { maxWidth: 300, padding: 15 }]}>
+              <Text style={[styles.modalTitle, { fontSize: 16, marginBottom: 15 }]}>Select Country</Text>
+              {COUNTRIES.map((country) => (
+                <TouchableOpacity
+                  key={country.code}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 12,
+                    paddingHorizontal: 8,
+                    borderRadius: 8,
+                    backgroundColor: selectedCountry.code === country.code ? Theme.bgNav : "transparent",
+                    gap: 12
+                  }}
+                  onPress={() => {
+                    setSelectedCountry(country);
+                    setShowCountryPicker(false);
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontFamily: Fonts.bold, color: Theme.textPrimary }}>{country.code}</Text>
+                  <Text style={{ fontSize: 13, fontFamily: Fonts.regular, color: Theme.textSecondary, flex: 1 }}>{country.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </SafeAreaView>
   );
@@ -877,6 +931,7 @@ const styles = StyleSheet.create({
   },
   historyList: {
     paddingBottom: 12,
+    paddingHorizontal: 8,
   },
   orderRowCard: {
     backgroundColor: Theme.bgMain,
@@ -912,28 +967,35 @@ const styles = StyleSheet.create({
   },
   badgeRow: {
     flexDirection: "row",
-    gap: 4,
+    gap: 6,
     marginTop: 6,
+    alignItems: "center",
   },
   statusBadge: {
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
     borderRadius: 4,
+    justifyContent: "center",
+    alignItems: "center",
   },
   statusBadgeText: {
     color: "#FFF",
     fontSize: 10,
     fontFamily: Fonts.bold,
+    lineHeight: 12,
   },
   payModeBadge: {
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
     borderRadius: 4,
+    justifyContent: "center",
+    alignItems: "center",
   },
   payModeBadgeText: {
     color: Theme.primary,
     fontSize: 10,
     fontFamily: Fonts.bold,
+    lineHeight: 12,
   },
   sectionLabel: {
     fontSize: 12,
@@ -1061,5 +1123,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Fonts.bold,
     color: "#FFF",
+  },
+  countrySelectorBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 4,
+    height: "100%",
+    justifyContent: "center",
+  },
+  countryFlagText: {
+    fontSize: 18,
+  },
+  countryCodeText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: Theme.textPrimary,
+  },
+  verticalDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: Theme.border,
+    marginHorizontal: 12,
   },
 });

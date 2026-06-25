@@ -424,7 +424,7 @@ export default function StaffAttendanceScreen() {
                   <View key={i} style={[styles.historyRow, { borderLeftColor: iconColor }]}>
                     <View style={styles.historyDetailLeft}>
                       <View style={[styles.historyIconBox, { backgroundColor: iconColor + '15' }]}>
-                        <Ionicons name={iconName as any} size={16} color={iconColor} />
+                        <Ionicons name={iconName as any} size={20} color={iconColor} />
                       </View>
                       <View>
                         <Text style={styles.historyAction}>{log.ActionName}</Text>
@@ -779,6 +779,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderLeftWidth: 4,
     paddingLeft: 12,
+    paddingRight: 12,
     paddingVertical: 15,
     marginBottom: 10,
     backgroundColor: Theme.bgMain,
