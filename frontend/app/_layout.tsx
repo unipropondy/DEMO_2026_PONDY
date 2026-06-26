@@ -70,10 +70,10 @@ const CRITICAL_POLICY: NetworkPolicy = {
 };
 
 const NORMAL_POLICY: NetworkPolicy = {
-  timeout: 10000,
-  maxRetries: 1,
+  timeout: 30000,
+  maxRetries: 2,
   initialDelay: 1000,
-  budget: 15000,
+  budget: 45000,
 };
 
 const HEALTH_POLICY: NetworkPolicy = {
