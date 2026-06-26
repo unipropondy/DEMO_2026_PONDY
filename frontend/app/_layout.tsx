@@ -43,6 +43,7 @@ import { API_URL } from "@/constants/Config";
 
 // 🌐 GLOBAL FETCH RETRY & IDEMPOTENCY ENGINE
 const originalFetch = global.fetch;
+
 const getUUID = () => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = Math.random() * 16 | 0;
@@ -51,14 +52,65 @@ const getUUID = () => {
   });
 };
 
+interface NetworkPolicy {
+  timeout: number;
+  maxRetries: number;
+  initialDelay: number;
+  budget: number;
+}
+
+const CRITICAL_POLICY: NetworkPolicy = {
+  timeout: 30000,
+  maxRetries: 4,
+  initialDelay: 1000,
+  budget: 60000,
+};
+
+const NORMAL_POLICY: NetworkPolicy = {
+  timeout: 10000,
+  maxRetries: 1,
+  initialDelay: 1000,
+  budget: 15000,
+};
+
+const HEALTH_POLICY: NetworkPolicy = {
+  timeout: 5000,
+  maxRetries: 1,
+  initialDelay: 1000,
+  budget: 15000,
+};
+
+const classifyRequest = (url: string): NetworkPolicy => {
+  if (!url) return NORMAL_POLICY;
+  if (url.includes("/health")) return HEALTH_POLICY;
+
+  const criticalKeywords = [
+    "checkout",
+    "save-cart",
+    "send",
+    "hold",
+    "complete",
+    "/save",
+    "print",
+    "update-item-status",
+    "log-visit"
+  ];
+
+  const isCritical = criticalKeywords.some((keyword) => url.includes(keyword));
+  return isCritical ? CRITICAL_POLICY : NORMAL_POLICY;
+};
+
+const getJitteredDelay = (baseDelay: number): number => {
+  const min = baseDelay * 0.8;
+  const max = baseDelay * 1.2;
+  return min + Math.random() * (max - min);
+};
+
 global.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === 'string' ? input : (input instanceof URL ? input.href : (input as any).url);
 
   if (url && url.includes(API_URL)) {
-    const maxRetries = 4;
-    let delay = 500;
-    let lastError: any = null;
-
+    const policy = classifyRequest(url);
     const options: RequestInit = init ? { ...init } : {};
     const headers: Record<string, string> = {};
 
@@ -85,22 +137,76 @@ global.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Pr
     headers['x-request-id'] = requestId;
     options.headers = headers;
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await originalFetch(input, options);
-        if (response.status !== 503 && response.status !== 504) {
-          return response;
+    let delay = policy.initialDelay;
+    let lastError: any = null;
+    const startTime = Date.now();
+
+    if (__DEV__) {
+      console.log(`🌐 [Fetch Start] ${options.method || 'GET'} -> ${url} | id: ${requestId}`);
+    }
+
+    for (let attempt = 0; attempt <= policy.maxRetries; attempt++) {
+      const elapsed = Date.now() - startTime;
+      if (attempt > 0 && elapsed + delay > policy.budget) {
+        if (__DEV__) {
+          console.warn(`🛑 [Fetch Budget Exceeded] Elapsed: ${elapsed}ms, next delay: ${delay}ms, Budget: ${policy.budget}ms. Aborting retries for ${url}`);
         }
-        lastError = new Error(`Server returned status ${response.status}`);
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`⚠️ [Global Fetch] [Attempt ${attempt}/${maxRetries}] failed: ${err.message || err}`);
+        break;
       }
 
-      if (attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        delay *= 2.0; // Stronger backoff: 500ms -> 1000ms -> 2000ms -> 4000ms
+      const controller = new AbortController();
+      options.signal = controller.signal;
+
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, policy.timeout);
+
+      try {
+        const response = await originalFetch(input, options);
+        clearTimeout(timeoutId);
+
+        if (response.status === 502 || response.status === 503 || response.status === 504) {
+          lastError = new Error(`Server returned transient status ${response.status}`);
+          if (__DEV__) {
+            console.warn(`⚠️ [Fetch Transient Status] ${response.status} on ${url} (Attempt ${attempt}/${policy.maxRetries})`);
+          }
+        } else {
+          if (__DEV__ && attempt > 0) {
+            console.log(`✅ [Fetch Success After Retry] ${url} succeeded on attempt ${attempt}`);
+          }
+          return response;
+        }
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        lastError = err;
+
+        const isTimeout = err.name === 'AbortError';
+        const isNetwork = err instanceof TypeError || err.message?.includes('Network request failed');
+
+        if (!isTimeout && !isNetwork) {
+          if (__DEV__) {
+            console.error(`🛑 [Fetch Non-Retryable Error] ${err.message || err} on ${url}`);
+          }
+          throw err;
+        }
+
+        if (__DEV__) {
+          console.warn(`⚠️ [Fetch Transient Error] Attempt ${attempt}/${policy.maxRetries} failed: ${err.message || err} (Timeout: ${isTimeout}, Network: ${isNetwork})`);
+        }
       }
+
+      if (attempt < policy.maxRetries) {
+        const jitteredDelay = getJitteredDelay(delay);
+        if (__DEV__) {
+          console.log(`💤 [Fetch Retry Delay] Waiting ${Math.round(jitteredDelay)}ms before attempt ${attempt + 1}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, jitteredDelay));
+        delay *= 2.0;
+      }
+    }
+
+    if (__DEV__) {
+      console.error(`🛑 [Fetch Failed Exhausted] ${options.method || 'GET'} -> ${url} | Failed after ${policy.maxRetries} retries. Error: ${lastError?.message || lastError}`);
     }
     throw lastError;
   }
