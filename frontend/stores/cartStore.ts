@@ -118,18 +118,12 @@ const fetchWithRetry = async (
   timeoutMs = 30000
 ): Promise<Response> => {
   let lastErr: any;
-  console.log("🔍 [DIAGNOSTIC] [fetchWithRetry] entry:", { url, optionsKeys: Object.keys(options), hasHeaders: !!options.headers });
-  if (options.headers) {
-    console.log("🔍 [DIAGNOSTIC] [fetchWithRetry] options.headers detail:", JSON.stringify(options.headers));
-  }
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       if (__DEV__) console.log(`[fetchWithRetry] Attempt ${attempt}/${maxRetries}: ${url}`);
-      console.log(`🔍 [DIAGNOSTIC] [fetchWithRetry] Calling fetch for attempt ${attempt}`);
       const res = await fetch(url, { ...options, signal: controller.signal });
-      console.log(`🔍 [DIAGNOSTIC] [fetchWithRetry] fetch resolved: status ${res.status}`);
       clearTimeout(timer);
       return res;
     } catch (err: any) {
@@ -1309,11 +1303,11 @@ export const useCartStore = create<CartState>()(
 
       checkoutOrder: async (tableId) => {
         try {
-          const token = useAuthStore.getState().token;
           if (__DEV__) console.log(`🚀 [CartStore] Initiating Checkout for Table: ${tableId}`);
+          const token = useAuthStore.getState().token;
           const response = await fetchWithRetry(`${API_URL}/api/orders/checkout`, {
             method: "POST",
-            headers: {
+            headers: { 
               "Content-Type": "application/json",
               ...(token ? { "Authorization": `Bearer ${token}` } : {})
             },
