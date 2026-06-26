@@ -1309,21 +1309,14 @@ export const useCartStore = create<CartState>()(
 
       checkoutOrder: async (tableId) => {
         try {
-          const hasHydrated = useAuthStore.persist.hasHydrated();
           const token = useAuthStore.getState().token;
-          const isLoggedIn = useAuthStore.getState().isLoggedIn;
-          console.log("🔍 [DIAGNOSTIC] [checkoutOrder] start:", { hasHydrated, hasToken: !!token, isLoggedIn, tableId });
-
-          const reqHeaders = { 
-            "Content-Type": "application/json",
-            ...(token ? { "Authorization": `Bearer ${token}` } : {})
-          };
-          console.log("🔍 [DIAGNOSTIC] [checkoutOrder] request headers constructed:", { ...reqHeaders, Authorization: token ? `Bearer ${token.substring(0, 15)}...` : "NONE" });
-
           if (__DEV__) console.log(`🚀 [CartStore] Initiating Checkout for Table: ${tableId}`);
           const response = await fetchWithRetry(`${API_URL}/api/orders/checkout`, {
             method: "POST",
-            headers: reqHeaders,
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
             body: JSON.stringify({ tableId }),
           });
           

@@ -1,29 +1,6 @@
+import "../shims/displayMock";
 import "react-native-get-random-values";
 import "react-native-reanimated";
-
-// 🖥️ MOCK/STUB NATIVE MODULES FOR EXPO GO / DEV CLIENTS WITHOUT THE NATIVE MODULE COMPILED
-import { TurboModuleRegistry } from "react-native";
-const originalGet = TurboModuleRegistry.get;
-(TurboModuleRegistry as any).get = (name: string) => {
-  if (name === "RNExternalDisplayEvent") {
-    const mockModule = originalGet("RNExternalDisplayEvent");
-    if (!mockModule || typeof (mockModule as any).init !== "function") {
-      return {
-        init: () => {},
-        getInitialScreens: () => ({ SCREEN_INFO: {} }),
-        SCREEN_INFO: {},
-        requestScene: () => false,
-        closeScene: () => false,
-        isMainSceneActive: () => true,
-        resumeMainScene: () => true,
-        addListener: () => {},
-        removeListeners: () => {},
-      };
-    }
-    return mockModule;
-  }
-  return originalGet(name);
-};
 
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import {
@@ -134,8 +111,6 @@ const getJitteredDelay = (baseDelay: number): number => {
 global.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === 'string' ? input : (input instanceof URL ? input.href : (input as any).url);
 
-  console.log("🔍 [DIAGNOSTIC] [global.fetch] intercepted:", { url, hasInit: !!init });
-
   if (url && url.includes(API_URL)) {
     const policy = classifyRequest(url);
     const options: RequestInit = init ? { ...init } : {};
@@ -155,24 +130,14 @@ global.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Pr
       }
     }
 
-    console.log("🔍 [DIAGNOSTIC] [global.fetch] parsed headers before token injection:", JSON.stringify(headers));
-
     const token = useAuthStore.getState().token;
-    console.log("🔍 [DIAGNOSTIC] [global.fetch] retrieved token from authStore:", { hasToken: !!token });
-
     if (token && !headers['Authorization'] && !headers['authorization']) {
       headers['Authorization'] = `Bearer ${token}`;
-      console.log("🔍 [DIAGNOSTIC] [global.fetch] token injected dynamically!");
     }
 
     const requestId = headers['x-request-id'] || headers['X-Request-ID'] || getUUID();
     headers['x-request-id'] = requestId;
     options.headers = headers;
-
-    console.log("🔍 [DIAGNOSTIC] [global.fetch] final request headers to be sent:", JSON.stringify({
-      ...headers,
-      Authorization: headers['Authorization'] ? `Bearer ${headers['Authorization'].substring(15, 30)}...` : (headers['authorization'] ? `Bearer ${headers['authorization'].substring(15, 30)}...` : "NONE")
-    }));
 
     let delay = policy.initialDelay;
     let lastError: any = null;
@@ -299,6 +264,8 @@ export default function RootLayout() {
     Inter_800ExtraBold,
     Inter_900Black,
   });
+
+
 
   // 🖥️ CUSTOMER DISPLAY: Gate resolves once fonts + settings + socket are ready
   const isPOSReady = usePOSReadyGate(fontsLoaded || !!fontError);

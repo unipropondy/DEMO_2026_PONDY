@@ -1327,7 +1327,10 @@ router.post("/hold", async (req, res) => {
 });
 
 router.post("/checkout", async (req, res) => {
-  try {
+  const MAX_DEADLOCK_RETRIES = 3;
+  const DEADLOCK_RETRY_DELAY_MS = 150;
+
+  const attemptCheckout = async () => {
     const { tableId } = req.body;
     const cleanId = toGuidOrNull(tableId);
     if (!cleanId) {
@@ -1335,32 +1338,44 @@ router.post("/checkout", async (req, res) => {
       return res.json({ success: true, tableNo: "TAKEAWAY", section: "TAKEAWAY" });
     }
     const pool = await poolPromise;
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      // Step 1: Move table to Payment Pending (Status 2) and mark items as SERVED (4)
+      await transaction.request().input("tid", sql.UniqueIdentifier, cleanId).query(`
+          -- Reduce deadlock victim priority: prefer to lose vs more critical write transactions
+          SET DEADLOCK_PRIORITY LOW;
 
-    // Step 1: Move table to Payment Pending (Status 2) and mark items as SERVED (4)
-    await pool.request().input("tid", sql.UniqueIdentifier, cleanId).query(`
-        -- 1. Update Table Status to Checkout (2)
-        UPDATE TableMaster SET Status = 2, ModifiedOn = GETDATE() WHERE TableId = @tid;
+          DECLARE @TableNo VARCHAR(50);
+          SELECT @TableNo = TableNumber FROM TableMaster WHERE TableId = @tid;
 
-        -- 2. Mark all active items for this table as SERVED (4) so they leave KDS
-        UPDATE d
-        SET d.StatusCode = 4, d.ModifiedOn = GETDATE()
-        FROM RestaurantOrderDetailCur d
-        JOIN RestaurantOrderCur h ON d.OrderId = h.OrderId
-        JOIN TableMaster tm ON h.Tableno = tm.TableNumber
-        WHERE tm.TableId = @tid 
-        AND (h.isOrderClosed = 0 OR h.isOrderClosed IS NULL)
-        AND d.StatusCode IN (1, 2, 3, 5);
+          -- 1. Update Table Status to Checkout (2)
+          UPDATE TableMaster SET Status = 2, ModifiedOn = GETDATE() WHERE TableId = @tid;
 
-        -- 3. Expire VOIDED items (StatusCode 0) from KDS instantly
-        UPDATE d
-        SET d.ModifiedOn = DATEADD(MINUTE, -10, GETDATE())
-        FROM RestaurantOrderDetailCur d
-        JOIN RestaurantOrderCur h ON d.OrderId = h.OrderId
-        JOIN TableMaster tm ON h.Tableno = tm.TableNumber
-        WHERE tm.TableId = @tid 
-        AND (h.isOrderClosed = 0 OR h.isOrderClosed IS NULL)
-        AND d.StatusCode = 0;
-      `);
+          -- 2. Mark all active items for this table as SERVED (4) so they leave KDS
+          UPDATE d
+          SET d.StatusCode = 4, d.ModifiedOn = GETDATE()
+          FROM RestaurantOrderDetailCur d
+          JOIN RestaurantOrderCur h ON d.OrderId = h.OrderId
+          WHERE h.Tableno = @TableNo 
+          AND (h.isOrderClosed = 0 OR h.isOrderClosed IS NULL)
+          AND d.StatusCode IN (1, 2, 3, 5);
+
+          -- 3. Expire VOIDED items (StatusCode 0) from KDS instantly
+          UPDATE d
+          SET d.ModifiedOn = DATEADD(MINUTE, -10, GETDATE())
+          FROM RestaurantOrderDetailCur d
+          JOIN RestaurantOrderCur h ON d.OrderId = h.OrderId
+          WHERE h.Tableno = @TableNo 
+          AND (h.isOrderClosed = 0 OR h.isOrderClosed IS NULL)
+          AND d.StatusCode = 0;
+        `);
+
+      await transaction.commit();
+    } catch (txErr) {
+      try { await transaction.rollback(); } catch (_) {}
+      throw txErr;
+    }
 
     const updated = await syncTableStatus(req, cleanId);
 
@@ -1380,10 +1395,30 @@ router.post("/checkout", async (req, res) => {
       });
     }
 
-    res.json({ success: true, ...updated });
-  } catch (err) {
-    console.error("❌ Checkout Error:", err.message);
-    res.status(500).json({ error: err.message });
+    return updated;
+  };
+
+  for (let attempt = 1; attempt <= MAX_DEADLOCK_RETRIES; attempt++) {
+    try {
+      const updated = await attemptCheckout();
+      if (!res.headersSent) {
+        res.json({ success: true, ...updated });
+      }
+      return;
+    } catch (err) {
+      const isDeadlock = err.number === 1205 || (err.message && err.message.includes("deadlock"));
+      if (isDeadlock && attempt < MAX_DEADLOCK_RETRIES) {
+        const delay = DEADLOCK_RETRY_DELAY_MS * attempt;
+        console.warn(`⚠️ [Checkout] Deadlock detected (attempt ${attempt}/${MAX_DEADLOCK_RETRIES}). Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      console.error(`❌ Checkout Error (attempt ${attempt}):`, err.message);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message });
+      }
+      return;
+    }
   }
 });
 

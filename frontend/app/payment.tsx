@@ -1082,8 +1082,7 @@ const confirmPayment = async () => {
 
         const result = await response.json();
         if (result.success) {
-          setTimeout(() => {
-            router.push({
+          router.push({
               pathname: "/payment_success" as any,
               params: {
                 total: total.toFixed(2),
@@ -1114,7 +1113,6 @@ const confirmPayment = async () => {
                 isMember: isMember ? "true" : "false",
               },
             });
-          }, 100);
         } else {
           showToast({
             type: "error",
@@ -1203,7 +1201,7 @@ const confirmPayment = async () => {
       });
       const result = await response.json();
       if (result.success) {
-        setTimeout(() => {
+          // Navigate first — let the success screen mount fully before mutating store state
           router.push({
             pathname: "/payment_success" as any,
             params: {
@@ -1231,36 +1229,42 @@ const confirmPayment = async () => {
               waiterName: context?.serverName ?? "",
             },
           });
-          if (context) {
-            if (splitItems) {
-              const { carts, currentContextId, setCartItems } =
-                useCartStore.getState();
-              if (currentContextId) {
-                const updated = (carts[currentContextId] || [])
-                  .map((o) => {
-                    const s = splitItems.find(
-                      (si: any) => si.lineItemId === o.lineItemId,
-                    );
-                    return s ? { ...o, qty: o.qty - s.qty } : o;
-                  })
-                  .filter((i) => i.qty > 0);
-                setCartItems(currentContextId, updated);
-              }
-              useCartStore.getState().setActiveSplitItems(null);
-            } else {
-              if (context.orderType === "DINE_IN") {
-                clearTable(context.section!, context.tableNo!);
-              }
+          // Snapshot context/splitItems before the delayed cleanup
+          const ctxSnapshot = context;
+          const splitSnapshot = splitItems;
+          const orderIdSnapshot = displayOrderId;
+          // Delay cleanup so the success screen renders before store mutations
+          setTimeout(() => {
+            if (ctxSnapshot) {
+              if (splitSnapshot) {
+                const { carts, currentContextId, setCartItems } =
+                  useCartStore.getState();
+                if (currentContextId) {
+                  const updated = (carts[currentContextId] || [])
+                    .map((o: any) => {
+                      const s = splitSnapshot.find(
+                        (si: any) => si.lineItemId === o.lineItemId,
+                      );
+                      return s ? { ...o, qty: o.qty - s.qty } : o;
+                    })
+                    .filter((i: any) => i.qty > 0);
+                  setCartItems(currentContextId, updated);
+                }
+                useCartStore.getState().setActiveSplitItems(null);
+              } else {
+                if (ctxSnapshot.orderType === "DINE_IN") {
+                  clearTable(ctxSnapshot.section!, ctxSnapshot.tableNo!);
+                }
 
-              if (context.tableId) {
-                useCartStore.getState().clearTableSession(context.tableId);
-                closeActiveOrder(displayOrderId || "");
-              }
+                if (ctxSnapshot.tableId) {
+                  useCartStore.getState().clearTableSession(ctxSnapshot.tableId);
+                  closeActiveOrder(orderIdSnapshot || "");
+                }
 
-              useOrderContextStore.getState().clearOrderContext();
+                useOrderContextStore.getState().clearOrderContext();
+              }
             }
-          }
-        }, 100);
+          }, 800);
       } else {
         showToast({ type: "error", message: "Failed", subtitle: result.error });
       }
