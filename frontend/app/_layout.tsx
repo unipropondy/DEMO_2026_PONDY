@@ -17,6 +17,8 @@ import { useEffect } from "react";
 import { useWindowDimensions } from "react-native";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { ToastProvider } from "../components/Toast";
+import { CustomerDisplayManager } from "../components/CustomerDisplayManager";
+import { usePOSReadyGate } from "../hooks/usePOSReadyGate";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -139,6 +141,9 @@ export default function RootLayout() {
     Inter_900Black,
   });
 
+  // 🖥️ CUSTOMER DISPLAY: Gate resolves once fonts + settings + socket are ready
+  const isPOSReady = usePOSReadyGate(fontsLoaded || !!fontError);
+
   // ✅ AUTH GUARD: Redirect based on auth state and role
   useEffect(() => {
     if (!fontsLoaded) return;
@@ -183,6 +188,8 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <ToastProvider>
+        {/* 🖥️ Customer Display: auto-projects onto Sunmi D3 secondary screen */}
+        <CustomerDisplayManager isPOSReady={isPOSReady} />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="login" options={{ gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" />
@@ -208,6 +215,7 @@ export default function RootLayout() {
           <Stack.Screen name="loyalty" />
           <Stack.Screen name="loyaltyConfig" />
           <Stack.Screen name="terminal-settings" />
+          <Stack.Screen name="customer-display" />
         </Stack>
         <StatusBar style="light" />
       </ToastProvider>
