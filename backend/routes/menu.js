@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { poolPromise } = require("../config/db");
+const sharp = require("sharp");
 
 // 🚀 PERFORMANCE CACHE
 const cache = new Map();
@@ -271,7 +272,22 @@ router.get("/image/:imageId", async (req, res) => {
       .query(`SELECT ImageData FROM ImageList WHERE Imageid = @Imageid`);
 
     if (result.recordset.length > 0 && result.recordset[0].ImageData) {
-      const buffer = result.recordset[0].ImageData;
+      let buffer = result.recordset[0].ImageData;
+
+      // Compress large images (> 100KB) dynamically to prevent event loop bottlenecks
+      if (buffer.length > 100 * 1024) {
+        try {
+          const startTime = Date.now();
+          buffer = await sharp(buffer)
+            .resize(400, 400, { fit: "inside", withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+          console.log(`⚡ [ImageCache] Compressed image ${imageId} from ${(result.recordset[0].ImageData.length / 1024).toFixed(1)}KB to ${(buffer.length / 1024).toFixed(1)}KB in ${Date.now() - startTime}ms`);
+        } catch (compressErr) {
+          console.error("⚠️ [ImageCache] Sharp compression failed, serving original image:", compressErr.message);
+        }
+      }
+
       imageCache.set(imageId, buffer);
       res.set("Cache-Control", "public, max-age=86400");
       res.type("image/jpeg").send(buffer);
