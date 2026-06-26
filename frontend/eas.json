@@ -16,6 +16,9 @@
     },
     "production": {
       "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://demo2026pondy-production.up.railway.app"
+      },
       "android": {
         "buildType": "apk"
       }
