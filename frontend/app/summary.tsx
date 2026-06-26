@@ -171,7 +171,7 @@ export default function SummaryScreen() {
         showToast({
           type: "success",
           message: data.exists ? "Customer Found" : "New Customer Enrolled",
-          subtitle: data.exists ? `Visits: ${data.customer.VisitCount}/9` : "First visit recorded upon checkout"
+          subtitle: data.exists ? `Visits: ${data.customer.VisitCount} (Lifetime: ${data.customer.TotalVisits || 0})` : "First visit recorded upon checkout"
         });
 
         if (data.customer.RewardPending === 1 || data.customer.VisitCount === 9) {
@@ -1384,7 +1384,7 @@ export default function SummaryScreen() {
                       </Text>
                     </View>
                     <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.textSecondary, marginLeft: 22 }}>
-                      Visit Progress: {loyaltyCustomer.isNew ? "New Enrollment" : `${loyaltyCustomer.VisitCount}/9`}
+                      Visit Progress: {loyaltyCustomer.isNew ? "New Enrollment" : `${loyaltyCustomer.VisitCount} (Lifetime: ${loyaltyCustomer.TotalVisits || 0})`}
                     </Text>
                     <Text style={{ fontSize: 12, fontFamily: Fonts.medium, color: Theme.textSecondary, marginLeft: 22 }}>
                       Reward Status: {loyaltyCustomer.isNew
@@ -2661,7 +2661,7 @@ export default function SummaryScreen() {
                         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                           <Text style={{ fontFamily: Fonts.bold, fontSize: 13, color: Theme.textSecondary }}>Visit Progress</Text>
                           <View style={{ backgroundColor: Theme.primaryLight, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: Theme.primaryBorder }}>
-                            <Text style={{ fontFamily: Fonts.black, fontSize: 13, color: Theme.primary }}>{loyaltyCustomer.VisitCount}/9</Text>
+                            <Text style={{ fontFamily: Fonts.black, fontSize: 13, color: Theme.primary }}>{loyaltyCustomer.VisitCount} (Lifetime: {loyaltyCustomer.TotalVisits || 0})</Text>
                           </View>
                         </View>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
@@ -2790,7 +2790,7 @@ export default function SummaryScreen() {
                                   </View>
                                   <View style={{ alignItems: "flex-end", gap: 4 }}>
                                     <View style={{ backgroundColor: cust.VisitCount >= 9 ? (Theme.successBg || "#dcfce7") : Theme.bgNav, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: cust.VisitCount >= 9 ? (Theme.successBorder || "#bbf7d0") : Theme.border }}>
-                                      <Text style={{ fontFamily: Fonts.bold, fontSize: 11, color: cust.VisitCount >= 9 ? (Theme.success || "#16a34a") : Theme.primary }}>{cust.VisitCount || 0}/9 visits</Text>
+                                      <Text style={{ fontFamily: Fonts.bold, fontSize: 11, color: cust.VisitCount >= 9 ? (Theme.success || "#16a34a") : Theme.primary }}>{cust.VisitCount || 0} visits (Lifetime: {cust.TotalVisits || 0})</Text>
                                     </View>
                                     <Ionicons name="chevron-forward" size={14} color={Theme.textSecondary} />
                                   </View>

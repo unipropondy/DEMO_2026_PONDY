@@ -2597,6 +2597,103 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
         }
       }
 
+      // 4. Fetch all active loyalty rules
+      const activeRulesRes = await transaction.request().query(`
+        SELECT r.RuleId, r.PurchaseDishId, r.RewardDishId, r.RequiredBills
+        FROM LoyaltyRule r
+        INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
+        WHERE r.IsActive = 1 AND c.IsActive = 1
+          AND GETDATE() BETWEEN c.StartDate AND c.EndDate
+      `);
+      const activeRules = activeRulesRes.recordset || [];
+
+      // 5. Process Dish-Specific Loyalty Progress & Redemptions
+      if (Array.isArray(itemsList) && activeRules.length > 0) {
+        // Separate items by unique DishId
+        const uniquePurchaseIds = [...new Set(itemsList.filter(i => {
+          const isReward = i.isDishReward === true || i.isDishReward === 1 || String(i.isDishReward).toLowerCase() === 'true';
+          return !isReward;
+        }).map(i => String(i.DishId || i.dishId || i.id).toLowerCase()))];
+
+        const redeemedRewards = itemsList.filter(i => {
+          const isReward = i.isDishReward === true || i.isDishReward === 1 || String(i.isDishReward).toLowerCase() === 'true';
+          return isReward;
+        });
+
+        // A. Process Paid Items (Increments)
+        for (const rule of activeRules) {
+          const rulePurchaseIdLower = String(rule.PurchaseDishId).toLowerCase();
+          
+          if (uniquePurchaseIds.includes(rulePurchaseIdLower) && !isSplitDuplicate) {
+            // Get current state
+            const stateRes = await transaction.request()
+              .input("CustomerId", sql.UniqueIdentifier, customerId)
+              .input("RuleId", sql.UniqueIdentifier, rule.RuleId)
+              .query(`
+                SELECT CurrentCount, RewardsAvailable FROM CustomerDishLoyaltyState WITH (UPDLOCK)
+                WHERE CustomerId = @CustomerId AND RuleId = @RuleId
+              `);
+
+            if (stateRes.recordset.length === 0) {
+              // Insert initial state
+              const initialCount = 1;
+              const rewardsEarned = initialCount >= rule.RequiredBills ? 1 : 0;
+              const finalCount = rewardsEarned > 0 ? 0 : initialCount;
+
+              await transaction.request()
+                .input("CustomerId", sql.UniqueIdentifier, customerId)
+                .input("RuleId", sql.UniqueIdentifier, rule.RuleId)
+                .input("Count", sql.Int, finalCount)
+                .input("Rewards", sql.Int, rewardsEarned)
+                .query(`
+                  INSERT INTO CustomerDishLoyaltyState (CustomerId, RuleId, CurrentCount, RewardsAvailable, RewardCyclesCompleted)
+                  VALUES (@CustomerId, @RuleId, @Count, @Rewards, 0)
+                `);
+            } else {
+              // Update state
+              const state = stateRes.recordset[0];
+              const newCount = state.CurrentCount + 1;
+              const rewardsEarned = newCount >= rule.RequiredBills ? 1 : 0;
+              const finalCount = rewardsEarned > 0 ? 0 : newCount;
+              const finalRewards = state.RewardsAvailable + rewardsEarned;
+
+              await transaction.request()
+                .input("CustomerId", sql.UniqueIdentifier, customerId)
+                .input("RuleId", sql.UniqueIdentifier, rule.RuleId)
+                .input("Count", sql.Int, finalCount)
+                .input("Rewards", sql.Int, finalRewards)
+                .query(`
+                  UPDATE CustomerDishLoyaltyState
+                  SET CurrentCount = @Count,
+                      RewardsAvailable = @Rewards,
+                      ModifiedOn = GETDATE()
+                  WHERE CustomerId = @CustomerId AND RuleId = @RuleId
+                `);
+            }
+          }
+        }
+
+        // B. Process Redemptions (Decrements)
+        for (const redeemed of redeemedRewards) {
+          const ruleId = redeemed.rewardRuleId || redeemed.RewardRuleId;
+          const qty = redeemed.Qty || redeemed.qty || 1;
+
+          if (ruleId) {
+            await transaction.request()
+              .input("CustomerId", sql.UniqueIdentifier, customerId)
+              .input("RuleId", sql.UniqueIdentifier, ruleId)
+              .input("Qty", sql.Int, qty)
+              .query(`
+                UPDATE CustomerDishLoyaltyState
+                SET RewardsAvailable = CASE WHEN RewardsAvailable >= @Qty THEN RewardsAvailable - @Qty ELSE 0 END,
+                    RewardCyclesCompleted = RewardCyclesCompleted + @Qty,
+                    ModifiedOn = GETDATE()
+                WHERE CustomerId = @CustomerId AND RuleId = @RuleId
+              `);
+          }
+        }
+      }
+
       await transaction.request()
         .input("LoyaltyCustomerId", sql.UniqueIdentifier, customerId)
         .input("SettlementId", sql.UniqueIdentifier, settlementId)

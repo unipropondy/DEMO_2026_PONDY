@@ -1165,7 +1165,7 @@ const confirmPayment = async () => {
       section: context?.section,
       items: finalItems.map((item: any) => ({
         lineItemId: item.lineItemId,
-        dishId: item.id,
+        dishId: item.dishId || item.DishId || item.id,
         name: item.name,
         songName: item.songName || item.SongName || "",
         qty: item.qty,
@@ -1173,6 +1173,9 @@ const confirmPayment = async () => {
         status: item.status,
         discountAmount: item.discountAmount ?? item.discount ?? null,
         discountType: item.discountType ?? null,
+        isDishReward: item.isDishReward || false,
+        rewardRuleId: item.rewardRuleId || null,
+        rewardDishId: item.rewardDishId || null,
       })),
       subTotal: subtotal,
       taxAmount: displayedTax,
