@@ -15,6 +15,7 @@ import {
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import * as React from "react";
 import { useEffect } from "react";
 import { useWindowDimensions } from "react-native";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -217,6 +218,19 @@ global.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Pr
 };
 
 export default function RootLayout() {
+  const [authHydrated, setAuthHydrated] = React.useState(useAuthStore.persist.hasHydrated());
+
+  React.useEffect(() => {
+    if (authHydrated) return;
+
+    // Subscribe to completion of hydration in Zustand
+    const unsubFinish = useAuthStore.persist.onFinishHydration(() => {
+      setAuthHydrated(true);
+    });
+
+    return unsubFinish;
+  }, [authHydrated]);
+
   useGlobalSocketSync();
   const colorScheme = useColorScheme();
   const router = useRouter();
@@ -272,7 +286,7 @@ export default function RootLayout() {
 
   // ✅ AUTH GUARD: Redirect based on auth state and role
   useEffect(() => {
-    if (!fontsLoaded) return;
+    if (!fontsLoaded || !authHydrated) return;
 
     const rootSegment = segments[0];
     const isInsideApp = !!rootSegment && rootSegment !== "login";
@@ -299,15 +313,15 @@ export default function RootLayout() {
         }
       }
     }
-  }, [user, segments, fontsLoaded]);
+  }, [user, segments, fontsLoaded, authHydrated]);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if ((fontsLoaded || fontError) && authHydrated) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, authHydrated]);
 
-  if (!fontsLoaded && !fontError) {
+  if ((!fontsLoaded && !fontError) || !authHydrated) {
     return null;
   }
 
