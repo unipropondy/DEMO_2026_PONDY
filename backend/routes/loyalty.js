@@ -13,18 +13,46 @@ router.get("/search", async (req, res) => {
     if (!q || q.trim() === "") {
       const result = await pool.request()
         .query(`
-          SELECT TOP 20 Phone, Name, VisitCount, TotalVisits, RewardPending 
-          FROM LoyaltyCustomer 
-          ORDER BY LastVisitDate DESC, Name ASC
+          SELECT TOP 20 
+            cust.Phone, 
+            cust.Name, 
+            ISNULL(s.CurrentCount, 0) AS VisitCount, 
+            cust.TotalVisits, 
+            cust.RewardPending 
+          FROM LoyaltyCustomer cust
+          OUTER APPLY (
+            SELECT TOP 1 state.CurrentCount 
+            FROM CustomerDishLoyaltyState state
+            INNER JOIN LoyaltyRule r ON state.RuleId = r.RuleId
+            INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
+            WHERE state.CustomerId = cust.LoyaltyCustomerId
+              AND r.IsActive = 1 AND c.IsActive = 1
+              AND GETDATE() BETWEEN c.StartDate AND c.EndDate
+          ) s
+          ORDER BY cust.LastVisitDate DESC, cust.Name ASC
         `);
       return res.json(result.recordset);
     }
     const result = await pool.request()
       .input("Query", sql.NVarChar(50), `%${q.trim()}%`)
       .query(`
-        SELECT TOP 10 Phone, Name, VisitCount, TotalVisits, RewardPending 
-        FROM LoyaltyCustomer 
-        WHERE Phone LIKE @Query OR Name LIKE @Query
+        SELECT TOP 10 
+          cust.Phone, 
+          cust.Name, 
+          ISNULL(s.CurrentCount, 0) AS VisitCount, 
+          cust.TotalVisits, 
+          cust.RewardPending 
+        FROM LoyaltyCustomer cust
+        OUTER APPLY (
+          SELECT TOP 1 state.CurrentCount 
+          FROM CustomerDishLoyaltyState state
+          INNER JOIN LoyaltyRule r ON state.RuleId = r.RuleId
+          INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
+          WHERE state.CustomerId = cust.LoyaltyCustomerId
+            AND r.IsActive = 1 AND c.IsActive = 1
+            AND GETDATE() BETWEEN c.StartDate AND c.EndDate
+        ) s
+        WHERE cust.Phone LIKE @Query OR cust.Name LIKE @Query
       `);
     res.json(result.recordset);
   } catch (err) {
@@ -45,9 +73,26 @@ router.get("/status/:phone", async (req, res) => {
     const result = await pool.request()
       .input("Phone", sql.NVarChar(50), phone.trim())
       .query(`
-        SELECT LoyaltyCustomerId, Phone, Name, VisitCount, TotalVisits, RewardsEarned, RewardsRedeemed, RewardPending 
-        FROM LoyaltyCustomer 
-        WHERE Phone = @Phone
+        SELECT 
+          cust.LoyaltyCustomerId, 
+          cust.Phone, 
+          cust.Name, 
+          ISNULL(s.CurrentCount, 0) AS VisitCount, 
+          cust.TotalVisits, 
+          cust.RewardsEarned, 
+          cust.RewardsRedeemed, 
+          cust.RewardPending 
+        FROM LoyaltyCustomer cust
+        OUTER APPLY (
+          SELECT TOP 1 state.CurrentCount 
+          FROM CustomerDishLoyaltyState state
+          INNER JOIN LoyaltyRule r ON state.RuleId = r.RuleId
+          INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
+          WHERE state.CustomerId = cust.LoyaltyCustomerId
+            AND r.IsActive = 1 AND c.IsActive = 1
+            AND GETDATE() BETWEEN c.StartDate AND c.EndDate
+        ) s
+        WHERE cust.Phone = @Phone
       `);
 
     if (result.recordset.length > 0) {

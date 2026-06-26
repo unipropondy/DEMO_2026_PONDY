@@ -2571,7 +2571,6 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
       } else {
         const cust = custRes.recordset[0];
         customerId = cust.LoyaltyCustomerId;
-
         if (!isSplitDuplicate) {
           let newVisitCount = cust.VisitCount;
           let newTotalVisits = cust.TotalVisits + 1;
@@ -2584,13 +2583,13 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
             newRewardsRedeemed = 1;
             newRewardPending = 0;
           } else if (hasLoyaltyDishOrdered) {
+            const primaryRule = activeRules[0];
+            const requiredBills = primaryRule ? primaryRule.RequiredBills : 9;
             newVisitCount = cust.VisitCount + 1;
-            if (newVisitCount === 9) {
+            if (newVisitCount >= requiredBills) {
+              newVisitCount = 0;
               newRewardPending = 1;
               newRewardsEarned = 1;
-            } else if (newVisitCount >= 10) {
-              newVisitCount = 1;
-              newRewardPending = 0;
             }
           }
 
