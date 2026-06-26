@@ -36,11 +36,23 @@ if (reactNative && reactNative.NativeModules) {
       }
     });
 
-    Object.defineProperty(reactNative, "NativeModules", {
-      value: nativeModulesProxy,
-      configurable: true,
-      writable: true,
-    });
+    const descriptor = Object.getOwnPropertyDescriptor(reactNative, "NativeModules");
+    if (!descriptor || descriptor.configurable) {
+      Object.defineProperty(reactNative, "NativeModules", {
+        value: nativeModulesProxy,
+        configurable: true,
+        writable: true,
+      });
+    } else {
+      // If non-configurable, we can directly mutate the properties of the proxy target (originalNativeModules)
+      // or assign properties if writable
+      try {
+        originalNativeModules.RNExternalDisplayEvent = mockDisplayModule;
+        originalNativeModules.ThermalPrinter = mockThermalPrinter;
+      } catch (mutateErr) {
+        // Fallback silently if sealed
+      }
+    }
   } catch (e) {
     console.warn("⚠️ [DisplayMock] Failed to proxy NativeModules:", e.message);
   }
