@@ -267,6 +267,29 @@ router.post("/log-visit", async (req, res) => {
     await transaction.begin();
 
     try {
+      // 4. Fetch all active loyalty rules
+      const activeRulesRes = await transaction.request().query(`
+        SELECT r.RuleId, r.PurchaseDishId, r.RewardDishId, r.RequiredBills
+        FROM LoyaltyRule r
+        INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
+        WHERE r.IsActive = 1 AND c.IsActive = 1
+          AND GETDATE() BETWEEN c.StartDate AND c.EndDate
+      `);
+      const activeRules = activeRulesRes.recordset || [];
+
+      const itemsList = items || [];
+      const hasLoyaltyDishOrdered = Array.isArray(itemsList) && activeRules.length > 0 && itemsList.some(item => {
+        const isReward = item.isDishReward === true || item.isDishReward === 1 || String(item.isDishReward).toLowerCase() === 'true';
+        if (isReward) return false;
+        const dishId = String(item.DishId || item.dishId || item.id || "").toLowerCase();
+        return activeRules.some(rule => String(rule.PurchaseDishId).toLowerCase() === dishId);
+      });
+
+      const hasRewardClaimed = Array.isArray(itemsList) && itemsList.some(item => {
+        const isReward = item.isDishReward === true || item.isDishReward === 1 || String(item.isDishReward).toLowerCase() === 'true';
+        return isReward;
+      });
+
       // 3. Upsert LoyaltyCustomer (Global Visits)
       let customerId;
       const custRes = await transaction.request()
@@ -274,11 +297,13 @@ router.post("/log-visit", async (req, res) => {
         .query("SELECT LoyaltyCustomerId, VisitCount, TotalVisits, RewardPending FROM LoyaltyCustomer WITH (UPDLOCK) WHERE Phone = @Phone");
 
       if (custRes.recordset.length === 0) {
+        const initialVisitCount = !isSplitDuplicate && hasLoyaltyDishOrdered ? 1 : 0;
+        const initialTotalVisits = isSplitDuplicate ? 0 : 1;
         const insertCustRes = await transaction.request()
           .input("Phone", sql.NVarChar(50), cleanPhone)
           .input("Name", sql.NVarChar(255), name ? name.trim() : null)
-          .input("VisitCount", sql.Int, isSplitDuplicate ? 0 : 1)
-          .input("TotalVisits", sql.Int, isSplitDuplicate ? 0 : 1)
+          .input("VisitCount", sql.Int, initialVisitCount)
+          .input("TotalVisits", sql.Int, initialTotalVisits)
           .query(`
             DECLARE @newCustId UNIQUEIDENTIFIER = NEWID();
             INSERT INTO LoyaltyCustomer (LoyaltyCustomerId, Phone, Name, VisitCount, TotalVisits, LastVisitDate)
@@ -291,15 +316,21 @@ router.post("/log-visit", async (req, res) => {
         customerId = cust.LoyaltyCustomerId;
 
         if (!isSplitDuplicate) {
-          let newVisitCount = cust.VisitCount + 1;
+          let newVisitCount = cust.VisitCount;
           let newTotalVisits = cust.TotalVisits + 1;
           let newRewardPending = cust.RewardPending;
 
-          if (newVisitCount === 9) {
-            newRewardPending = 1;
-          } else if (newVisitCount >= 10) {
-            newVisitCount = 1;
+          if (hasRewardClaimed) {
+            newVisitCount = 0;
             newRewardPending = 0;
+          } else if (hasLoyaltyDishOrdered) {
+            newVisitCount = cust.VisitCount + 1;
+            if (newVisitCount === 9) {
+              newRewardPending = 1;
+            } else if (newVisitCount >= 10) {
+              newVisitCount = 1;
+              newRewardPending = 0;
+            }
           }
 
           await transaction.request()
@@ -319,16 +350,6 @@ router.post("/log-visit", async (req, res) => {
             `);
         }
       }
-
-      // 4. Fetch all active loyalty rules
-      const activeRulesRes = await transaction.request().query(`
-        SELECT r.RuleId, r.PurchaseDishId, r.RewardDishId, r.RequiredBills
-        FROM LoyaltyRule r
-        INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
-        WHERE r.IsActive = 1 AND c.IsActive = 1
-          AND GETDATE() BETWEEN c.StartDate AND c.EndDate
-      `);
-      const activeRules = activeRulesRes.recordset || [];
 
       // 5. Process Dish-Specific Loyalty Progress & Redemptions
       if (Array.isArray(items) && activeRules.length > 0) {

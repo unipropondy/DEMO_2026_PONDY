@@ -2531,17 +2531,36 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
     await transaction.begin();
 
     try {
+      // 4. Fetch all active loyalty rules
+      const activeRulesRes = await transaction.request().query(`
+        SELECT r.RuleId, r.PurchaseDishId, r.RewardDishId, r.RequiredBills
+        FROM LoyaltyRule r
+        INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
+        WHERE r.IsActive = 1 AND c.IsActive = 1
+          AND GETDATE() BETWEEN c.StartDate AND c.EndDate
+      `);
+      const activeRules = activeRulesRes.recordset || [];
+
+      const hasLoyaltyDishOrdered = Array.isArray(itemsList) && activeRules.length > 0 && itemsList.some(item => {
+        const isReward = item.isDishReward === true || item.isDishReward === 1 || String(item.isDishReward).toLowerCase() === 'true';
+        if (isReward) return false;
+        const dishId = String(item.DishId || item.dishId || item.id || "").toLowerCase();
+        return activeRules.some(rule => String(rule.PurchaseDishId).toLowerCase() === dishId);
+      });
+
       let customerId;
       const custRes = await transaction.request()
         .input("Phone", sql.NVarChar(50), cleanPhone)
         .query("SELECT LoyaltyCustomerId, VisitCount, TotalVisits, RewardPending FROM LoyaltyCustomer WITH (UPDLOCK) WHERE Phone = @Phone");
 
       if (custRes.recordset.length === 0) {
+        const initialVisitCount = !isSplitDuplicate && hasLoyaltyDishOrdered ? 1 : 0;
+        const initialTotalVisits = isSplitDuplicate ? 0 : 1;
         const insertCustRes = await transaction.request()
           .input("Phone", sql.NVarChar(50), cleanPhone)
           .input("Name", sql.NVarChar(255), name ? String(name).trim() : null)
-          .input("VisitCount", sql.Int, isSplitDuplicate ? 0 : 1)
-          .input("TotalVisits", sql.Int, isSplitDuplicate ? 0 : 1)
+          .input("VisitCount", sql.Int, initialVisitCount)
+          .input("TotalVisits", sql.Int, initialTotalVisits)
           .query(`
             DECLARE @newCustId UNIQUEIDENTIFIER = NEWID();
             INSERT INTO LoyaltyCustomer (LoyaltyCustomerId, Phone, Name, VisitCount, TotalVisits, LastVisitDate)
@@ -2564,7 +2583,7 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
             newVisitCount = 0;
             newRewardsRedeemed = 1;
             newRewardPending = 0;
-          } else {
+          } else if (hasLoyaltyDishOrdered) {
             newVisitCount = cust.VisitCount + 1;
             if (newVisitCount === 9) {
               newRewardPending = 1;
@@ -2596,16 +2615,6 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
             `);
         }
       }
-
-      // 4. Fetch all active loyalty rules
-      const activeRulesRes = await transaction.request().query(`
-        SELECT r.RuleId, r.PurchaseDishId, r.RewardDishId, r.RequiredBills
-        FROM LoyaltyRule r
-        INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
-        WHERE r.IsActive = 1 AND c.IsActive = 1
-          AND GETDATE() BETWEEN c.StartDate AND c.EndDate
-      `);
-      const activeRules = activeRulesRes.recordset || [];
 
       // 5. Process Dish-Specific Loyalty Progress & Redemptions
       if (Array.isArray(itemsList) && activeRules.length > 0) {
