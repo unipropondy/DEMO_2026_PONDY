@@ -1399,9 +1399,10 @@ router.post("/save", async (req, res) => {
     displayOrderId = null;
     let dailySequence = 0;
 
-    if (tableId) {
+    const cleanTableId = toGuidOrNull(tableId);
+    if (cleanTableId) {
         const tableCheck = await transaction.request()
-            .input("tid", sql.UniqueIdentifier, String(tableId).replace(/^\{|\}$/g, "").trim())
+            .input("tid", sql.UniqueIdentifier, cleanTableId)
             .query("SELECT CurrentOrderId FROM TableMaster WITH (UPDLOCK) WHERE TableId = @tid");
         displayOrderId = tableCheck.recordset[0]?.CurrentOrderId;
         
@@ -2115,14 +2116,17 @@ router.post("/save", async (req, res) => {
       // 4. Cleanup Table & Cart on success
       if (tableId) {
         const cleanTableId = String(tableId).replace(/^\{|\}$/g, "").trim();
+        const validTableGuid = toGuidOrNull(cleanTableId);
         
         if (isSplit && hasRemaining) {
           console.log(`[SAVE SALE] Split bill partial payment. Remaining Total: ${remainingTotal}`);
-          // Partially paid: DO NOT clear table status. Just update total.
-          await transaction.request()
-            .input("tid", sql.NVarChar(128), cleanTableId)
-            .input("total", sql.Decimal(18, 2), remainingTotal)
-            .query("UPDATE [dbo].[TableMaster] SET TotalAmount = @total WHERE TableId = @tid");
+          if (validTableGuid) {
+            // Partially paid: DO NOT clear table status. Just update total.
+            await transaction.request()
+              .input("tid", sql.UniqueIdentifier, validTableGuid)
+              .input("total", sql.Decimal(18, 2), remainingTotal)
+              .query("UPDATE [dbo].[TableMaster] SET TotalAmount = @total WHERE TableId = @tid");
+          }
 
           const io = req.app.get("io");
           if (io) {
@@ -2136,9 +2140,11 @@ router.post("/save", async (req, res) => {
             .input("cartId", sql.NVarChar(128), cleanTableId)
             .query("DELETE FROM [dbo].[CartItems] WHERE [CartId] = @cartId");
             
-          await transaction.request()
-            .input("tid", sql.NVarChar(128), cleanTableId)
-            .query("UPDATE [dbo].[TableMaster] SET Status = 0, entry_status = NULL, TotalAmount = 0, StartTime = NULL, CurrentOrderId = NULL, CustomerName = NULL, Pax = NULL WHERE TableId = @tid");
+          if (validTableGuid) {
+            await transaction.request()
+              .input("tid", sql.UniqueIdentifier, validTableGuid)
+              .query("UPDATE [dbo].[TableMaster] SET Status = 0, entry_status = NULL, TotalAmount = 0, StartTime = NULL, CurrentOrderId = NULL, CustomerName = NULL, Pax = NULL WHERE TableId = @tid");
+          }
 
           const io = req.app.get("io");
           if (io) {

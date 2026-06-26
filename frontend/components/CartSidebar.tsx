@@ -927,7 +927,6 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
   const gstRate = (settings.gstPercentage || 0) / 100;
   const scRate = (settings.serviceChargePercentage || 0) / 100;
 
-  const activeOrders = useActiveOrdersStore((state) => state.activeOrders);
   const appendOrder = useActiveOrdersStore((state) => state.appendOrder);
   const markItemsSent = useActiveOrdersStore((state) => state.markItemsSent);
   const closeActiveOrder = useActiveOrdersStore(
@@ -935,26 +934,27 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
   );
   const voidOrderItem = useActiveOrdersStore((state) => state.voidOrderItem);
   const updateTableStatus = useTableStatusStore((s: any) => s.updateTableStatus);
-  const tables = useTableStatusStore((s: any) => s.tables);
-  const enableKOT = useGeneralSettingsStore((s: any) => s.settings.enableKOT);
-  const enableCheckoutBill = useGeneralSettingsStore((s: any) => s.settings.enableCheckoutBill);
-  const enableCheckoutFlow = useGeneralSettingsStore((s: any) => s.settings.enableCheckoutFlow !== undefined ? s.settings.enableCheckoutFlow : true);
-  const enableDirectProcessToPay = useGeneralSettingsStore((s: any) => s.settings.enableDirectProcessToPay !== undefined ? s.settings.enableDirectProcessToPay : false);
 
-  const tableData = useMemo(() => {
+  // 🟢 OPTIMIZED: Select only the tableData we care about to prevent re-renders on other tables' updates
+  const tableData = useTableStatusStore((s: any) => {
     if (!orderContext) return null;
     if (orderContext.orderType === "TAKEAWAY") {
-      return tables.find(
+      return s.tables.find(
         (t: any) =>
           t.section === "TAKEAWAY" && t.tableNo === orderContext.takeawayNo,
       );
     }
-    return tables.find(
+    return s.tables.find(
       (t: any) =>
         t.section === orderContext.section &&
         t.tableNo === orderContext.tableNo,
     );
-  }, [tables, orderContext]);
+  });
+
+  const enableKOT = useGeneralSettingsStore((s: any) => s.settings.enableKOT);
+  const enableCheckoutBill = useGeneralSettingsStore((s: any) => s.settings.enableCheckoutBill);
+  const enableCheckoutFlow = useGeneralSettingsStore((s: any) => s.settings.enableCheckoutFlow !== undefined ? s.settings.enableCheckoutFlow : true);
+  const enableDirectProcessToPay = useGeneralSettingsStore((s: any) => s.settings.enableDirectProcessToPay !== undefined ? s.settings.enableDirectProcessToPay : false);
 
   const unsentCount = useMemo(() => {
     return cart.filter((i: any) => !isItemSent(i)).length;
@@ -997,9 +997,10 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
     return s || "EMPTY";
   }, [tableData]);
 
-  const activeOrder = useMemo(() => {
+  // 🟢 OPTIMIZED: Select only the specific active order we care about to prevent re-renders on other orders' updates
+  const activeOrder = useActiveOrdersStore((state) => {
     if (!orderContext) return undefined;
-    return activeOrders.find((o) => {
+    return state.activeOrders.find((o) => {
       if (orderContext.orderType === "DINE_IN") {
         return (
           o.context.orderType === "DINE_IN" &&
@@ -1012,7 +1013,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
         String(o.context.takeawayNo || "").trim().toLowerCase() === String(orderContext.takeawayNo || "").trim().toLowerCase()
       );
     });
-  }, [activeOrders, orderContext]);
+  });
 
   useEffect(() => {
     if (orderContext?.tableId) {

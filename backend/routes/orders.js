@@ -561,11 +561,16 @@ async function syncToProfessionalTables(
 
 async function syncTableStatus(req, tableId) {
   if (!tableId || tableId === "undefined" || tableId === "null") return null;
+  const cleanId = String(tableId).replace(/^\{|\}$/g, "").trim().toLowerCase();
+  
+  const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
+  if (!isValidUUID) {
+    console.log(`[syncTableStatus] Skipping sync for non-UUID tableId: ${cleanId}`);
+    return null;
+  }
+
   const pool = await poolPromise;
-  const cleanId = String(tableId)
-    .replace(/^\{|\}$/g, "")
-    .trim();
-  const res = await pool.request().input("tid", sql.VarChar(50), cleanId)
+  const res = await pool.request().input("tid", sql.UniqueIdentifier, cleanId)
     .query(`
     DECLARE @ActualOrderId UNIQUEIDENTIFIER, @ActualOrderNo NVARCHAR(50), @TableNo VARCHAR(20), @count INT, @total DECIMAL(18,2);
     
@@ -1259,11 +1264,15 @@ router.post("/cancel", async (req, res) => {
 router.post("/complete", async (req, res) => {
   try {
     const { tableId, userId } = req.body;
-    const cleanId = tableId.replace(/^\{|\}$/g, "").trim();
+    const cleanId = toGuidOrNull(tableId);
+    if (!cleanId) {
+      console.log(`[Complete] Skipping table release for non-table order: ${tableId}`);
+      return res.json({ success: true });
+    }
     const pool = await poolPromise;
 
     // Final atomic update: Close the professional order and release the table
-    await pool.request().input("tid", sql.VarChar(50), cleanId).query(`
+    await pool.request().input("tid", sql.UniqueIdentifier, cleanId).query(`
         UPDATE RestaurantOrderCur SET isOrderClosed = 1, ModifiedOn = GETDATE() 
         WHERE Tableno = (SELECT TOP 1 TableNumber FROM TableMaster WHERE TableId = @tid) 
         AND (isOrderClosed = 0 OR isOrderClosed IS NULL);
@@ -1294,11 +1303,15 @@ router.post("/complete", async (req, res) => {
 router.post("/hold", async (req, res) => {
   try {
     const { tableId } = req.body;
+    const cleanId = toGuidOrNull(tableId);
+    if (!cleanId) {
+      console.log(`[Hold] Skipping table updates for non-table order: ${tableId}`);
+      return res.json({ success: true });
+    }
     const pool = await poolPromise;
-    const cleanId = tableId.replace(/^\{|\}$/g, "").trim();
 
     // Set status to 3 (Hold)
-    await pool.request().input("tid", sql.VarChar(50), cleanId).query(`
+    await pool.request().input("tid", sql.UniqueIdentifier, cleanId).query(`
         UPDATE TableMaster 
         SET Status = 3, 
             ModifiedOn = GETDATE() 
@@ -1316,7 +1329,11 @@ router.post("/hold", async (req, res) => {
 router.post("/checkout", async (req, res) => {
   try {
     const { tableId } = req.body;
-    const cleanId = tableId.replace(/^\{|\}$/g, "").trim();
+    const cleanId = toGuidOrNull(tableId);
+    if (!cleanId) {
+      console.log(`[Checkout] Skipping table updates for non-table order: ${tableId}`);
+      return res.json({ success: true, tableNo: "TAKEAWAY", section: "TAKEAWAY" });
+    }
     const pool = await poolPromise;
 
     // Step 1: Move table to Payment Pending (Status 2) and mark items as SERVED (4)

@@ -49,6 +49,8 @@ import {
 
 // --- MOBILE SOLID COLORS ---
 const SOLID_LIGHT_GREEN = "#F0FDF4";
+
+let lastTablesFetchTime = 0;
 const SOLID_LIGHT_RED = "#FEF2F2";
 const SOLID_LIGHT_BLUE = "#F0F9FF";
 const SOLID_LIGHT_AMBER = "#FFFBEB";
@@ -613,9 +615,7 @@ export default function Category() {
       }
 
       // Re-fetch only if data is likely stale (older than 30s)
-      const lastUpdate =
-        useTableStatusStore.getState().tables[0]?.startTime || 0;
-      if (Date.now() - lastUpdate > 30000) {
+      if (Date.now() - lastTablesFetchTime > 30000) {
         fetchTables();
       }
     }, []),
@@ -632,6 +632,7 @@ export default function Category() {
   // fetchLockedTables consolidated into fetchTables
 
   const fetchTables = async () => {
+    lastTablesFetchTime = Date.now();
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);

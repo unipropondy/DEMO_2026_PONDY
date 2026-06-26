@@ -115,7 +115,7 @@ const fetchWithRetry = async (
   url: string,
   options: RequestInit,
   maxRetries = 3,
-  timeoutMs = 15000
+  timeoutMs = 30000
 ): Promise<Response> => {
   let lastErr: any;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {

@@ -6,7 +6,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Keyboard,
   LayoutAnimation,
   Modal,
@@ -22,6 +21,7 @@ import {
   useWindowDimensions,
   View
 } from "react-native";
+import { Image } from "expo-image";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -155,7 +155,8 @@ const DishCard = React.memo(
             <Image
               source={{ uri: `${IMAGE_BASE_URL}${dish.Image}` }}
               style={styles.dishImg}
-              resizeMode="cover"
+              contentFit="cover"
+              transition={150}
             />
           ) : (
             <View
