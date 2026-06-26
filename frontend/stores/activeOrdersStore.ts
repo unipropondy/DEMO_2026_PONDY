@@ -427,7 +427,9 @@ const storeCreator: StateCreator<
 
         set({ activeOrders: merged });
       } catch (err) {
-        console.error("❌ [ActiveOrdersStore] Fetch error:", err);
+        if (__DEV__) {
+          console.warn("⚠️ [ActiveOrdersStore] Fetch error (expected if network is re-connecting):", err);
+        }
       } finally {
         set({ isFetching: false });
       }
