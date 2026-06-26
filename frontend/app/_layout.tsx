@@ -63,24 +63,24 @@ interface NetworkPolicy {
 }
 
 const CRITICAL_POLICY: NetworkPolicy = {
-  timeout: 30000,
-  maxRetries: 4,
-  initialDelay: 1000,
-  budget: 60000,
+  timeout: 15000,
+  maxRetries: 3,
+  initialDelay: 300,
+  budget: 35000,
 };
 
 const NORMAL_POLICY: NetworkPolicy = {
-  timeout: 30000,
-  maxRetries: 2,
-  initialDelay: 1000,
-  budget: 45000,
+  timeout: 5000,
+  maxRetries: 1,
+  initialDelay: 300,
+  budget: 10000,
 };
 
 const HEALTH_POLICY: NetworkPolicy = {
-  timeout: 5000,
-  maxRetries: 1,
-  initialDelay: 1000,
-  budget: 15000,
+  timeout: 3000,
+  maxRetries: 0,
+  initialDelay: 300,
+  budget: 5000,
 };
 
 const classifyRequest = (url: string): NetworkPolicy => {
