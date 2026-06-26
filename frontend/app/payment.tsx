@@ -161,7 +161,9 @@ const [paymentMessage, setPaymentMessage] = useState("");
           const endpoint = isMember
             ? `${API_URL}/api/members/search?query=${encodeURIComponent(memberPhone || memberId)}`
             : `${API_URL}/api/credit-customers/search?query=${encodeURIComponent(memberPhone || memberId)}`;
-          const res = await fetch(endpoint);
+          const res = await fetch(endpoint, {
+            headers: useAuthStore.getState().token ? { Authorization: `Bearer ${useAuthStore.getState().token}` } : {},
+          });
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
             const match = data.find((m: any) => m.MemberId === memberId);
@@ -347,7 +349,9 @@ const [paymentMessage, setPaymentMessage] = useState("");
       ? `${API_URL}/api/credit-customers/search?query=${encodeURIComponent(q)}`
       : `${API_URL}/api/members/search?query=${encodeURIComponent(q)}`;
     try {
-      const res = await fetch(endpoint);
+      const res = await fetch(endpoint, {
+        headers: useAuthStore.getState().token ? { Authorization: `Bearer ${useAuthStore.getState().token}` } : {},
+      });
       const data = await res.json();
       setMembers(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -508,8 +512,21 @@ const [paymentMessage, setPaymentMessage] = useState("");
 
   useEffect(() => {
     const init = async () => {
-      await usePaymentSettingsStore.getState().fetchSettings();
-      await fetchPaymentMethods();
+      const store = usePaymentSettingsStore.getState();
+      if (!store.hasLoadedMethods) {
+        setLoadingMethods(true);
+        try {
+          await Promise.all([
+            store.fetchSettings(),
+            store.fetchPaymentMethods()
+          ]);
+        } catch (err) {
+          if (__DEV__) {
+            console.error("Failed to fetch settings/methods on payment screen mount:", err);
+          }
+        }
+      }
+      applyPaymentMethodsFromCache();
       if (context?.tableId) {
         try {
           const res = await fetch(`${API_URL}/api/tables/${context.tableId}`);
@@ -697,33 +714,25 @@ const [paymentMessage, setPaymentMessage] = useState("");
   const change = Math.max(0, paidNum - total);
   const quickCash = [20, 50, 100, 200, 500, 1000];
 
-  const fetchPaymentMethods = async () => {
-  try {
-    const res = await fetch(`${API_URL}/api/sales/payment-methods`);
-    const data: any[] = await res.json();
-    
-    // ✅ DEBUG - Log raw data
-    console.log('🔍🔍🔍 RAW DATA FROM BACKEND:', JSON.stringify(data, null, 2));
-    
-    const mapped: PaymentMethod[] = data.map((d) => ({
-  payMode: d.payMode || "",
-  description: d.description || d.payMode || "",
-  icon: getPaymodeIcon(d.payMode || ""),
-  commission: parseFloat(d.Commission) || 0,
-  serviceCharge: parseFloat(d.ServiceCharge) || 0,
-  isEntertainment: d.isEntertainment === 1 || d.isEntertainment === true,
-  isVoucher: d.isVoucher === 1 || d.isVoucher === true,
-  position: d.Position || 0,
-  active: d.active,
-  // ✅ FIX: Handle both boolean and number
-  yeahPayEnabled: d.YeahPayEnabled === 1 || d.YeahPayEnabled === true,
-  deviceSn: d.DeviceSN || null,
-  deviceSalt: d.DeviceSalt || null,
-}));
-    // ✅ DEBUG - Log mapped data
-    console.log('🔍🔍🔍 MAPPED DATA:', JSON.stringify(mapped, null, 2));
-    
-    // ... rest of your code
+  const applyPaymentMethodsFromCache = () => {
+    setLoadingMethods(true);
+    try {
+      const cached = usePaymentSettingsStore.getState().paymentMethods;
+      
+      const mapped: PaymentMethod[] = cached.map((d) => ({
+        payMode: d.payMode || "",
+        description: d.description || d.payMode || "",
+        icon: getPaymodeIcon(d.payMode || ""),
+        commission: d.commission,
+        serviceCharge: d.serviceCharge,
+        isEntertainment: d.isEntertainment,
+        isVoucher: d.isVoucher,
+        position: d.position || 0,
+        active: d.active,
+        yeahPayEnabled: d.yeahPayEnabled,
+        deviceSn: d.deviceSn || null,
+        deviceSalt: d.deviceSalt || null,
+      }));
 
       const seen = new Set<string>();
       const deduped = mapped.filter((m) => {
@@ -766,12 +775,15 @@ const [paymentMessage, setPaymentMessage] = useState("");
       setPaymentMethods(filtered);
       if (filtered.length > 0) {
         setMethod(filtered[0].payMode);
-        fetchPaymentDetail(filtered[0].payMode, filtered[0]);
+        setSelectedDetail(filtered[0]);
         if (isCashMethod(filtered[0].payMode)) {
           setCashInput(total.toFixed(2));
         }
       }
-    } catch {
+    } catch (err) {
+      if (__DEV__) {
+        console.error("Error applying payment methods from cache:", err);
+      }
       setPaymentMethods([
         {
           payMode: "CAS",
@@ -789,33 +801,6 @@ const [paymentMessage, setPaymentMessage] = useState("");
     }
   };
 
-  const fetchPaymentDetail = async (
-    payMode: string,
-    fallback?: PaymentMethod,
-  ) => {
-    setLoadingDetail(true);
-    try {
-      const res = await fetch(
-        `${API_URL}/api/sales/payment-detail/${encodeURIComponent(payMode)}`,
-      );
-      const d = await res.json();
-      setSelectedDetail({
-        payMode: d.payMode || payMode,
-        description: d.description || payMode,
-        icon: getPaymodeIcon(d.payMode || payMode),
-        commission: parseFloat(d.commission) || 0,
-        serviceCharge: parseFloat(d.serviceCharge) || 0,
-        isEntertainment: d.isEntertainment === 1 || d.isEntertainment === true,
-        isVoucher: d.isVoucher === 1 || d.isVoucher === true,
-        position: d.position || 0,
-      });
-    } catch {
-      setSelectedDetail(fallback || null);
-    } finally {
-      setLoadingDetail(false);
-    }
-  };
-
   const handleSelectMethod = (m: PaymentMethod) => {
     setMethod(m.payMode);
     if (!isCashMethod(m.payMode)) {
@@ -824,7 +809,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
     } else {
       setCashInput(total.toFixed(2));
     }
-    fetchPaymentDetail(m.payMode, m);
+    setSelectedDetail(m);
   };
 
   useEffect(() => {
@@ -864,7 +849,10 @@ const confirmPayment = async () => {
       const endpoint = isCard ? '/api/yeahpay/card-payment' : '/api/yeahpay/paynow-payment';
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(useAuthStore.getState().token ? { 'Authorization': `Bearer ${useAuthStore.getState().token}` } : {}),
+        },
         body: JSON.stringify({
           amount: total,
           deviceSn: deviceSn,
@@ -1079,7 +1067,7 @@ const confirmPayment = async () => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: token ? `Bearer ${token}` : "",
+            Authorization: useAuthStore.getState().token ? `Bearer ${useAuthStore.getState().token}` : "",
           },
           body: JSON.stringify({
             memberId: memberId,
@@ -1209,7 +1197,7 @@ const confirmPayment = async () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          ...(useAuthStore.getState().token ? { "Authorization": `Bearer ${useAuthStore.getState().token}` } : {})
         },
         body: JSON.stringify(saleData),
       });

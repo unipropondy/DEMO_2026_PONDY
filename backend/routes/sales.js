@@ -2339,26 +2339,27 @@ router.get("/payment-methods", async (req, res) => {
       const pool = await poolPromise;
       const result = await pool.request().query(`
         SELECT 
-          PayMode as payMode, 
-          Description as description, 
-          Position, 
-          Active as active,
+          PayMode       as payMode,
+          Description   as description,
+          Position,
+          Active        as active,
           DeviceSN,
           DeviceSalt,
-          YeahPayEnabled
+          YeahPayEnabled,
+          ISNULL(Commission, 0)      as commission,
+          ISNULL(ServiceCharge, 0)   as serviceCharge,
+          ISNULL(IsEntertainment, 0) as isEntertainment,
+          ISNULL(IsVoucher, 0)       as isVoucher
         FROM [dbo].[Paymode] 
         ORDER BY Position ASC
       `);
-      
-      // ✅ DEBUG - Log raw result
-      console.log('🔍 Raw DB result:', JSON.stringify(result.recordset, null, 2));
-      
       res.json(result.recordset || []);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
 });
 
+// Kept for backward compatibility — all fields now also returned by /payment-methods above.
 router.get("/payment-detail/:payMode", async (req, res) => {
     try {
       const pool = await poolPromise;

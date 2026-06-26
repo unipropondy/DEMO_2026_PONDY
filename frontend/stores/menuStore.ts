@@ -91,8 +91,15 @@ export const useMenuStore = create<MenuState>((set, get) => ({
   },
 
   fetchDishes: async (groupId) => {
-    const { dishesByGroup } = get();
-    if (dishesByGroup[groupId]) return dishesByGroup[groupId];
+    const { dishesByGroup, modifierCache } = get();
+    if (dishesByGroup[groupId]) {
+      const groupDishes = dishesByGroup[groupId];
+      const hasAnyModifierCached = groupDishes.some(d => modifierCache[d.DishId || d.id] !== undefined);
+      if (!hasAnyModifierCached) {
+        get().fetchModifiersForGroup(groupId);
+      }
+      return dishesByGroup[groupId];
+    }
 
     try {
       const res = await fetch(`${API_URL}/api/menu/dishes/group/${groupId}`);

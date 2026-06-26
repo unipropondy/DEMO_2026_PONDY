@@ -118,12 +118,18 @@ const fetchWithRetry = async (
   timeoutMs = 30000
 ): Promise<Response> => {
   let lastErr: any;
+  console.log("🔍 [DIAGNOSTIC] [fetchWithRetry] entry:", { url, optionsKeys: Object.keys(options), hasHeaders: !!options.headers });
+  if (options.headers) {
+    console.log("🔍 [DIAGNOSTIC] [fetchWithRetry] options.headers detail:", JSON.stringify(options.headers));
+  }
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       if (__DEV__) console.log(`[fetchWithRetry] Attempt ${attempt}/${maxRetries}: ${url}`);
+      console.log(`🔍 [DIAGNOSTIC] [fetchWithRetry] Calling fetch for attempt ${attempt}`);
       const res = await fetch(url, { ...options, signal: controller.signal });
+      console.log(`🔍 [DIAGNOSTIC] [fetchWithRetry] fetch resolved: status ${res.status}`);
       clearTimeout(timer);
       return res;
     } catch (err: any) {
@@ -1303,14 +1309,21 @@ export const useCartStore = create<CartState>()(
 
       checkoutOrder: async (tableId) => {
         try {
-          if (__DEV__) console.log(`🚀 [CartStore] Initiating Checkout for Table: ${tableId}`);
+          const hasHydrated = useAuthStore.persist.hasHydrated();
           const token = useAuthStore.getState().token;
+          const isLoggedIn = useAuthStore.getState().isLoggedIn;
+          console.log("🔍 [DIAGNOSTIC] [checkoutOrder] start:", { hasHydrated, hasToken: !!token, isLoggedIn, tableId });
+
+          const reqHeaders = { 
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          };
+          console.log("🔍 [DIAGNOSTIC] [checkoutOrder] request headers constructed:", { ...reqHeaders, Authorization: token ? `Bearer ${token.substring(0, 15)}...` : "NONE" });
+
+          if (__DEV__) console.log(`🚀 [CartStore] Initiating Checkout for Table: ${tableId}`);
           const response = await fetchWithRetry(`${API_URL}/api/orders/checkout`, {
             method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              ...(token ? { "Authorization": `Bearer ${token}` } : {})
-            },
+            headers: reqHeaders,
             body: JSON.stringify({ tableId }),
           });
           
