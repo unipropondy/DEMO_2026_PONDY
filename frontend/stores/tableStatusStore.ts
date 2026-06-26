@@ -81,25 +81,33 @@ export const useTableStatusStore = create<TableStatusState>((set, get) => ({
         ? new Date(startTime).getTime() 
         : startTime;
 
-      const existingIndex = state.tables.findIndex(
-        (t) => (String(t.tableId || "").replace(/^\{|\}$/g, "").trim().toLowerCase() === cleanTableId && !!cleanTableId) || (t.section === section && t.tableNo === tableNo)
-      );
+      let existingIndex = -1;
+      let existingTable: TableStatus | undefined = cleanTableId ? state.tableMap[cleanTableId] : undefined;
+
+      if (existingTable) {
+        existingIndex = state.tables.findIndex((t) => t.tableId === cleanTableId);
+      } else {
+        existingIndex = state.tables.findIndex((t) => t.section === section && t.tableNo === tableNo);
+        if (existingIndex > -1) {
+          existingTable = state.tables[existingIndex];
+        }
+      }
 
       const updateTimestamp = isExternal ? state.lastLocalUpdate[key] : now;
       const updatedTable: TableStatus = {
-        tableId: cleanTableId || (existingIndex > -1 ? state.tables[existingIndex].tableId : ""),
+        tableId: cleanTableId || existingTable?.tableId || "",
         section,
         tableNo,
         orderId,
         status,
-        startTime: parsedStartTime || (existingIndex > -1 ? state.tables[existingIndex].startTime : 0) || Date.now(),
+        startTime: parsedStartTime || existingTable?.startTime || Date.now(),
         lockedByName,
-        totalAmount: totalAmount !== undefined ? totalAmount : (existingIndex > -1 ? state.tables[existingIndex].totalAmount : 0),
-        isHoldOvertime: isHoldOvertime !== undefined ? isHoldOvertime : (existingIndex > -1 ? state.tables[existingIndex].isHoldOvertime : false),
-        lastModified: modifiedOn || (existingIndex > -1 ? state.tables[existingIndex].lastModified : ""),
-        entryStatus: entryStatus !== undefined ? entryStatus : (existingIndex > -1 ? state.tables[existingIndex].entryStatus : undefined),
-        customerName: customerName !== undefined ? customerName : (existingIndex > -1 ? state.tables[existingIndex].customerName : undefined),
-        pax: pax !== undefined ? pax : (existingIndex > -1 ? state.tables[existingIndex].pax : undefined),
+        totalAmount: totalAmount !== undefined ? totalAmount : (existingTable?.totalAmount ?? 0),
+        isHoldOvertime: isHoldOvertime !== undefined ? isHoldOvertime : (existingTable?.isHoldOvertime ?? false),
+        lastModified: modifiedOn || existingTable?.lastModified || "",
+        entryStatus: entryStatus !== undefined ? entryStatus : existingTable?.entryStatus,
+        customerName: customerName !== undefined ? customerName : existingTable?.customerName,
+        pax: pax !== undefined ? pax : existingTable?.pax,
       };
 
       const newTables = [...state.tables];

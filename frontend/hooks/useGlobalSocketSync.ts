@@ -30,7 +30,9 @@ export function useGlobalSocketSync() {
   useEffect(() => {
     // --- 0. RECONNECTION RE-SYNC ---
     const handleConnect = () => {
-      console.log(`🔌 [Socket-Global] CONNECTED: ${socket.id} | API: ${API_URL}`);
+      if (__DEV__) {
+        console.log(`🔌 [Socket-Global] CONNECTED: ${socket.id} | API: ${API_URL}`);
+      }
       useActiveOrdersStore.getState().fetchActiveKitchenOrders();
     };
 
@@ -39,19 +41,27 @@ export function useGlobalSocketSync() {
     const keepAliveInterval = setInterval(async () => {
       try {
         await fetch(`${API_URL}/health`, { method: 'GET' });
-        console.log('[KeepAlive] Pinged server successfully.');
+        if (__DEV__) {
+          console.log('[KeepAlive] Pinged server successfully.');
+        }
       } catch {
-        console.warn('[KeepAlive] Ping failed — server may be sleeping.');
+        if (__DEV__) {
+          console.warn('[KeepAlive] Ping failed — server may be sleeping.');
+        }
       }
     }, 4 * 60 * 1000); // every 4 minutes
 
     const handleConnectError = (error: any) => {
-      console.error("🔌 [Socket-Global] CONNECTION ERROR:", error);
+      if (__DEV__) {
+        console.error("🔌 [Socket-Global] CONNECTION ERROR:", error);
+      }
     };
 
     // --- 1. NEW ORDERS ---
     const handleNewOrder = (payload: any) => {
-      console.log("📦 [Socket-Global] New order:", payload.orderId);
+      if (__DEV__) {
+        console.log("📦 [Socket-Global] New order:", payload.orderId);
+      }
       appendOrder(payload.orderId, payload.context, payload.items, payload.createdAt);
       markItemsSent(payload.orderId);
     };
@@ -62,7 +72,9 @@ export function useGlobalSocketSync() {
       const tableId = data.tableId || data.tableid;
       if (!tableId) return;
 
-      console.log(`[TRACE] [${now}] [SOCKET_RECEIVE] table_status_updated | Table: ${tableId} | Status: ${data.status}`);
+      if (__DEV__) {
+        console.log(`[TRACE] [${now}] [SOCKET_RECEIVE] table_status_updated | Table: ${tableId} | Status: ${data.status}`);
+      }
 
       const status = data.status !== undefined ? data.status : data.Status;
       const totalAmount = data.totalAmount !== undefined ? data.totalAmount : data.TotalAmount;
@@ -124,11 +136,15 @@ export function useGlobalSocketSync() {
         const isCartEmpty = currentCartItems.length === 0 && totalAmount > 0;
         
         if (orderIdChanged || isCartEmpty) {
-          console.log(`[TRACE] [${Date.now()}] [SOCKET_RECEIVE] Definitive Change. Refreshing cart...`);
+          if (__DEV__) {
+            console.log(`[TRACE] [${Date.now()}] [SOCKET_RECEIVE] Definitive Change. Refreshing cart...`);
+          }
           throttledFetch(tableId, 100); // Fast refresh for critical changes
         } else {
           // Skip redundant fetch - rely on cart_change relay for item-level updates
-          console.log(`[TRACE] [${Date.now()}] [SOCKET_RECEIVE] Table ${tableId} total updated. Skipping redundant fetch.`);
+          if (__DEV__) {
+            console.log(`[TRACE] [${Date.now()}] [SOCKET_RECEIVE] Table ${tableId} total updated. Skipping redundant fetch.`);
+          }
         }
       }
     };
@@ -136,7 +152,9 @@ export function useGlobalSocketSync() {
     // --- 3. ITEM STATUS (READY/SERVED) ---
     const handleItemStatus = (payload: { orderId: string; lineItemId: string; status: string; tableId?: string }) => {
       const cleanLineItemId = String(payload.lineItemId || "").toLowerCase();
-      console.log(`✨ [Socket-Global] Item ${payload.status}:`, cleanLineItemId);
+      if (__DEV__) {
+        console.log(`✨ [Socket-Global] Item ${payload.status}:`, cleanLineItemId);
+      }
       
       if (payload.status === "READY") {
         markItemReady(payload.orderId, cleanLineItemId, true);
@@ -158,7 +176,9 @@ export function useGlobalSocketSync() {
 
     // --- 4. CART UPDATED ---
     const handleCartUpdated = (data: { tableId: string }) => {
-      console.log("🛒 [Socket-Global] Cart updated (DB Sync) for Table:", data.tableId);
+      if (__DEV__) {
+        console.log("🛒 [Socket-Global] Cart updated (DB Sync) for Table:", data.tableId);
+      }
       const currentOrder = useOrderContextStore.getState().currentOrder;
       if (data.tableId && data.tableId === currentOrder?.tableId) {
         const cartStore = useCartStore.getState();
@@ -167,7 +187,9 @@ export function useGlobalSocketSync() {
           const lastLocal = cartStore.lastLocalUpdate[contextId] || 0;
           const lastSync = cartStore.lastServerSync[contextId] || 0;
           if (lastLocal > 0 && lastSync >= lastLocal) {
-            console.log(`🛡️ [Socket-Global] Skipping redundant cart fetch for Table: ${data.tableId}. Local client is already synchronized.`);
+            if (__DEV__) {
+              console.log(`🛡️ [Socket-Global] Skipping redundant cart fetch for Table: ${data.tableId}. Local client is already synchronized.`);
+            }
             return;
           }
         }
@@ -179,7 +201,9 @@ export function useGlobalSocketSync() {
 
     // --- 5. ORDER STATUS (CLOSE/VOID) ---
     const handleOrderStatusUpdate = (payload: { orderId: string; action: "CLOSE" | "VOID"; lineItemId?: string }) => {
-      console.log(`🔄 [Socket-Global] Order ${payload.action}:`, payload.orderId);
+      if (__DEV__) {
+        console.log(`🔄 [Socket-Global] Order ${payload.action}:`, payload.orderId);
+      }
       if (payload.action === "CLOSE") {
         closeActiveOrder(payload.orderId);
       } else if (payload.action === "VOID" && payload.lineItemId) {
@@ -190,7 +214,9 @@ export function useGlobalSocketSync() {
     // --- 5.5 ORDER CLOSED (PAYMENT WIPE) ---
     const handleOrderClosed = (data: { tableId: string; tableNo: string; section: string }) => {
       const { tableId, tableNo, section } = data;
-      console.log(`🧹 [Socket-Global] Order Closed for Table: ${tableId} (${tableNo}). Wiping KDS...`);
+      if (__DEV__) {
+        console.log(`🧹 [Socket-Global] Order Closed for Table: ${tableId} (${tableNo}). Wiping KDS...`);
+      }
       const store = useActiveOrdersStore.getState();
       const activeOrders = store.activeOrders;
       
@@ -218,18 +244,24 @@ export function useGlobalSocketSync() {
     // --- 6. INSTANT CART SYNC (Socket-First) ---
     const handleCartChange = (payload: { tableId: string; contextId: string; items: any[]; lastUpdate: number; version?: number }) => {
       const now = Date.now();
-      console.log(`[TRACE] [${now}] [${payload.contextId}] socket.on: cart_change | Items: ${payload.items.length} | PayloadVersion: ${payload.version || 'NONE'}`);
+      if (__DEV__) {
+        console.log(`[TRACE] [${now}] [${payload.contextId}] socket.on: cart_change | Items: ${payload.items.length} | PayloadVersion: ${payload.version || 'NONE'}`);
+      }
 
       const store = useCartStore.getState();
       const currentLastUpdate = store.lastLocalUpdate[payload.contextId] || 0;
 
       // 🛡️ SYNC SHIELD: Only update if the socket data is NEWER than our last local edit
       if (payload.lastUpdate <= currentLastUpdate) {
-        console.log(`🛡️ [TRACE] [${now}] [${payload.contextId}] socket.on: cart_change | ABORTED (Stale: ${payload.lastUpdate} <= ${currentLastUpdate})`);
+        if (__DEV__) {
+          console.log(`🛡️ [TRACE] [${now}] [${payload.contextId}] socket.on: cart_change | ABORTED (Stale: ${payload.lastUpdate} <= ${currentLastUpdate})`);
+        }
         return;
       }
 
-      console.log(`⚡ [TRACE] [${now}] [${payload.contextId}] socket.on: cart_change | APPLYING`);
+      if (__DEV__) {
+        console.log(`⚡ [TRACE] [${now}] [${payload.contextId}] socket.on: cart_change | APPLYING`);
+      }
       store.setCartItems(payload.contextId, payload.items, true, "SOCKET_CHANGE");
     };
 

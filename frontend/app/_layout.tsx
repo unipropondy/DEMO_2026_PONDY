@@ -224,15 +224,21 @@ export default function RootLayout() {
   // 🌐 SILENT API WAKE-UP & CONNECTION PRE-WARM
   useEffect(() => {
     const warmupAPI = async () => {
-      console.log(`🌐 [App Startup] Warming up connection to ${API_URL}...`);
+      if (__DEV__) {
+        console.log(`🌐 [App Startup] Warming up connection to ${API_URL}...`);
+      }
       try {
         const start = Date.now();
         // Trigger DNS lookup, TCP/SSL handshake, and backend container spin-up
         const res = await fetch(`${API_URL}/health`);
         const duration = Date.now() - start;
-        console.log(`🌐 [App Startup] API warmed up successfully in ${duration}ms. Status: ${res.status}`);
+        if (__DEV__) {
+          console.log(`🌐 [App Startup] API warmed up successfully in ${duration}ms. Status: ${res.status}`);
+        }
       } catch (err: any) {
-        console.warn(`🌐 [App Startup] API warmup ping failed (expected if backend container is booting up):`, err.message || err);
+        if (__DEV__) {
+          console.warn(`🌐 [App Startup] API warmup ping failed (expected if backend container is booting up):`, err.message || err);
+        }
       }
     };
     warmupAPI();

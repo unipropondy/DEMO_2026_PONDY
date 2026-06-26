@@ -5,6 +5,7 @@ import { Theme } from "@/constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useRenderProfiler } from "../../utils/Profiler";
 import {
   Alert,
   FlatList,

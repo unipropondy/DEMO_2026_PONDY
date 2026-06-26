@@ -5,7 +5,6 @@ import {
   Dimensions,
   DimensionValue,
   FlatList,
-  LayoutAnimation,
   Modal,
   Platform,
   Pressable,
@@ -1191,7 +1190,6 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
   }
 
   const toggleExpand = (id: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedItemId(expandedItemId === id ? null : id);
   };
 

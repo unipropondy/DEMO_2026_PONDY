@@ -122,7 +122,7 @@ const fetchWithRetry = async (
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      console.log(`[fetchWithRetry] Attempt ${attempt}/${maxRetries}: ${url}`);
+      if (__DEV__) console.log(`[fetchWithRetry] Attempt ${attempt}/${maxRetries}: ${url}`);
       const res = await fetch(url, { ...options, signal: controller.signal });
       clearTimeout(timer);
       return res;
@@ -130,7 +130,7 @@ const fetchWithRetry = async (
       clearTimeout(timer);
       lastErr = err;
       const isAbort = err?.name === 'AbortError';
-      console.warn(`[fetchWithRetry] Attempt ${attempt} ${isAbort ? 'TIMED OUT' : 'FAILED'}: ${err?.message}`);
+      if (__DEV__) console.warn(`[fetchWithRetry] Attempt ${attempt} ${isAbort ? 'TIMED OUT' : 'FAILED'}: ${err?.message}`);
       if (attempt < maxRetries) {
         await new Promise(r => setTimeout(r, 2000 * attempt)); // 2s, 4s back-off
       }
@@ -355,8 +355,7 @@ export const useCartStore = create<CartState>()(
         const { currentContextId } = get();
         if (!currentContextId) return;
         
-        console.log(`[TRACE] [${Date.now()}] [SOCKET_QUANTITY_SYNC] Received ${items.length} items for Context: ${currentContextId}`);
-        items.forEach((item: CartItem) => console.log(`[TRACE] [SOCKET_QUANTITY_SYNC] Item: ${item.name} | Qty: ${item.qty}`));
+        if (__DEV__) console.log(`[TRACE] [${Date.now()}] [SOCKET_QUANTITY_SYNC] Received ${items.length} items for Context: ${currentContextId}`);
 
         // Update qty map
         const newQtyMap: Record<string, number> = {};
@@ -601,7 +600,7 @@ export const useCartStore = create<CartState>()(
 
         const newVersion = (get().operationVersion[currentContextId] || 0) + 1;
         const now = Date.now();
-        console.log(`[TRACE] [${now}] [${currentContextId}] DELETE_START | ID: ${lineItemId} | Version: ${newVersion}`);
+        if (__DEV__) console.log(`[TRACE] [${now}] [${currentContextId}] DELETE_START | ID: ${lineItemId} | Version: ${newVersion}`);
 
         // 🛡️ LOCK & SHIELD
         set((state) => {
@@ -660,7 +659,7 @@ export const useCartStore = create<CartState>()(
 
           if (!res.ok) throw new Error("Delete failed on server");
 
-          console.log(`[TRACE] [${Date.now()}] [${currentContextId}] DELETE_DB_SUCCESS | ID: ${lineItemId}`);
+          if (__DEV__) console.log(`[TRACE] [${Date.now()}] [${currentContextId}] DELETE_DB_SUCCESS | ID: ${lineItemId}`);
           
           set((state) => {
             const nextDeleting = new Set(state.deletingItems);
@@ -702,7 +701,7 @@ export const useCartStore = create<CartState>()(
 
         const newVersion = (get().operationVersion[currentContextId] || 0) + 1;
         const now = Date.now();
-        console.log(`[TRACE] [${now}] [${currentContextId}] Mutate: CLEAR_CART | START | NewVersion: ${newVersion}`);
+        if (__DEV__) console.log(`[TRACE] [${now}] [${currentContextId}] Mutate: CLEAR_CART | START | NewVersion: ${newVersion}`);
 
         // 🛡️ LOCK & SHIELD
         set((state) => ({
@@ -764,9 +763,9 @@ export const useCartStore = create<CartState>()(
           });
 
           // Wait for DB to settle
-          console.log(`[TRACE] [${Date.now()}] [${currentContextId}] Mutate: CLEAR_CART | DB request finished. Waiting 5s before unlocking...`);
+          if (__DEV__) console.log(`[TRACE] [${Date.now()}] [${currentContextId}] Mutate: CLEAR_CART | DB request finished. Waiting 5s before unlocking...`);
           setTimeout(async () => {
-            console.log(`[TRACE] [${Date.now()}] [${currentContextId}] Mutate: CLEAR_CART | UNLOCKING & FETCHING`);
+            if (__DEV__) console.log(`[TRACE] [${Date.now()}] [${currentContextId}] Mutate: CLEAR_CART | UNLOCKING & FETCHING`);
             set((state) => ({ isClearing: { ...state.isClearing, [currentContextId]: false } }));
             await fetchCartFromDB(tableId);
           }, 5000);
@@ -796,7 +795,7 @@ export const useCartStore = create<CartState>()(
           Object.keys(newLastLocalUpdate).forEach(ctx => { if (ctx.includes(tableId)) delete newLastLocalUpdate[ctx]; });
           Object.keys(newLastServerSync).forEach(ctx => { if (ctx.includes(tableId)) delete newLastServerSync[ctx]; });
 
-          console.log(`🧹 [CartStore] Table session cleared: ${tableId}`);
+          if (__DEV__) console.log(`🧹 [CartStore] Table session cleared: ${tableId}`);
 
           return {
             carts: newCarts,
@@ -817,18 +816,18 @@ export const useCartStore = create<CartState>()(
         
         // 🛡️ CLEAR LOCK: Reject updates during a manual clear
         if (state.isClearing[contextId]) {
-          console.log(`🛡️ [TRACE] [${now}] [${contextId}] setCartItems: BLOCKED (Clear Lock active) | SOURCE: ${source}`);
+          if (__DEV__) console.log(`🛡️ [TRACE] [${now}] [${contextId}] setCartItems: BLOCKED (Clear Lock active) | SOURCE: ${source}`);
           return;
         }
 
-        console.log(`[TRACE] [${now}] [${contextId}] setCartItems: SOURCE: ${source} | Items: ${items.length} | CurrentVersion: ${currentVersion}`);
+        if (__DEV__) console.log(`[TRACE] [${now}] [${contextId}] setCartItems: SOURCE: ${source} | Items: ${items.length} | CurrentVersion: ${currentVersion}`);
 
         // 🛡️ DELETION SHIELD FILTER: Ensure no ghost items slip through any setCartItems call
         const { deletedItemsShield } = get();
         const filteredItems = items.filter(item => {
           const shieldExpiry = deletedItemsShield[item.lineItemId];
           if (shieldExpiry && now < shieldExpiry) {
-            console.log(`🛡️ [TRACE] [${now}] [${contextId}] BLOCKED GHOST RESTORE: ${item.name} (${item.lineItemId}) from ${source}`);
+            if (__DEV__) console.log(`🛡️ [TRACE] [${now}] [${contextId}] BLOCKED GHOST RESTORE: ${item.name} (${item.lineItemId}) from ${source}`);
             return false;
           }
           return true;
@@ -859,7 +858,7 @@ export const useCartStore = create<CartState>()(
 
         const currentCart = get().carts[currentContextId] || [];
         const item = currentCart.find(i => i.lineItemId === lineItemId);
-        if (item) {
+        if (item && __DEV__) {
           const type = newQty < item.qty ? "DECREMENT" : "INCREMENT";
           console.log(`[TRACE] [${Date.now()}] [QUANTITY_${type}] Product: ${item.name} | NewQty: ${newQty}`);
         }
@@ -1015,7 +1014,7 @@ export const useCartStore = create<CartState>()(
 
         // 🛑 ABORT PREVIOUS IN-FLIGHT: If we're already saving for this context, stop it
         if (_syncAbortControllers[contextId]) {
-          console.log(`🛑 [CartStore] ABORTING stale save request for ${contextId}`);
+          if (__DEV__) console.log(`🛑 [CartStore] ABORTING stale save request for ${contextId}`);
           _syncAbortControllers[contextId].abort();
         }
         
@@ -1025,7 +1024,7 @@ export const useCartStore = create<CartState>()(
           const lastSync = currentState.lastServerSync[contextId] || 0;
 
           if (lastLocal > 0 && lastSync >= lastLocal) {
-            console.log(`🛡️ [CartStore] Skipping redundant save-cart sync for ${contextId}. Local: ${lastLocal}, Sync: ${lastSync}`);
+            if (__DEV__) console.log(`🛡️ [CartStore] Skipping redundant save-cart sync for ${contextId}. Local: ${lastLocal}, Sync: ${lastSync}`);
             set({ pendingSync: false, _syncTimeout: null });
             return;
           }
@@ -1039,7 +1038,7 @@ export const useCartStore = create<CartState>()(
             _syncAbortControllers: { ...state._syncAbortControllers, [contextId]: controller }
           }));
 
-          console.log(`💾 [CartStore] SYNC START for ${contextId}...`);
+          if (__DEV__) console.log(`💾 [CartStore] SYNC START for ${contextId}...`);
 
           try {
             const items = currentState.carts[contextId] || [];
@@ -1082,7 +1081,7 @@ export const useCartStore = create<CartState>()(
             
             if (res.ok) {
                 const data = await res.json();
-                console.log(`✅ [CartStore] SYNC SUCCESS for ${contextId}`);
+                if (__DEV__) console.log(`✅ [CartStore] SYNC SUCCESS for ${contextId}`);
                 
                 set(state => {
                   // Only remove the controller if it's still THIS one
@@ -1104,7 +1103,7 @@ export const useCartStore = create<CartState>()(
             }
           } catch (err) {
             if ((err as any).name === 'AbortError') {
-              console.log(`ℹ️ [CartStore] SYNC ABORTED for ${contextId}`);
+              if (__DEV__) console.log(`ℹ️ [CartStore] SYNC ABORTED for ${contextId}`);
             } else {
               console.error("❌ [CartStore] Sync Exception:", err);
             }
@@ -1129,18 +1128,18 @@ export const useCartStore = create<CartState>()(
 
             // 🛡️ CLEAR LOCK: Reject fetches during a manual clear
             if (state.isClearing[currentContext]) {
-              console.log(`🛡️ [TRACE] [${now}] [${currentContext}] fetchCartFromDB: BLOCKED (Clear Lock active)`);
+              if (__DEV__) console.log(`🛡️ [TRACE] [${now}] [${currentContext}] fetchCartFromDB: BLOCKED (Clear Lock active)`);
               return;
             }
 
             const lastEdit = state.lastLocalUpdate[currentContext] || 0;
             const timeSinceLastEdit = now - lastEdit;
 
-            console.log(`[TRACE] [${now}] [${currentContext}] fetchCartFromDB: START | Table: ${tableId} | LastEdit: ${timeSinceLastEdit}ms ago`);
+            if (__DEV__) console.log(`[TRACE] [${now}] [${currentContext}] fetchCartFromDB: START | Table: ${tableId} | LastEdit: ${timeSinceLastEdit}ms ago`);
 
             // 🛡️ DYNAMIC SHIELD: Latency protection
             if (timeSinceLastEdit < 600 || lastEdit > fetchStartTime) {
-               console.log(`🛡️ [TRACE] [${now}] [${currentContext}] fetchCartFromDB: ABORTED (Latency Shield)`);
+               if (__DEV__) console.log(`🛡️ [TRACE] [${now}] [${currentContext}] fetchCartFromDB: ABORTED (Latency Shield)`);
                return;
             }
 
@@ -1153,17 +1152,12 @@ export const useCartStore = create<CartState>()(
             // 🛡️ FINAL CHECK: Ensure no edits happened DURING the network request
             const latestState = get();
             if (latestState.lastLocalUpdate[currentContext] > fetchStartTime) {
-              console.log(`🛡️ [TRACE] [${now}] [${currentContext}] fetchCartFromDB: ABORTED (Newer local edit detected during fetch)`);
+              if (__DEV__) console.log(`🛡️ [TRACE] [${now}] [${currentContext}] fetchCartFromDB: ABORTED (Newer local edit detected during fetch)`);
               return;
             }
 
             const rawItems = Array.isArray(data) ? data : (data.items || []);
             const orderId = data.currentOrderId || null;
-            rawItems.forEach((it: any, idx: number) => {
-               if (it.Note || it.IsTakeaway || it.note || it.isTakeaway) {
-                  console.log(`   └─ Item ${idx}: ${it.name} | Note: "${it.Note || it.note}" | TW: ${it.IsTakeaway || it.isTakeaway}`);
-               }
-            });
 
             const dbItems = rawItems.map((item: any) => normalizeCartItem(item));
 
@@ -1210,7 +1204,7 @@ export const useCartStore = create<CartState>()(
             const filteredDbItems = dbItems.filter((dbItem: CartItem) => {
                const shieldExpiry = deletedItemsShield[dbItem.lineItemId];
                if (shieldExpiry && now < shieldExpiry) {
-                  console.log(`🛡️ [CartStore] DELETION SHIELD: Ignored stale DB item ${dbItem.name} (${dbItem.lineItemId})`);
+                  if (__DEV__) console.log(`🛡️ [CartStore] DELETION SHIELD: Ignored stale DB item ${dbItem.name} (${dbItem.lineItemId})`);
                   return false;
                }
                return true;
@@ -1275,7 +1269,7 @@ export const useCartStore = create<CartState>()(
               }
             });
 
-            console.log(`[TRACE] [${Date.now()}] [${resolvedContextId}] fetchCartFromDB: APPLYING | Items: ${mergedItems.length}`);
+            if (__DEV__) console.log(`[TRACE] [${Date.now()}] [${resolvedContextId}] fetchCartFromDB: APPLYING | Items: ${mergedItems.length}`);
 
             set((state) => {
               const newQtyMap: Record<string, number> = {};
@@ -1309,7 +1303,7 @@ export const useCartStore = create<CartState>()(
 
       checkoutOrder: async (tableId) => {
         try {
-          console.log(`🚀 [CartStore] Initiating Checkout for Table: ${tableId}`);
+          if (__DEV__) console.log(`🚀 [CartStore] Initiating Checkout for Table: ${tableId}`);
           const token = useAuthStore.getState().token;
           const response = await fetchWithRetry(`${API_URL}/api/orders/checkout`, {
             method: "POST",
@@ -1322,22 +1316,22 @@ export const useCartStore = create<CartState>()(
           
           if (!response.ok) {
             const errorText = await response.text();
-            console.error(`❌ [CartStore] Checkout API Error (${response.status}):`, errorText);
+            if (__DEV__) console.error(`❌ [CartStore] Checkout API Error (${response.status}):`, errorText);
             return { success: false };
           }
 
           const data = await response.json();
-          console.log("✅ [CartStore] Checkout Success:", data);
+          if (__DEV__) console.log("✅ [CartStore] Checkout Success:", data);
           return { success: true };
         } catch (err: any) {
-          console.error(`❌ [CartStore] Checkout failed (all retries exhausted):`, err);
+          if (__DEV__) console.error(`❌ [CartStore] Checkout failed (all retries exhausted):`, err);
           return { success: false };
         }
       },
 
       completeOrder: async (tableId) => {
         try {
-          console.log(`🚀 [CartStore] Completing Order for Table: ${tableId}`);
+          if (__DEV__) console.log(`🚀 [CartStore] Completing Order for Table: ${tableId}`);
           const token = useAuthStore.getState().token;
           const response = await fetchWithRetry(`${API_URL}/api/orders/complete`, {
             method: "POST",
@@ -1350,12 +1344,12 @@ export const useCartStore = create<CartState>()(
 
           if (!response.ok) {
             const errorText = await response.text();
-            console.error(`❌ [CartStore] Complete API Error (${response.status}):`, errorText);
+            if (__DEV__) console.error(`❌ [CartStore] Complete API Error (${response.status}):`, errorText);
             return { success: false };
           }
 
           const data = await response.json();
-          console.log(`✅ [CartStore] Complete Success:`, data);
+          if (__DEV__) console.log(`✅ [CartStore] Complete Success:`, data);
 
           if (data.success) {
             // 🚀 INSTANT LOCAL RESET: Wipe everything related to this table immediately
@@ -1374,7 +1368,7 @@ export const useCartStore = create<CartState>()(
           }
           return { success: false };
         } catch (err: any) {
-          console.error(`❌ [CartStore] Complete failed (all retries exhausted):`, err);
+          if (__DEV__) console.error(`❌ [CartStore] Complete failed (all retries exhausted):`, err);
           return { success: false };
         }
       },
@@ -1385,7 +1379,7 @@ export const useCartStore = create<CartState>()(
           set({ _syncTimeout: null });
         }
         if (currentContextId && _syncAbortControllers[currentContextId]) {
-          console.log(`🛑 [CartStore] cancelPendingSync: Aborting sync for ${currentContextId}`);
+          if (__DEV__) console.log(`🛑 [CartStore] cancelPendingSync: Aborting sync for ${currentContextId}`);
           _syncAbortControllers[currentContextId].abort();
         }
       },
@@ -1395,15 +1389,12 @@ export const useCartStore = create<CartState>()(
       storage: createJSONStorage(() => 
         Platform.OS === 'web' ? window.sessionStorage : AsyncStorage
       ),
+      // 🚀 PERF: Only persist session-critical fields. Cart items are always re-fetched from DB
+      // on table open. Persisting carts/discounts/shields caused heavy AsyncStorage writes on
+      // every mutation (4+ writes per cart item add). Now: ~0 writes during normal operation.
       partialize: (state) => ({
-        carts: state.carts,
-        discounts: state.discounts,
         tableOrderIds: state.tableOrderIds,
         currentContextId: state.currentContextId,
-        lastLocalUpdate: state.lastLocalUpdate,
-        lastServerSync: state.lastServerSync,
-        deletedItemsShield: state.deletedItemsShield,
-        operationVersion: state.operationVersion,
       }),
       merge: (persistedState: any, currentState) => {
         const merged = { ...currentState, ...persistedState };
