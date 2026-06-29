@@ -1,4 +1,5 @@
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
+const { SunmiPrinterDetector } = NativeModules;
 import ThermalPrinter from 'react-native-thermal-printer';
 import { API_URL } from '../constants/Config';
 import { useAuthStore } from '../stores/authStore';
@@ -87,8 +88,21 @@ export default class CashDrawerService {
         return false;
       }
     }
+    if (Platform.OS === 'android' && SunmiPrinterDetector) {
+      try {
+        console.log('🔌 [CashDrawer] Triggering built-in Sunmi Cash Drawer...');
+        const success = await SunmiPrinterDetector.openCashDrawer();
+        if (success) {
+          console.log('✅ [CashDrawer] Sunmi Cash Drawer opened successfully');
+          return true;
+        }
+      } catch (e) {
+        console.warn('⚠️ [CashDrawer] Built-in Sunmi Cash Drawer trigger failed, falling back to TCP:', e);
+      }
+    }
+
     if (!printerIp || printerIp.trim() === '') {
-      console.warn('[CashDrawer] No printer IP configured');
+      console.warn('[CashDrawer] No printer IP configured for TCP fallback');
       return false;
     }
     try {
