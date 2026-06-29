@@ -61,6 +61,8 @@ class SunmiCustomerDisplayModule(private val reactContext: ReactApplicationConte
         }
 
         val activity = currentActivityRef ?: reactContext.currentActivity ?: return
+        // We comment out the native Java presentation so that the React Native ExternalDisplay UI is not covered/blocked by this native view.
+        /*
         if (presentation == null) {
             try {
                 Log.d(TAG, "Creating new CustomerDisplayPresentation instance")
@@ -83,6 +85,7 @@ class SunmiCustomerDisplayModule(private val reactContext: ReactApplicationConte
                 }
             }
         }
+        */
     }
 
     private fun hidePresentationInternal() {
