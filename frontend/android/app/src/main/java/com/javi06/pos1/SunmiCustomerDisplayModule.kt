@@ -31,10 +31,11 @@ class SunmiCustomerDisplayModule(private val reactContext: ReactApplicationConte
         super.initialize()
         displayManager.registerDisplayListener(this, null)
         UiThreadUtil.runOnUiThread {
-            val activity = currentActivity
+            val activity: Activity? = reactContext.currentActivity
             if (activity != null) {
                 currentActivityRef = activity
-                activity.application.registerActivityLifecycleCallbacks(this)
+                val app = activity.applicationContext as? android.app.Application
+                app?.registerActivityLifecycleCallbacks(this)
             }
         }
     }
@@ -59,7 +60,7 @@ class SunmiCustomerDisplayModule(private val reactContext: ReactApplicationConte
             return
         }
 
-        val activity = currentActivityRef ?: currentActivity ?: return
+        val activity = currentActivityRef ?: reactContext.currentActivity ?: return
         if (presentation == null) {
             try {
                 Log.d(TAG, "Creating new CustomerDisplayPresentation instance")
@@ -179,7 +180,8 @@ class SunmiCustomerDisplayModule(private val reactContext: ReactApplicationConte
         super.invalidate()
         displayManager.unregisterDisplayListener(this)
         UiThreadUtil.runOnUiThread {
-            currentActivityRef?.application?.unregisterActivityLifecycleCallbacks(this)
+            val app = currentActivityRef?.applicationContext as? android.app.Application
+            app?.unregisterActivityLifecycleCallbacks(this)
             hidePresentationInternal()
         }
     }

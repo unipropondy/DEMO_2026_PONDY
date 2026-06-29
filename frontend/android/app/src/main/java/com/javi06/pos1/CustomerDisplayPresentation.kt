@@ -763,7 +763,7 @@ class CustomerDisplayPresentation(context: Context, display: Display) : Presenta
         }
     }
 
-    private fun loadImageAsync(url: String, imageView: java.lang.ImageView) {
+    private fun loadImageAsync(url: String, imageView: android.widget.ImageView) {
         imageView.tag = url
         executor.execute {
             try {
