@@ -414,7 +414,7 @@ export default function LoyaltyConfigScreen() {
       {/* Save Config Modal */}
       <Modal visible={showSaveModal} transparent animationType="fade" onRequestClose={() => setShowSaveModal(false)}>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalContent}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{ruleId ? "✏️ Edit Loyalty Program" : "🎉 New Loyalty Program"}</Text>
               <TouchableOpacity onPress={() => setShowSaveModal(false)}>
@@ -422,7 +422,7 @@ export default function LoyaltyConfigScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 14 }}>
+            <ScrollView style={{ flexShrink: 1, width: "100%" }} contentContainerStyle={{ gap: 14 }} showsVerticalScrollIndicator={false}>
               {/* Campaign Name */}
               <View>
                 <Text style={styles.inputLabel}>Campaign Name *</Text>

@@ -2345,7 +2345,13 @@ export default function Category() {
       {/* Floating AI Chat Assistant Button */}
       {user?.role === "ADMIN" && (
         <TouchableOpacity
-          style={styles.floatingAiBtn}
+          style={[
+            styles.floatingAiBtn,
+            {
+              bottom: Math.max(insets.bottom, 16) + 16,
+              right: Math.max(insets.right, 16) + 16,
+            },
+          ]}
           onPress={() => router.push("/ai-chat")}
           activeOpacity={0.8}
         >
