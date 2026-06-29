@@ -231,7 +231,7 @@ app.use(compression()); // Compress all responses
 app.use(
   cors({
     origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   }),
 );
 app.use(express.json({ limit: "50mb" }));

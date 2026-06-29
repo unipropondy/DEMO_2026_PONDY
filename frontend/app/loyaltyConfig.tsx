@@ -14,6 +14,7 @@ import {
   StatusBar,
   ScrollView,
   TouchableWithoutFeedback,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -36,6 +37,7 @@ export default function LoyaltyConfigScreen() {
 
   // Modal States
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [ruleId, setRuleId] = useState<string | null>(null);
   const [campaignName, setCampaignName] = useState("");
   const [purchaseDishId, setPurchaseDishId] = useState("");
@@ -170,6 +172,33 @@ export default function LoyaltyConfigScreen() {
       }
 
       showToast({ type: "success", message: data.message });
+      fetchConfigs();
+    } catch (err: any) {
+      showToast({ type: "error", message: err.message });
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    setDeleteConfirmId(id);
+  };
+
+  const performDelete = async (id: string) => {
+    try {
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`${API_URL}/api/loyalty/configs/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete configuration");
+      }
+
+      showToast({ type: "success", message: "Loyalty configuration deleted successfully." });
+      setDeleteConfirmId(null);
       fetchConfigs();
     } catch (err: any) {
       showToast({ type: "error", message: err.message });
@@ -355,6 +384,19 @@ export default function LoyaltyConfigScreen() {
                     <Text style={[styles.toggleBtnText, { color: active ? Theme.danger : Theme.success }]}>
                       {active ? "Deactivate" : "Activate"}
                     </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.deleteBtn} 
+                    onPress={() => handleDelete(item.RuleId)}
+                  >
+                    <Ionicons 
+                      name="trash-outline" 
+                      size={16} 
+                      color={Theme.danger} 
+                      style={{ marginRight: 4 }} 
+                    />
+                    <Text style={styles.deleteBtnText}>Delete</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -547,6 +589,40 @@ export default function LoyaltyConfigScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      {/* Custom Delete Confirmation Modal */}
+      <Modal
+        visible={!!deleteConfirmId}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteConfirmId(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <View style={styles.confirmIconContainer}>
+              <Ionicons name="alert-circle-outline" size={48} color={Theme.danger} />
+            </View>
+            <Text style={styles.confirmTitle}>Delete Campaign</Text>
+            <Text style={styles.confirmMessage}>
+              Are you sure you want to delete this loyalty configuration? This action cannot be undone.
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmCancelBtn}
+                onPress={() => setDeleteConfirmId(null)}
+              >
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmDeleteBtn}
+                onPress={() => deleteConfirmId && performDelete(deleteConfirmId)}
+              >
+                <Text style={styles.confirmDeleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -643,6 +719,8 @@ const styles = StyleSheet.create({
   deactivateBtn: { borderColor: "#fecaca" },
   activateBtn: { borderColor: "#bbf7d0" },
   toggleBtnText: { fontSize: 12, fontFamily: Fonts.bold },
+  deleteBtn: { flexDirection: "row", alignItems: "center", paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, borderWidth: 1, borderColor: "#fecaca" },
+  deleteBtnText: { fontSize: 12, fontFamily: Fonts.bold, color: Theme.danger },
   emptyContainer: { alignItems: "center", justifyContent: "center", paddingVertical: 64 },
   emptyText: { fontSize: 14, fontFamily: Fonts.medium, color: Theme.textMuted, marginTop: 12 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "center", alignItems: "center", padding: 20 },
@@ -664,4 +742,71 @@ const styles = StyleSheet.create({
   statusToggleTextActive: { color: Theme.success },
   submitBtn: { backgroundColor: Theme.primary, borderRadius: 8, height: 48, alignItems: "center", justifyContent: "center", marginTop: 16 },
   submitBtnText: { color: "#FFF", fontSize: 15, fontFamily: Fonts.bold },
+  confirmModalContent: {
+    backgroundColor: Theme.bgCard,
+    borderRadius: 16,
+    width: "100%",
+    maxWidth: 340,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Theme.border,
+    ...Theme.shadowLg,
+  },
+  confirmIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#fee2e2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.black,
+    color: Theme.textPrimary,
+    marginBottom: 8,
+  },
+  confirmMessage: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+    color: Theme.textSecondary,
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  confirmActions: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  confirmCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Theme.border,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Theme.bgInput,
+  },
+  confirmCancelText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: Theme.textSecondary,
+  },
+  confirmDeleteBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: Theme.danger,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  confirmDeleteText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: "#FFF",
+  },
 });

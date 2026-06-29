@@ -223,4 +223,47 @@ router.patch("/:id/toggle", async (req, res) => {
   }
 });
 
+// ================= DELETE CONFIGURATION =================
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pool = await poolPromise;
+
+    // Fetch existing CampaignId to clean up both tables
+    const existingRule = await pool.request()
+      .input("RuleId", sql.UniqueIdentifier, id)
+      .query("SELECT CampaignId FROM LoyaltyRule WHERE RuleId = @RuleId");
+
+    if (existingRule.recordset.length === 0) {
+      return res.status(404).json({ error: "Loyalty configuration not found." });
+    }
+
+    const campaignId = existingRule.recordset[0].CampaignId;
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // 1. Delete rule first (foreign key dependency)
+      await transaction.request()
+        .input("RuleId", sql.UniqueIdentifier, id)
+        .query("DELETE FROM LoyaltyRule WHERE RuleId = @RuleId");
+
+      // 2. Delete campaign
+      await transaction.request()
+        .input("CampaignId", sql.UniqueIdentifier, campaignId)
+        .query("DELETE FROM LoyaltyCampaign WHERE CampaignId = @CampaignId");
+
+      await transaction.commit();
+      res.json({ success: true, message: "Loyalty configuration deleted successfully." });
+    } catch (txErr) {
+      await transaction.rollback();
+      throw txErr;
+    }
+  } catch (err) {
+    console.error("[LOYALTY CONFIG DELETE ERROR]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
