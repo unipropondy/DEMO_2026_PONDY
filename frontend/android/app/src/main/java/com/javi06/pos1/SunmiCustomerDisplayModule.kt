@@ -27,15 +27,14 @@ class SunmiCustomerDisplayModule(private val reactContext: ReactApplicationConte
     private var lastDataJson: String? = null
     private var currentActivityRef: Activity? = null
 
-    init {
+    override fun initialize() {
+        super.initialize()
         displayManager.registerDisplayListener(this, null)
-        reactContext.runOnJSQueueThread {
-            UiThreadUtil.runOnUiThread {
-                val activity = currentActivity
-                if (activity != null) {
-                    currentActivityRef = activity
-                    activity.application.registerActivityLifecycleCallbacks(this)
-                }
+        UiThreadUtil.runOnUiThread {
+            val activity = currentActivity
+            if (activity != null) {
+                currentActivityRef = activity
+                activity.application.registerActivityLifecycleCallbacks(this)
             }
         }
     }
@@ -178,7 +177,9 @@ class SunmiCustomerDisplayModule(private val reactContext: ReactApplicationConte
 
     override fun invalidate() {
         super.invalidate()
+        displayManager.unregisterDisplayListener(this)
         UiThreadUtil.runOnUiThread {
+            currentActivityRef?.application?.unregisterActivityLifecycleCallbacks(this)
             hidePresentationInternal()
         }
     }
