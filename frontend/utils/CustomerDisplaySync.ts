@@ -2,6 +2,12 @@ import { socket } from "../constants/socket";
 import { useGeneralSettingsStore } from "../stores/generalSettingsStore";
 import { useAuthStore } from "../stores/authStore";
 import { useTerminalStore } from "../stores/terminalStore";
+import { useCompanySettingsStore } from "../stores/companySettingsStore";
+import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
+import { NativeModules, Platform } from "react-native";
+import { API_URL } from "@/constants/Config";
+
+const { SunmiCustomerDisplay } = NativeModules;
 
 export interface SyncCartParams {
   orderContext: {
@@ -145,7 +151,10 @@ export const CustomerDisplaySync = {
         };
       });
 
-      // 3. Emit via Socket.io (room-scoped via terminalCode)
+      const companySettings = useCompanySettingsStore.getState().settings;
+      const paymentSettings = usePaymentSettingsStore.getState().settings;
+
+      // 3. Emit via Socket.io and update native presentation display
       const payload = {
         active,
         paymentSuccess: false,
@@ -164,10 +173,19 @@ export const CustomerDisplaySync = {
         waiterName: orderContext.serverName || "",
         paymentMethod,
         terminalCode: getTerminalCode(), // 🖥️ Room routing key
+        companyName: companySettings?.name || paymentSettings?.shopName || "Restaurant",
+        companyLogo: companySettings?.companyLogo ? (companySettings.companyLogo.startsWith("data:") || companySettings.companyLogo.startsWith("http") ? companySettings.companyLogo : `${API_URL}${companySettings.companyLogo.startsWith("/") ? "" : "/"}${companySettings.companyLogo}`) : "",
+        upiId: paymentSettings?.upiId || "",
+        payNowQrUrl: paymentSettings?.payNowQrUrl ? (paymentSettings.payNowQrUrl.startsWith("data:") || paymentSettings.payNowQrUrl.startsWith("http") ? paymentSettings.payNowQrUrl : `${API_URL}${paymentSettings.payNowQrUrl.startsWith("/") ? "" : "/"}${paymentSettings.payNowQrUrl}`) : "",
+        currencySymbol: companySettings?.currencySymbol || "₹",
       };
 
       console.log("🖥️ [CustomerDisplaySync] Emitting cart update for Table/Takeaway:", payload.tableNo, "| Terminal:", payload.terminalCode);
       socket.emit("customer_display_sync", payload);
+
+      if (Platform.OS === "android" && SunmiCustomerDisplay) {
+        SunmiCustomerDisplay.updateCustomerDisplay(JSON.stringify(payload));
+      }
     } catch (err: any) {
       console.error("🖥️ [CustomerDisplaySync] Failed to sync cart:", err.message);
     }
@@ -189,12 +207,23 @@ export const CustomerDisplaySync = {
         return;
       }
 
-      console.log("🖥️ [CustomerDisplaySync] Emitting idle attract loop | Terminal:", getTerminalCode());
-      socket.emit("customer_display_sync", {
+      const companySettings = useCompanySettingsStore.getState().settings;
+      const paymentSettings = usePaymentSettingsStore.getState().settings;
+
+      const payload = {
         active: false,
         paymentSuccess: false,
         terminalCode: getTerminalCode(), // 🖥️ Room routing key
-      });
+        companyName: companySettings?.name || paymentSettings?.shopName || "Restaurant",
+        companyLogo: companySettings?.companyLogo ? (companySettings.companyLogo.startsWith("data:") || companySettings.companyLogo.startsWith("http") ? companySettings.companyLogo : `${API_URL}${companySettings.companyLogo.startsWith("/") ? "" : "/"}${companySettings.companyLogo}`) : "",
+      };
+
+      console.log("🖥️ [CustomerDisplaySync] Emitting idle attract loop | Terminal:", getTerminalCode());
+      socket.emit("customer_display_sync", payload);
+
+      if (Platform.OS === "android" && SunmiCustomerDisplay) {
+        SunmiCustomerDisplay.updateCustomerDisplay(JSON.stringify(payload));
+      }
     } catch (err: any) {
       console.error("🖥️ [CustomerDisplaySync] Failed to sync idle state:", err.message);
     }
@@ -211,8 +240,10 @@ export const CustomerDisplaySync = {
       const isDisplayOn = useGeneralSettingsStore.getState().settings.customerSideDisplay;
       if (!isDisplayOn) return;
 
-      console.log("🖥️ [CustomerDisplaySync] Emitting payment success:", params.orderId, "| Terminal:", getTerminalCode());
-      socket.emit("customer_display_sync", {
+      const companySettings = useCompanySettingsStore.getState().settings;
+      const paymentSettings = usePaymentSettingsStore.getState().settings;
+
+      const payload = {
         active: true,
         paymentSuccess: true,
         orderId: params.orderId,
@@ -221,7 +252,16 @@ export const CustomerDisplaySync = {
         change: params.change,
         paymentMethod: params.method,
         terminalCode: getTerminalCode(), // 🖥️ Room routing key
-      });
+        companyName: companySettings?.name || paymentSettings?.shopName || "Restaurant",
+        currencySymbol: companySettings?.currencySymbol || "₹",
+      };
+
+      console.log("🖥️ [CustomerDisplaySync] Emitting payment success:", params.orderId, "| Terminal:", getTerminalCode());
+      socket.emit("customer_display_sync", payload);
+
+      if (Platform.OS === "android" && SunmiCustomerDisplay) {
+        SunmiCustomerDisplay.updateCustomerDisplay(JSON.stringify(payload));
+      }
     } catch (err: any) {
       console.error("🖥️ [CustomerDisplaySync] Failed to sync payment success:", err.message);
     }
