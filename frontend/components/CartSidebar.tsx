@@ -1419,7 +1419,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
         };
         const isAdditional = cart.some((i: any) => isItemSent(i));
         if (enableKOT) {
-          UniversalPrinter.printKOT(
+          await UniversalPrinter.printKOT(
             kotData,
             "SYSTEM",
             isAdditional ? "ADDITIONAL" : "NEW",

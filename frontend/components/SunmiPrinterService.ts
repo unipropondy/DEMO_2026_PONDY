@@ -1,7 +1,7 @@
 // components/SunmiPrinterService.ts - AUTOMATIC 58MM/80MM DETECTOR AND FORMATTER
 import { Platform, NativeModules } from "react-native";
 import { API_URL } from "../constants/Config";
-import { formatToSingaporeTime } from "../utils/timezoneHelper";
+import { formatToSingaporeTime, parseDatabaseDate } from "../utils/timezoneHelper";
 
 const { SunmiPrinterDetector } = NativeModules;
 
@@ -349,8 +349,8 @@ class SunmiPrinterService {
       await SunmiModule.lineWrap(1);
 
       // ============ BILL DETAILS ============
-      const saleDate = saleData.originalDate ? new Date(saleData.originalDate) : 
-                       saleData.date ? new Date(saleData.date) : 
+      const saleDate = saleData.originalDate ? parseDatabaseDate(saleData.originalDate) : 
+                       saleData.date ? parseDatabaseDate(saleData.date) : 
                        new Date();
       const dateStr = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', day: '2-digit', month: '2-digit', year: 'numeric' }).format(saleDate);
       const timeStr = formatToSingaporeTime(saleDate);
@@ -591,6 +591,17 @@ class SunmiPrinterService {
       await SunmiPrinterManager.init();
       const formatter = SunmiPrinterManager.getFormatter();
 
+      const is80mm = SunmiPrinterManager.getPaperSize() === "80mm";
+      const fontSizes = {
+        title: is80mm ? 28 : 36,
+        timestamp: is80mm ? 20 : 24,
+        table: is80mm ? 38 : 48,
+        item: is80mm ? 28 : 36,
+        modifier: is80mm ? 20 : 24,
+        note: is80mm ? 22 : 28,
+        reset: is80mm ? 20 : 24,
+      };
+
       const title = type === "REPRINT" ? "REPRINT" : type === "ADDITIONAL" ? "ADDITIONAL" : "NEW ORDER";
       const items = data.items || [];
       const tableNo = data.tableNo || "N/A";
@@ -612,21 +623,21 @@ class SunmiPrinterService {
       };
 
       // ============ HEADER (Large & Bold) ============
-      await setSize(36);
+      await setSize(fontSizes.title);
       await SunmiModule.printText(formatter.left(title));
       await SunmiModule.lineWrap(1);
 
-      await setSize(24);
+      await setSize(fontSizes.timestamp);
       await SunmiModule.printText(formatter.left(timestamp));
       await SunmiModule.lineWrap(1);
 
       // ============ TABLE INFO (EXTREMELY LARGE) ============
       await SunmiModule.printText(formatter.doubleDivider("="));
-      await setSize(48);
+      await setSize(fontSizes.table);
       await SunmiModule.printText(formatter.left(`TABLE: ${tableNo}`));
       await SunmiModule.lineWrap(1);
 
-      await setSize(24);
+      await setSize(fontSizes.timestamp);
       await SunmiModule.printText(formatter.left(`Order: #${orderNo}`));
       await SunmiModule.printText(formatter.left(`Waiter: ${waiter}`));
       await SunmiModule.printText(formatter.doubleDivider("="));
@@ -634,25 +645,25 @@ class SunmiPrinterService {
       // ============ ITEMS ============
       await SunmiModule.lineWrap(1);
       for (const item of items) {
-        await setSize(36);
+        await setSize(fontSizes.item);
         await SunmiModule.printText(formatter.left(`[${item.qty || item.quantity || 1}] ${item.name}`));
 
         const songName = item.songName || item.SongName || "";
         if (songName) {
-          await setSize(28);
+          await setSize(fontSizes.note);
           await SunmiModule.printText(formatter.left(`  🎵 ${songName}`));
           await SunmiModule.lineWrap(1);
         }
 
         const isTw = !!(item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway);
         if (isTw) {
-          await setSize(28);
+          await setSize(fontSizes.note);
           await SunmiModule.printText(formatter.left(`  - Takeaway`));
           await SunmiModule.lineWrap(1);
         }
 
         if (item.modifiers && item.modifiers.length > 0) {
-          await setSize(24);
+          await setSize(fontSizes.modifier);
           for (const mod of item.modifiers) {
             await SunmiModule.printText(formatter.left(`  + ${mod.ModifierName || mod.name}`));
             await SunmiModule.lineWrap(1);
@@ -661,7 +672,7 @@ class SunmiPrinterService {
 
         const noteText = item.note || item.notes || item.Remarks || item.remarks;
         if (noteText) {
-          await setSize(28);
+          await setSize(fontSizes.note);
           await SunmiModule.printText(formatter.left(`  * NOTE: ${noteText}`));
           await SunmiModule.lineWrap(1);
         }
@@ -669,7 +680,7 @@ class SunmiPrinterService {
         await SunmiModule.printText(formatter.divider("-"));
       }
 
-      await setSize(24);
+      await setSize(fontSizes.reset);
       await SunmiModule.lineWrap(3);
       await SunmiModule.cutPaper();
       return true;

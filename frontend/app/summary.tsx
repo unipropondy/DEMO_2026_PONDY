@@ -423,14 +423,7 @@ export default function SummaryScreen() {
     return id ? s.discounts[id] : null;
   });
 
-  // 🖥️ CUSTOMER DISPLAY REAL-TIME SYNC
-  useEffect(() => {
-    // Forces idle attract loop during ordering
-    CustomerDisplaySync.syncIdle();
-    return () => {
-      CustomerDisplaySync.syncIdle();
-    };
-  }, []);
+
 
   const applyDiscount = useCartStore((s: any) => s.applyDiscount);
   const clearCart = useCartStore((s: any) => s.clearCart);
@@ -867,6 +860,32 @@ export default function SummaryScreen() {
   const finalItems = useMemo(() => {
     return loyaltyDiscountItems.length > 0 ? loyaltyDiscountItems : cart;
   }, [loyaltyDiscountItems, cart]);
+
+  // 🖥️ CUSTOMER DISPLAY REAL-TIME SYNC
+  useEffect(() => {
+    if (context && finalItems && finalItems.length > 0) {
+      console.log("🖥️ [Summary] Syncing finalItems to Customer Display:", finalItems.length);
+      CustomerDisplaySync.syncCart({
+        orderContext: context,
+        cart: finalItems,
+        discountInfo: discountInfo,
+        gstPercentage: settings.gstPercentage || 0,
+        roundOff: 0,
+        active: true,
+      });
+    } else {
+      console.log("🖥️ [Summary] finalItems empty or null, syncing idle");
+      CustomerDisplaySync.syncIdle();
+    }
+  }, [context, finalItems, discountInfo, settings]);
+
+  // 🖥️ CUSTOMER DISPLAY UNMOUNT CLEANUP
+  useEffect(() => {
+    return () => {
+      console.log("🖥️ [Summary] Unmounting screen, resetting Customer Display to idle");
+      CustomerDisplaySync.syncIdle();
+    };
+  }, []);
 
   const totalItems = useMemo(
     () =>

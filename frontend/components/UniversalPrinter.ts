@@ -526,98 +526,94 @@ class UniversalPrinter {
       }
     }
 
-    // 🚀 NON-BLOCKING BACKGROUND EXECUTION: Run printing in the background to prevent UI lag on APK
-    (async () => {
-      try {
-        const company = await BillPDFGenerator.loadSettings(userId);
-        const html = this.generateKOTHTML(orderData, type);
-        const targetIp = printerIpOverride || company.printerIp;
+    try {
+      const company = await BillPDFGenerator.loadSettings(userId);
+      const html = this.generateKOTHTML(orderData, type);
+      const targetIp = printerIpOverride || company.printerIp;
 
-        // ✅ 1. Try Hardware Printer (WiFi or Bluetooth)
-        let isReachable = false;
-        const isIp = targetIp && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(targetIp.trim());
-        if (isIp) {
-          isReachable = await this.isIpReachable(targetIp);
-        } else if (targetIp && targetIp.trim().length > 0) {
-          isReachable = true;
-        }
-
-        if (isReachable) {
-          try {
-            const text = this.formatKOTThermalText(orderData, type);
-
-            if (isIp) {
-              console.log(`🌐 KOT WiFi print to: ${targetIp}`);
-              const printPromise = ThermalPrinter.printTcp({
-                ip: targetIp,
-                port: 9100,
-                payload: text,
-                mmFeedPaper: 60,
-              });
-              const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("WiFi Timeout")), 1500),
-              );
-              await Promise.race([printPromise, timeoutPromise]);
-            } else {
-              console.log(`🔵 KOT Bluetooth print to: ${targetIp}`);
-              const printPromise = ThermalPrinter.printBluetooth({
-                macAddress: targetIp,
-                payload: text,
-                mmFeedPaper: 60,
-              });
-              const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("BT Timeout")), 3000),
-              );
-              await Promise.race([printPromise, timeoutPromise]);
-            }
-            await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
-            return;
-          } catch (printError) {
-            console.warn("❌ Hardware KOT failed/timeout, falling back...");
-          }
-        }
-
-        // ✅ 2. Try Sunmi direct print (Silent)
-        const sunmiReady = await SunmiPrinterService.init().catch(() => false);
-        if (sunmiReady) {
-          try {
-            const printPromise = SunmiPrinterService.printKOT(orderData, type);
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("Sunmi Timeout")), 2000),
-            );
-            const printed = await Promise.race([printPromise, timeoutPromise]);
-
-            if (printed) {
-              console.log("✅ KOT Printed with Sunmi - NO PREVIEW");
-              await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
-              return;
-            }
-          } catch (sunmiErr) {
-            console.warn("❌ Sunmi KOT failed/timeout:", sunmiErr);
-          }
-        }
-
-
-        // ✅ 3. Mobile Fallback (Android/iOS)
-        const { uri } = await Print.printToFileAsync({
-          html,
-          width: 226, // 80mm approximate
-        });
-
-        if (Platform.OS === "android" || Platform.OS === "ios") {
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(uri);
-          }
-        }
-
-        // ✅ 4. LOG TO DATABASE (Audit Trail)
-        await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
-      } catch (error) {
-        console.log("KOT Print Error:", error);
+      // ✅ 1. Try Hardware Printer (WiFi or Bluetooth)
+      let isReachable = false;
+      const isIp = targetIp && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(targetIp.trim());
+      if (isIp) {
+        isReachable = await this.isIpReachable(targetIp);
+      } else if (targetIp && targetIp.trim().length > 0) {
+        isReachable = true;
       }
-    })();
 
-    return true;
+      if (isReachable) {
+        try {
+          const text = this.formatKOTThermalText(orderData, type);
+
+          if (isIp) {
+            console.log(`🌐 KOT WiFi print to: ${targetIp}`);
+            const printPromise = ThermalPrinter.printTcp({
+              ip: targetIp,
+              port: 9100,
+              payload: text,
+              mmFeedPaper: 60,
+            });
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("WiFi Timeout")), 1500),
+            );
+            await Promise.race([printPromise, timeoutPromise]);
+          } else {
+            console.log(`🔵 KOT Bluetooth print to: ${targetIp}`);
+            const printPromise = ThermalPrinter.printBluetooth({
+              macAddress: targetIp,
+              payload: text,
+              mmFeedPaper: 60,
+            });
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("BT Timeout")), 3000),
+            );
+            await Promise.race([printPromise, timeoutPromise]);
+          }
+          await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
+          return true;
+        } catch (printError) {
+          console.warn("❌ Hardware KOT failed/timeout, falling back...");
+        }
+      }
+
+      // ✅ 2. Try Sunmi direct print (Silent)
+      const sunmiReady = await SunmiPrinterService.init().catch(() => false);
+      if (sunmiReady) {
+        try {
+          const printPromise = SunmiPrinterService.printKOT(orderData, type);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Sunmi Timeout")), 2000),
+          );
+          const printed = await Promise.race([printPromise, timeoutPromise]);
+
+          if (printed) {
+            console.log("✅ KOT Printed with Sunmi - NO PREVIEW");
+            await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
+            return true;
+          }
+        } catch (sunmiErr) {
+          console.warn("❌ Sunmi KOT failed/timeout:", sunmiErr);
+        }
+      }
+
+      // ✅ 3. Mobile Fallback (Android/iOS)
+      const { uri } = await Print.printToFileAsync({
+        html,
+        width: 226, // 80mm approximate
+      });
+
+      if (Platform.OS === "android" || Platform.OS === "ios") {
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri);
+        }
+      }
+
+      // ✅ 4. LOG TO DATABASE (Audit Trail)
+      await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
+      return true;
+    } catch (error) {
+      console.log("KOT Print Error:", error);
+      return false;
+    }
   }
 
   private static generateKOTHTML(data: any, type: string): string {
@@ -657,53 +653,53 @@ class UniversalPrinter {
             background: #fff;
           }
           .kot-container { 
-            padding: 2mm 4mm; 
-            width: 72mm;
+            padding: 1mm 2mm; 
+            width: 76mm;
           }
           
           .header-box { 
             background: #000 !important; 
             color: #fff !important; 
-            padding: 4px 10px; 
+            padding: 3px 8px; 
             text-align: left; 
-            font-weight: 900; 
-            font-size: 32px; 
+            font-weight: bold; 
+            font-size: 24px; 
             display: inline-block;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
             text-transform: uppercase;
             -webkit-print-color-adjust: exact;
           }
           
           .timestamp {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: bold;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             color: #333;
           }
           
           .table-info {
             display: flex;
             justify-content: space-between;
-            border-bottom: 3px dashed #000;
-            padding: 4px 0;
-            margin-bottom: 8px;
-            font-size: 32px;
-            font-weight: 900;
+            border-bottom: 2px dashed #000;
+            padding: 3px 0;
+            margin-bottom: 6px;
+            font-size: 26px;
+            font-weight: bold;
           }
           
           .headers {
             display: flex;
-            border-bottom: 2px dashed #000;
-            padding: 4px 0;
-            font-size: 20px;
-            font-weight: 900;
+            border-bottom: 1.5px dashed #000;
+            padding: 3px 0;
+            font-size: 16px;
+            font-weight: bold;
             text-transform: uppercase;
           }
-          .qty-head { width: 60px; margin-right: 10px; }
+          .qty-head { width: 50px; margin-right: 8px; }
           
           .item-row {
-            border-bottom: 2px solid #000;
-            padding: 15px 0;
+            border-bottom: 1.5px solid #000;
+            padding: 8px 0;
           }
           
           .item-main {
@@ -712,54 +708,54 @@ class UniversalPrinter {
           }
           
           .item-qty {
-            font-size: 48px;
-            font-weight: 900;
-            width: 60px;
+            font-size: 32px;
+            font-weight: bold;
+            width: 50px;
             line-height: 1;
-            margin-right: 10px;
+            margin-right: 8px;
           }
           
           .item-name {
-            font-size: 36px;
-            font-weight: 900;
+            font-size: 24px;
+            font-weight: bold;
             flex: 1;
             line-height: 1.1;
           }
           
           .modifier-list {
-            margin-left: 70px;
-            margin-top: 5px;
+            margin-left: 58px;
+            margin-top: 3px;
           }
           
           .modifier-item {
-            font-size: 26px;
-            font-weight: 900;
+            font-size: 18px;
+            font-weight: bold;
             display: block;
           }
           
           .remarks {
-            margin-left: 70px;
-            font-size: 22px;
-            font-weight: 900;
+            margin-left: 58px;
+            font-size: 16px;
+            font-weight: bold;
             font-style: italic;
-            margin-top: 6px;
+            margin-top: 4px;
           }
           
           .footer {
-            margin-top: 15px;
-            font-size: 18px;
-            font-weight: 900;
+            margin-top: 10px;
+            font-size: 14px;
+            font-weight: bold;
             font-family: monospace;
           }
           
           .kitchen-name {
             text-align: center;
-            font-size: 32px;
-            font-weight: 900;
-            margin-top: 25px;
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 16px;
             text-transform: uppercase;
-            border: 3px solid #000;
-            padding: 10px;
+            border: 2px solid #000;
+            padding: 6px;
           }
           
           @media print {

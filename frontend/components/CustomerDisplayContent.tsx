@@ -452,7 +452,7 @@ export default function CustomerDisplayContent() {
   }
 
   // Active checkout view
-  if (displayState.active && paymentSettings.customerSideDisplay) {
+  if (displayState.active) {
     const isUPI =
       /UPI|GPAY|PHONE|PAYTM/i.test(displayState.paymentMethod || "") ||
       (displayState.paymentMethod === undefined && paymentSettings.upiId);

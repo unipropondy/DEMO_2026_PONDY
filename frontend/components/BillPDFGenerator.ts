@@ -7,7 +7,7 @@ import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { API_URL } from '@/constants/Config';
-import { formatToSingaporeDate, formatToSingaporeTime } from '../utils/timezoneHelper';
+import { formatToSingaporeDate, formatToSingaporeTime, parseDatabaseDate } from '../utils/timezoneHelper';
 
 interface CompanySettings {
   name: string;
@@ -282,8 +282,8 @@ private static escapeHtml(str: string): string {
         console.log('📋 Using discount from saleData fields:', finalDiscountInfo);
     }
     
-    const saleDate = saleData.originalDate ? new Date(saleData.originalDate) : 
-                     saleData.date ? new Date(saleData.date) : 
+    const saleDate = saleData.originalDate ? parseDatabaseDate(saleData.originalDate) : 
+                     saleData.date ? parseDatabaseDate(saleData.date) : 
                      new Date();
     
     const isReprint = saleData.isReprint === true;
