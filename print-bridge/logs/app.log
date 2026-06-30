@@ -15,3 +15,20 @@
 [ERROR] [2026-06-30T05:07:13.692Z] [PRINT BRIDGE] TCP Socket error after 21ms: - Error: AggregateError
 [ERROR] [2026-06-30T05:07:13.694Z] Printing job 4D62BF4C-02C5-4D1F-8899-8A8F1D0D1BA1 failed: TCP Socket Connection Failed
 [INFO] [2026-06-30T05:07:13.700Z] [PRINT BRIDGE] Socket closed (Total elapsed: 29ms)
+[ERROR] [2026-06-30T05:24:56.877Z] Error polling backend for pending print jobs: Request failed with status code 503
+[ERROR] [2026-06-30T05:24:59.347Z] Error polling backend for pending print jobs: Request failed with status code 503
+[ERROR] [2026-06-30T05:25:01.816Z] Error polling backend for pending print jobs: Request failed with status code 503
+[ERROR] [2026-06-30T05:25:04.283Z] Error polling backend for pending print jobs: Request failed with status code 503
+[ERROR] [2026-06-30T05:25:06.740Z] Error polling backend for pending print jobs: Request failed with status code 503
+[ERROR] [2026-06-30T05:25:09.194Z] Error polling backend for pending print jobs: Request failed with status code 503
+[ERROR] [2026-06-30T05:25:11.650Z] Error polling backend for pending print jobs: Request failed with status code 503
+[INFO] [2026-06-30T05:25:24.942Z] Retrieved 1 pending print job(s) from Railway.
+[INFO] [2026-06-30T05:25:24.942Z] Starting execution of Job 04441065-7EE6-481F-986D-007987BE73CB for printer IP :9100
+[INFO] [2026-06-30T05:25:24.944Z] [PRINT BRIDGE] Preparing job for printer at :9100
+[INFO] [2026-06-30T05:25:24.944Z] [PRINT BRIDGE] Current timeout setting: 30000ms
+[INFO] [2026-06-30T05:25:24.945Z] [PRINT BRIDGE] Content preview (first 300 chars): "G3AAGRk="
+[INFO] [2026-06-30T05:25:24.946Z] [PRINT BRIDGE] Detected base64 binary payload
+[INFO] [2026-06-30T05:25:24.947Z] [PRINT BRIDGE] Connecting to printer... IP: , Port: 9100, Payload length: 5 bytes
+[ERROR] [2026-06-30T05:25:24.953Z] [PRINT BRIDGE] TCP Socket error after 10ms: - Error: AggregateError
+[ERROR] [2026-06-30T05:25:24.954Z] Printing job 04441065-7EE6-481F-986D-007987BE73CB failed: TCP Socket Connection Failed
+[INFO] [2026-06-30T05:25:24.956Z] [PRINT BRIDGE] Socket closed (Total elapsed: 13ms)

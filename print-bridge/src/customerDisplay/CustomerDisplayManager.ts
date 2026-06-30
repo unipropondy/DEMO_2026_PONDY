@@ -7,12 +7,8 @@ let displayWindow: BrowserWindow | null = null;
 
 // Paths differ depending on whether we run in development (src/) or production packaged (dist/)
 const getUIPath = () => {
-  // If process is packaged via electron-builder, resources are placed in extraResources/Resources
-  const isPackaged = require('electron').app.isPackaged;
-  if (isPackaged) {
-    return path.join(process.resourcesPath, 'customer-display-web', 'index.html');
-  }
-  return path.join(__dirname, '../../../customer-display-web/index.html');
+  const { app } = require('electron');
+  return path.join(app.getAppPath(), 'customer-display-web', 'index.html');
 };
 
 /**

@@ -67,7 +67,13 @@ yarn-error.*
 # =========================
 backend/logs/
 
-# =========================
-# Sub-repositories
-# =========================
 UCS_PONDY/
+
+# =========================
+# Print Bridge Builds
+# =========================
+print-bridge/out/
+print-bridge/customer-display-web/
+print-bridge/dist/
+print-bridge/logs/
+packages/customer-display/node_modules/
