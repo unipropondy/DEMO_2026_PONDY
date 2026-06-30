@@ -2,22 +2,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   DimensionValue,
-  FlatList,
-  Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  UIManager,
   useWindowDimensions,
-  View,
-  ActivityIndicator,
-  Alert,
-  ScrollView,
+  View
 } from "react-native";
 import { API_URL } from "../constants/Config";
 import { Fonts } from "../constants/Fonts";
@@ -28,21 +23,21 @@ import UniversalPrinter from "./UniversalPrinter";
 import VoidItemModal from "./VoidItemModal";
 
 import { socket } from "../constants/socket";
-import { CustomerDisplaySync } from "../utils/CustomerDisplaySync";
-import { OrderItem, useActiveOrdersStore } from "../stores/activeOrdersStore";
+import { useActiveOrdersStore } from "../stores/activeOrdersStore";
+import { useAuthStore } from "../stores/authStore";
 import {
   CartItem,
   clearCart as clearCartStandalone,
-  useCartStore,
   isItemSent,
+  useCartStore,
 } from "../stores/cartStore";
-import { useAuthStore } from "../stores/authStore";
-import { holdOrder } from "../stores/heldOrdersStore";
-import { useOrderContextStore } from "../stores/orderContextStore";
 import { useCompanySettingsStore } from "../stores/companySettingsStore";
 import { useGeneralSettingsStore } from "../stores/generalSettingsStore";
+import { holdOrder } from "../stores/heldOrdersStore";
+import { useOrderContextStore } from "../stores/orderContextStore";
 import { useTableStatusStore } from "../stores/tableStatusStore";
 import { useTerminalStore } from "../stores/terminalStore";
+import { CustomerDisplaySync } from "../utils/CustomerDisplaySync";
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -559,7 +554,7 @@ const CartItemRow = React.memo(
                   >
                     {item.name}
                   </Text>
- 
+
                   {item.songName ? (
                     <Text
                       style={{
@@ -571,7 +566,7 @@ const CartItemRow = React.memo(
                       🎵 {item.songName}
                     </Text>
                   ) : null}
- 
+
                   {item.splitMembers?.map((member: any, idx: number) => (
                     <View
                       key={idx}
@@ -584,7 +579,7 @@ const CartItemRow = React.memo(
                       <Text style={{ fontSize: 12 }}>
                         {member.CustomerName}
                       </Text>
- 
+
                       <Text style={{ fontSize: 12 }}>
                         {member.Amount?.toFixed(2)}
                       </Text>
@@ -819,7 +814,7 @@ const CartItemRow = React.memo(
                           isPhone && { fontSize: 8 },
                         ]}
                       >
-                        {item.discountType === 'fixed' || (item.discountType == null && item.discountAmount > 0 && !item.discount) 
+                        {item.discountType === 'fixed' || (item.discountType == null && item.discountAmount > 0 && !item.discount)
                           ? `-$${Number(item.discountAmount ?? item.discount).toFixed(2)}`
                           : `-${Number(item.discountAmount ?? item.discount)}%`}
                       </Text>
@@ -835,9 +830,9 @@ const CartItemRow = React.memo(
                   ]}
                 >
                   ${((item.price || 0) * item.qty - (
-                    (item.discountType === 'fixed' || (item.discountType == null && item.discountAmount > 0 && !item.discount)) 
-                    ? (Number(item.discountAmount ?? item.discount ?? 0) * item.qty) 
-                    : ((item.price || 0) * item.qty * (Number(item.discountAmount ?? item.discount ?? 0) / 100))
+                    (item.discountType === 'fixed' || (item.discountType == null && item.discountAmount > 0 && !item.discount))
+                      ? (Number(item.discountAmount ?? item.discount ?? 0) * item.qty)
+                      : ((item.price || 0) * item.qty * (Number(item.discountAmount ?? item.discount ?? 0) / 100))
                   )).toFixed(2)}
                 </Text>
               </View>
@@ -921,7 +916,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
   );
   const pendingSync = useCartStore((state) => state.pendingSync);
 
-  const settings = useCompanySettingsStore((state) => state.settings);
+  const settings = useCompanySettingsStore((state: any) => state.settings);
   const currencySymbol = settings.currencySymbol || "$";
   const gstRate = (settings.gstPercentage || 0) / 100;
   const scRate = (settings.serviceChargePercentage || 0) / 100;
@@ -1104,12 +1099,12 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
       (acc, item) => {
         const isVoided = "status" in item && item.status === "VOIDED";
         if (isVoided) return acc;
-        
+
         const baseTotal = (item.price || 0) * item.qty;
         let itemDiscount = 0;
         const discAmt = Number(item.discountAmount ?? item.discount ?? 0);
         const discType = item.discountType || 'percentage';
-        
+
         if (discAmt > 0) {
           if (discType === 'percentage') {
             itemDiscount = baseTotal * (discAmt / 100);
@@ -1346,7 +1341,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
     }
   };
 
-  const handleSendOrder = async () => {
+  const handleSendOrder = async (skipRedirect = false) => {
     const unsentItems = cart.filter(
       (i: any) => !i.status || i.status === "NEW",
     );
@@ -1432,7 +1427,9 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
     })();
 
     // 3. Close Sidebar & Redirect instantly
-    router.replace(`/(tabs)/category?section=${orderContext.section}`);
+    if (!skipRedirect) {
+      router.replace(`/(tabs)/category?section=${orderContext.section}`);
+    }
 
     // 4. Handle Server Save in the background
     (async () => {
@@ -1830,104 +1827,21 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
                             />
                           </TouchableOpacity>
 
-                          {/* Checkout button (Orange, icon only, 50px) */}
+                          {/* KOT button (Indigo, text 'KOT', 50px) */}
                           <TouchableOpacity
                             disabled={isCheckingOut}
                             style={[
                               styles.compactIconBtn,
-                              { backgroundColor: "#F59E0B" },
+                              { backgroundColor: "#4F46E5" },
                               isCheckingOut && { opacity: 0.6 }
                             ]}
                             onPress={async () => {
                               if (isCheckingOut) return;
-                              useCartStore.getState().cancelPendingSync();
-                              const tableId = orderContext.tableId;
-                              if (!tableId) return;
-
                               setIsCheckingOut(true);
                               try {
-                                const targetOrderId = activeOrder?.orderId || currentTableOrderId || "NEW";
-                                const officialOrderId = await saveCartHelper(tableId, targetOrderId, true);
-
-                                // Print checkout bill if enabled
-                                let displayOrderId = officialOrderId || targetOrderId;
-                                if (
-                                  displayOrderId === "NEW" ||
-                                  displayOrderId === "PENDING" ||
-                                  displayOrderId === "#NEW"
-                                ) {
-                                  const timestamp = new Date().getTime().toString().slice(-6);
-                                  displayOrderId = `ORD-${new Date().toISOString().split("T")[0].replace(/-/g, "")}-${timestamp}`;
-                                }
-                                const currentOrderId = displayOrderId;
-                                (async () => {
-                                  const printData = {
-                                    id: currentOrderId,
-                                    invoiceNumber: currentOrderId,
-                                    date: new Date(),
-                                    items: cart.filter(
-                                      (i: any) => i.status !== "VOIDED" && i.statusCode !== 0,
-                                    ),
-                                    total: payableAmount,
-                                    totalAmount: payableAmount,
-                                    subTotal: grossTotal,
-                                    taxAmount: taxAmount,
-                                    discountAmount: 0,
-                                    serviceCharge: serviceChargeAmt,
-                                    tableNo: orderContext.tableNo,
-                                    section: orderContext.section,
-                                    serverName: user?.userName || "Staff",
-                                    paymentMethod: "CASH",
-                                  };
-
-                                  if (enableCheckoutBill) {
-                                    console.log("🖨️ [SidebarTurboPrint] Sending to printer instantly...");
-                                    try {
-                                      UniversalPrinter.printCheckoutBill(printData, user?.userId);
-                                    } catch (e) {
-                                      console.error("Sidebar Print Error:", e);
-                                    }
-                                  }
-                                })();
-
-                                // Local optimistic update to SENT then checkout
-                                useCartStore.getState().markAllAsSent(true);
-
-                                // Call checkout API
-                                const res = await useCartStore.getState().checkoutOrder(tableId);
-
-                                if (res && res.success) {
-                                  useActiveOrdersStore.getState().fetchActiveKitchenOrders();
-                                  updateTableStatus(
-                                    tableId,
-                                    orderContext.section!,
-                                    orderContext.tableNo!,
-                                    officialOrderId || targetOrderId,
-                                    "BILL_REQUESTED",
-                                    new Date().toISOString(),
-                                    undefined,
-                                    payableAmount,
-                                  );
-
-                                  // Fetch cart again to ensure state is clean
-                                  await useCartStore.getState().fetchCartFromDB(tableId);
-
-                                  showToast({
-                                    type: "success",
-                                    message: "Success",
-                                    subtitle: enableCheckoutBill ? "Order finalized & Printing..." : "Checkout completed. Bill printing is disabled.",
-                                    duration: 1500,
-                                  });
-                                } else {
-                                  showToast({
-                                    type: "error",
-                                    message: "Checkout Failed",
-                                    subtitle: "Please try again.",
-                                  });
-                                }
+                                await handleSendOrder(true);
                               } catch (err) {
-                                console.error("Fast checkout checkout error:", err);
-                                showToast({ type: "error", message: "Error", subtitle: "Failed to checkout." });
+                                console.error("KOT send error:", err);
                               } finally {
                                 setIsCheckingOut(false);
                               }
@@ -1936,7 +1850,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
                             {isCheckingOut ? (
                               <ActivityIndicator size="small" color="#fff" />
                             ) : (
-                              <Ionicons name="receipt-outline" size={iconSize} color="#fff" />
+                              <Text style={{ color: "#fff", fontFamily: Fonts.black, fontSize: 13 }}>KOT</Text>
                             )}
                           </TouchableOpacity>
 
@@ -1958,7 +1872,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
                               try {
                                 const targetOrderId = activeOrder?.orderId || currentTableOrderId || "NEW";
                                 const officialOrderId = await saveCartHelper(tableId, targetOrderId, true);
-                                
+
                                 updateTableStatus(
                                   tableId,
                                   orderContext.section!,
@@ -1997,100 +1911,21 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
                       // Dine-in Flow 2: 2-button layout when unsentCount === 0 and status is SENT or HOLD
                       return (
                         <>
-                          {/* Checkout button (Orange, icon only, 50px) */}
+                          {/* KOT button (Indigo, text 'KOT', 50px) */}
                           <TouchableOpacity
                             disabled={isCheckingOut}
                             style={[
                               styles.compactIconBtn,
-                              { backgroundColor: "#F59E0B" },
+                              { backgroundColor: "#4F46E5" },
                               isCheckingOut && { opacity: 0.6 }
                             ]}
                             onPress={async () => {
                               if (isCheckingOut) return;
-                              useCartStore.getState().cancelPendingSync();
-                              const tableId = orderContext.tableId;
-                              if (!tableId) return;
-
                               setIsCheckingOut(true);
                               try {
-                                const targetOrderId = activeOrder?.orderId || currentTableOrderId || "NEW";
-
-                                // Print checkout bill if enabled
-                                let displayOrderId = targetOrderId;
-                                if (
-                                  displayOrderId === "NEW" ||
-                                  displayOrderId === "PENDING" ||
-                                  displayOrderId === "#NEW"
-                                ) {
-                                  const timestamp = new Date().getTime().toString().slice(-6);
-                                  displayOrderId = `ORD-${new Date().toISOString().split("T")[0].replace(/-/g, "")}-${timestamp}`;
-                                }
-                                const currentOrderId = displayOrderId;
-                                (async () => {
-                                  const printData = {
-                                    id: currentOrderId,
-                                    invoiceNumber: currentOrderId,
-                                    date: new Date(),
-                                    items: cart.filter(
-                                      (i: any) => i.status !== "VOIDED" && i.statusCode !== 0,
-                                    ),
-                                    total: payableAmount,
-                                    totalAmount: payableAmount,
-                                    subTotal: grossTotal,
-                                    taxAmount: taxAmount,
-                                    discountAmount: 0,
-                                    serviceCharge: serviceChargeAmt,
-                                    tableNo: orderContext.tableNo,
-                                    section: orderContext.section,
-                                    serverName: user?.userName || "Staff",
-                                    paymentMethod: "CASH",
-                                  };
-
-                                  if (enableCheckoutBill) {
-                                    console.log("🖨️ [SidebarTurboPrint] Sending to printer instantly...");
-                                    try {
-                                      UniversalPrinter.printCheckoutBill(printData, user?.userId);
-                                    } catch (e) {
-                                      console.error("Sidebar Print Error:", e);
-                                    }
-                                  }
-                                })();
-
-                                // Call checkout API
-                                const res = await useCartStore.getState().checkoutOrder(tableId);
-
-                                if (res && res.success) {
-                                  useActiveOrdersStore.getState().fetchActiveKitchenOrders();
-                                  updateTableStatus(
-                                    tableId,
-                                    orderContext.section!,
-                                    orderContext.tableNo!,
-                                    targetOrderId,
-                                    "BILL_REQUESTED",
-                                    new Date().toISOString(),
-                                    undefined,
-                                    payableAmount,
-                                  );
-
-                                  // Fetch cart again to ensure state is clean
-                                  await useCartStore.getState().fetchCartFromDB(tableId);
-
-                                  showToast({
-                                    type: "success",
-                                    message: "Success",
-                                    subtitle: enableCheckoutBill ? "Order finalized & Printing..." : "Checkout completed. Bill printing is disabled.",
-                                    duration: 1500,
-                                  });
-                                } else {
-                                  showToast({
-                                    type: "error",
-                                    message: "Checkout Failed",
-                                    subtitle: "Please try again.",
-                                  });
-                                }
+                                await handleSendOrder(true);
                               } catch (err) {
-                                console.error("Checkout error:", err);
-                                showToast({ type: "error", message: "Error", subtitle: "Failed to checkout." });
+                                console.error("KOT send error:", err);
                               } finally {
                                 setIsCheckingOut(false);
                               }
@@ -2099,7 +1934,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
                             {isCheckingOut ? (
                               <ActivityIndicator size="small" color="#fff" />
                             ) : (
-                              <Ionicons name="receipt-outline" size={iconSize} color="#fff" />
+                              <Text style={{ color: "#fff", fontFamily: Fonts.black, fontSize: 13 }}>KOT</Text>
                             )}
                           </TouchableOpacity>
 
@@ -2180,7 +2015,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
                             try {
                               const targetOrderId = activeOrder?.orderId || currentTableOrderId || "NEW";
                               const officialOrderId = await saveCartHelper(tableId, targetOrderId, true);
-                              
+
                               updateTableStatus(
                                 tableId,
                                 orderContext.section || "TAKEAWAY",
@@ -2326,7 +2161,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
                             try {
                               const targetOrderId = activeOrder?.orderId || currentTableOrderId || "NEW";
                               const officialOrderId = await saveCartHelper(tableId, targetOrderId, true);
-                              
+
                               updateTableStatus(
                                 tableId,
                                 orderContext.section || "TAKEAWAY",
@@ -2356,7 +2191,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
                             try {
                               const targetOrderId = activeOrder?.orderId || currentTableOrderId || "NEW";
                               const officialOrderId = await saveCartHelper(tableId, targetOrderId, true);
-                              
+
                               updateTableStatus(
                                 tableId,
                                 orderContext.section || "TAKEAWAY",
@@ -2397,19 +2232,19 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
                           <ActivityIndicator size="small" color="#fff" />
                         ) : (
                           <>
-                            <Ionicons 
+                            <Ionicons
                               name={
-                                (enableCheckoutFlow === true && enableDirectProcessToPay === false) 
-                                  ? "send" 
+                                (enableCheckoutFlow === true && enableDirectProcessToPay === false)
+                                  ? "send"
                                   : (enableCheckoutFlow === false && enableDirectProcessToPay === true)
                                     ? "card-outline"
                                     : "receipt-outline"
-                              } 
-                              size={iconSize} 
-                              color="#fff" 
+                              }
+                              size={iconSize}
+                              color="#fff"
                             />
                             <Text style={styles.btnText}>
-                              {(enableCheckoutFlow === true && enableDirectProcessToPay === false) 
+                              {(enableCheckoutFlow === true && enableDirectProcessToPay === false)
                                 ? (isPhone ? "Send" : (!isLandscape ? "Send Kitchen" : "Send to Kitchen"))
                                 : (enableCheckoutFlow === false && enableDirectProcessToPay === true)
                                   ? (!isPhone ? "Process to Pay" : "Pay")
