@@ -1,7 +1,23 @@
+import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const logDir = path.join(process.cwd(), 'logs');
+let userDataPath = '';
+try {
+  if (app) {
+    userDataPath = app.getPath('userData');
+  }
+} catch (e) {
+  // app might not be initialized or available in dev/testing contexts
+}
+
+if (!userDataPath) {
+  userDataPath = process.env.APPDATA
+    ? path.join(process.env.APPDATA, 'UniPro Print Bridge')
+    : process.cwd();
+}
+
+const logDir = path.join(userDataPath, 'logs');
 const logFile = path.join(logDir, 'app.log');
 
 if (!fs.existsSync(logDir)) {

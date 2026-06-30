@@ -1,8 +1,24 @@
+import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../logger';
 
-const STATE_FILE = path.join(process.cwd(), 'customer-display-state.json');
+let userDataPath = '';
+try {
+  if (app) {
+    userDataPath = app.getPath('userData');
+  }
+} catch (e) {
+  // app might not be initialized yet
+}
+
+if (!userDataPath) {
+  userDataPath = process.env.APPDATA
+    ? path.join(process.env.APPDATA, 'UniPro Print Bridge')
+    : process.cwd();
+}
+
+const STATE_FILE = path.join(userDataPath, 'customer-display-state.json');
 
 let currentState: any = { active: false, paymentSuccess: false };
 
