@@ -447,6 +447,48 @@ export default function GeneralSettingsModal({
           {/* ── CUSTOM CONFIRMATION OVERLAY ── */}
           {showConfirmDialog && (
             <Animated.View style={[styles.confirmOverlay, { opacity: confirmOpacity }]}>
+              <Animated.View
+                style={[
+                  styles.confirmCard,
+                  { transform: [{ scale: confirmScale }] }
+                ]}
+              >
+                <View style={styles.confirmIconContainer}>
+                  <Ionicons name="alert-circle" size={30} color={Theme.warning} />
+                </View>
+                
+                <Text style={styles.confirmTitle}>Confirm Changes</Text>
+                
+                <Text style={styles.confirmDesc}>
+                  Are you sure you want to update settings? These changes will apply globally to all users.
+                </Text>
+                
+                <View style={styles.confirmActions}>
+                  <TouchableOpacity
+                    style={styles.confirmBtnCancel}
+                    onPress={() => setShowConfirmDialog(false)}
+                    disabled={isSaving}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.confirmBtnCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={styles.confirmBtnSave}
+                    onPress={performSave}
+                    disabled={isSaving}
+                    activeOpacity={0.8}
+                  >
+                    {isSaving ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.confirmBtnSaveText}>Save Changes</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
+            </Animated.View>
+          )}
 
           {/* ── ADMIN PASSWORD VERIFICATION MODAL OVERLAY ── */}
           {showPasswordModal && (
@@ -491,48 +533,6 @@ export default function GeneralSettingsModal({
                 </View>
               </View>
             </View>
-          )}
-              <Animated.View
-                style={[
-                  styles.confirmCard,
-                  { transform: [{ scale: confirmScale }] }
-                ]}
-              >
-                <View style={styles.confirmIconContainer}>
-                  <Ionicons name="alert-circle" size={30} color={Theme.warning} />
-                </View>
-                
-                <Text style={styles.confirmTitle}>Confirm Changes</Text>
-                
-                <Text style={styles.confirmDesc}>
-                  Are you sure you want to update settings? These changes will apply globally to all users.
-                </Text>
-                
-                <View style={styles.confirmActions}>
-                  <TouchableOpacity
-                    style={styles.confirmBtnCancel}
-                    onPress={() => setShowConfirmDialog(false)}
-                    disabled={isSaving}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.confirmBtnCancelText}>Cancel</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity
-                    style={styles.confirmBtnSave}
-                    onPress={performSave}
-                    disabled={isSaving}
-                    activeOpacity={0.8}
-                  >
-                    {isSaving ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <Text style={styles.confirmBtnSaveText}>Save Changes</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </Animated.View>
-            </Animated.View>
           )}
         </Animated.View>
       </Animated.View>

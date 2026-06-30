@@ -37,6 +37,8 @@ import { useAuthStore } from "../stores/authStore";
 import { useCartStore } from "../stores/cartStore";
 import { useCompanySettingsStore } from "../stores/companySettingsStore";
 import type { CompanySettings } from "../stores/companySettingsStore";
+import { useGeneralSettingsStore } from "../stores/generalSettingsStore";
+import { useQuickCashStore } from "../stores/quickCashStore";
 import { useOrderContextStore } from "../stores/orderContextStore";
 import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
 import type { CachedPaymentMethod } from "../stores/paymentSettingsStore";
@@ -714,7 +716,29 @@ const [paymentMessage, setPaymentMessage] = useState("");
       : 0;
   const paidNum = isCashMethod(method) ? parseFloat(cashInput) || 0 : total;
   const change = Math.max(0, paidNum - total);
-  const quickCash = [20, 50, 100, 200, 500, 1000];
+
+  // ── Quick Cash ─────────────────────────────────────────────────────────────
+  const { settings: generalSettings } = useGeneralSettingsStore();
+  const { amounts: quickCash, setAmounts: setQuickCashAmounts } =
+    useQuickCashStore();
+
+  const [isEditingQuickCash, setIsEditingQuickCash] = useState(false);
+  const [quickCashDraft, setQuickCashDraft] = useState<string[]>([]);
+
+  const openQuickCashEditor = () => {
+    setQuickCashDraft(quickCash.map((v) => v.toString()));
+    setIsEditingQuickCash(true);
+  };
+
+  const saveQuickCash = () => {
+    const parsed = quickCashDraft.map((s) => {
+      const n = parseFloat(s);
+      return isNaN(n) || n <= 0 ? 0 : Math.round(n * 100) / 100;
+    });
+    setQuickCashAmounts(parsed);
+    setIsEditingQuickCash(false);
+  };
+  // ───────────────────────────────────────────────────────────────────────────
 
   const applyPaymentMethodsFromCache = () => {
     setLoadingMethods(true);
@@ -1451,9 +1475,114 @@ const confirmPayment = async () => {
     setIsTestModalVisible(false);
   };
 
+  const renderQuickCashEditorModal = () => (
+    <Modal
+      visible={isEditingQuickCash}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setIsEditingQuickCash(false)}
+    >
+      <TouchableWithoutFeedback onPress={() => setIsEditingQuickCash(false)}>
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback>
+            <View style={[styles.adjustModalContent, { maxWidth: 340 }]}>
+              <View style={styles.adjustModalHeader}>
+                <Text style={styles.adjustModalTitle}>Edit Quick Cash Buttons</Text>
+                <TouchableOpacity onPress={() => setIsEditingQuickCash(false)}>
+                  <Ionicons name="close" size={22} color={Theme.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <Text
+                style={{
+                  color: Theme.textMuted,
+                  fontSize: 12,
+                  marginBottom: 14,
+                  lineHeight: 18,
+                }}
+              >
+                Set your 6 quick-cash shortcut amounts. Tap Save to apply.
+              </Text>
+
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {quickCashDraft.map((val, idx) => (
+                  <View key={idx} style={{ width: "30%" }}>
+                    <Text
+                      style={{
+                        color: Theme.textMuted,
+                        fontSize: 11,
+                        marginBottom: 4,
+                      }}
+                    >
+                      Button {idx + 1}
+                    </Text>
+                    <View
+                      style={[
+                        styles.cashInputBox,
+                        { paddingVertical: 6, paddingHorizontal: 8 },
+                      ]}
+                    >
+                      <Text style={styles.currencyPrefix}>{currencySymbol}</Text>
+                      <TextInput
+                        style={[
+                          styles.cashInput,
+                          { fontSize: 14, flex: 1, minWidth: 0 },
+                        ]}
+                        value={val}
+                        onChangeText={(t) => {
+                          const next = [...quickCashDraft];
+                          next[idx] = t;
+                          setQuickCashDraft(next);
+                        }}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        {...Platform.select({
+                          web: { outlineStyle: "none" } as any,
+                        })}
+                      />
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                  marginTop: 20,
+                }}
+              >
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={() => setIsEditingQuickCash(false)}
+                >
+                  <Text style={{ color: Theme.textMuted, fontFamily: Fonts.medium }}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { paddingHorizontal: 20 }]}
+                  onPress={saveQuickCash}
+                >
+                  <Text
+                    style={{ color: "#fff", fontFamily: Fonts.semiBold, fontSize: 14 }}
+                  >
+                    Save
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+
   const renderTestDisplayModal = () => (
     <Modal
       visible={isTestModalVisible}
+
       transparent
       animationType="fade"
       onRequestClose={() => setIsTestModalVisible(false)}
@@ -2357,6 +2486,19 @@ const confirmPayment = async () => {
                       <View style={styles.cashSection}>
                         <View style={styles.sectionHeader}>
                           <Text style={styles.sectionTitle}>Cash Received</Text>
+                          {generalSettings.enableCashDrawer && (
+                            <TouchableOpacity
+                              onPress={openQuickCashEditor}
+                              style={{ padding: 4, marginLeft: 6 }}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Ionicons
+                                name="pencil"
+                                size={14}
+                                color={Theme.primary}
+                              />
+                            </TouchableOpacity>
+                          )}
                         </View>
                         <View style={styles.cashInputBox}>
                           <Text style={styles.currencyPrefix}>
@@ -2971,6 +3113,7 @@ const confirmPayment = async () => {
 
       {renderAdjustmentModal()}
       {renderTestDisplayModal()}
+      {renderQuickCashEditorModal()}
       <UPIPaymentModal
         visible={isUPIVisible}
         onClose={() => {
