@@ -22,6 +22,14 @@ const app = express();
 app.use(express.json());
 app.use(cors({ origin: '*' }));
 
+// Request single-instance lock
+const gotTheLock = electronApp.requestSingleInstanceLock();
+if (!gotTheLock) {
+  logger.warn('[Electron] Another instance of UniPro Print Bridge is already running. Exiting...');
+  electronApp.quit();
+  process.exit(0);
+}
+
 // 1. GET /health - Local health check of the print bridge
 app.get('/health', (req: Request, res: Response) => {
   res.json(pollerStats.getHealth());
