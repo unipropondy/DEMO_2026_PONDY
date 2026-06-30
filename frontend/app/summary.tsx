@@ -341,7 +341,7 @@ export default function SummaryScreen() {
     }
   }, [activeOrder, tableState]);
 
-  const settings = useCompanySettingsStore((state) => state.settings);
+  const settings = useCompanySettingsStore((state: any) => state.settings);
   const currencySymbol = settings.currencySymbol || "$";
   const gstRate = (settings.gstPercentage || 0) / 100;
   const scRate = (settings.serviceChargePercentage || 0) / 100;
