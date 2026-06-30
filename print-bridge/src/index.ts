@@ -19,7 +19,8 @@ import { loadPersistedState, getCurrentState } from './customerDisplay/DisplaySt
 import displayRouter from './customerDisplay/displayRoutes';
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Enable CORS globally with support for credentials (which doesn't allow '*')
 app.use(cors({
