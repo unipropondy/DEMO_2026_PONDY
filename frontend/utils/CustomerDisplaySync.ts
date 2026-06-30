@@ -63,8 +63,17 @@ const getTerminalCode = (): string | null => {
 
 export const CustomerDisplaySync = {
   isPaymentActive: false,
+  idleTimeout: null as any,
+
+  cancelPendingIdle: () => {
+    if (CustomerDisplaySync.idleTimeout) {
+      clearTimeout(CustomerDisplaySync.idleTimeout);
+      CustomerDisplaySync.idleTimeout = null;
+    }
+  },
 
   syncCart: (params: SyncCartParams) => {
+    CustomerDisplaySync.cancelPendingIdle();
     try {
       // 🛡️ ROLE GUARD: Only ADMIN users trigger Customer Display updates
       if (!isAllowedRole()) {
@@ -192,44 +201,50 @@ export const CustomerDisplaySync = {
   },
 
   syncIdle: () => {
-    try {
-      // 🛡️ ROLE GUARD: Only ADMIN users trigger Customer Display updates
-      if (!isAllowedRole()) {
-        console.log("🖥️ [CustomerDisplaySync] syncIdle blocked — user role is not ADMIN.");
-        return;
+    CustomerDisplaySync.cancelPendingIdle();
+
+    CustomerDisplaySync.idleTimeout = setTimeout(() => {
+      CustomerDisplaySync.idleTimeout = null;
+      try {
+        // 🛡️ ROLE GUARD: Only ADMIN users trigger Customer Display updates
+        if (!isAllowedRole()) {
+          console.log("🖥️ [CustomerDisplaySync] syncIdle blocked — user role is not ADMIN.");
+          return;
+        }
+
+        const isDisplayOn = useGeneralSettingsStore.getState().settings.customerSideDisplay;
+        if (!isDisplayOn) return;
+
+        if (CustomerDisplaySync.isPaymentActive) {
+          console.log("🖥️ [CustomerDisplaySync] syncIdle blocked because payment is active");
+          return;
+        }
+
+        const companySettings = useCompanySettingsStore.getState().settings;
+        const paymentSettings = usePaymentSettingsStore.getState().settings;
+
+        const payload = {
+          active: false,
+          paymentSuccess: false,
+          terminalCode: getTerminalCode(), // 🖥️ Room routing key
+          companyName: companySettings?.name || paymentSettings?.shopName || "Restaurant",
+          companyLogo: companySettings?.companyLogo ? (companySettings.companyLogo.startsWith("data:") || companySettings.companyLogo.startsWith("http") ? companySettings.companyLogo : `${API_URL}${companySettings.companyLogo.startsWith("/") ? "" : "/"}${companySettings.companyLogo}`) : "",
+        };
+
+        console.log("🖥️ [CustomerDisplaySync] Emitting idle attract loop | Terminal:", getTerminalCode());
+        socket.emit("customer_display_sync", payload);
+
+        if (Platform.OS === "android" && SunmiCustomerDisplay) {
+          SunmiCustomerDisplay.updateCustomerDisplay(JSON.stringify(payload));
+        }
+      } catch (err: any) {
+        console.error("🖥️ [CustomerDisplaySync] Failed to sync idle state:", err.message);
       }
-
-      const isDisplayOn = useGeneralSettingsStore.getState().settings.customerSideDisplay;
-      if (!isDisplayOn) return;
-
-      if (CustomerDisplaySync.isPaymentActive) {
-        console.log("🖥️ [CustomerDisplaySync] syncIdle blocked because payment is active");
-        return;
-      }
-
-      const companySettings = useCompanySettingsStore.getState().settings;
-      const paymentSettings = usePaymentSettingsStore.getState().settings;
-
-      const payload = {
-        active: false,
-        paymentSuccess: false,
-        terminalCode: getTerminalCode(), // 🖥️ Room routing key
-        companyName: companySettings?.name || paymentSettings?.shopName || "Restaurant",
-        companyLogo: companySettings?.companyLogo ? (companySettings.companyLogo.startsWith("data:") || companySettings.companyLogo.startsWith("http") ? companySettings.companyLogo : `${API_URL}${companySettings.companyLogo.startsWith("/") ? "" : "/"}${companySettings.companyLogo}`) : "",
-      };
-
-      console.log("🖥️ [CustomerDisplaySync] Emitting idle attract loop | Terminal:", getTerminalCode());
-      socket.emit("customer_display_sync", payload);
-
-      if (Platform.OS === "android" && SunmiCustomerDisplay) {
-        SunmiCustomerDisplay.updateCustomerDisplay(JSON.stringify(payload));
-      }
-    } catch (err: any) {
-      console.error("🖥️ [CustomerDisplaySync] Failed to sync idle state:", err.message);
-    }
+    }, 500);
   },
 
   syncPaymentSuccess: (params: PaymentSuccessParams) => {
+    CustomerDisplaySync.cancelPendingIdle();
     try {
       // 🛡️ ROLE GUARD: Only ADMIN users trigger Customer Display updates
       if (!isAllowedRole()) {
