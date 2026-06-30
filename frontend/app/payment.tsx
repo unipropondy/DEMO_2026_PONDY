@@ -547,6 +547,12 @@ const [paymentMessage, setPaymentMessage] = useState("");
     init();
   }, []);
 
+  // 💵 QUICK CASH REAL-TIME SYNC — updates instantly when any terminal changes amounts
+  useEffect(() => {
+    const unsubscribe = useQuickCashStore.getState().subscribeToSocket();
+    return unsubscribe;
+  }, []);
+
   // 🖥️ CUSTOMER DISPLAY REAL-TIME SYNC
   useEffect(() => {
     CustomerDisplaySync.isPaymentActive = true;

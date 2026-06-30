@@ -99,6 +99,12 @@ io.on("connection", (socket) => {
     io.emit("order_status_update", data);
   });
 
+  // 💵 QUICK CASH SYNC: Broadcast quick-cash button amounts to all POS terminals
+  socket.on("quick_cash_updated", (data) => {
+    console.log("💵 [Server] Quick cash amounts updated:", data.amounts);
+    socket.broadcast.emit("quick_cash_updated", data);
+  });
+
   // 🖥️ TERMINAL ROOM JOIN: POS devices and Customer Display screens join a shared room
   // Room name format: terminal_{TerminalCode} (e.g. terminal_COUNTER_1)
   socket.on("join_terminal", ({ terminalCode }) => {
