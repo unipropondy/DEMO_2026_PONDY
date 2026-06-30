@@ -50,7 +50,16 @@ export default function HeldOrdersScreen() {
       
       <View style={styles.container}>
         <View style={styles.topBar}>
-          <Pressable style={styles.backBtn} onPress={() => router.replace("/(tabs)/category" as any)}>
+          <Pressable 
+            style={styles.backBtn} 
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/(tabs)/category" as any);
+              }
+            }}
+          >
             <Ionicons name="arrow-back" size={20} color={Theme.textPrimary} />
             <Text style={styles.backText}>Back</Text>
           </Pressable>

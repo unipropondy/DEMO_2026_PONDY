@@ -5,6 +5,8 @@ export { Theme } from './constants/theme';
 export { Fonts } from './constants/Fonts';
 export { API_URL } from './constants/Config';
 export { useCompanySettingsStore } from './stores/companySettingsStore';
+export type { CompanySettings } from './stores/companySettingsStore';
 export { usePaymentSettingsStore } from './stores/paymentSettingsStore';
+export type { CachedPaymentMethod } from './stores/paymentSettingsStore';
 export { useTerminalStore } from './stores/terminalStore';
 export type { Terminal } from './stores/terminalStore';

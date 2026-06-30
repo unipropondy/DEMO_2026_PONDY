@@ -274,7 +274,16 @@ export default function LoyaltyConfigScreen() {
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace("/loyalty" as any)} style={styles.backBtn}>
+        <TouchableOpacity 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/loyalty" as any);
+            }
+          }} 
+          style={styles.backBtn}
+        >
           <Ionicons name="arrow-back" size={20} color={Theme.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Loyalty Programs</Text>
@@ -360,8 +369,8 @@ export default function LoyaltyConfigScreen() {
                     <Text style={styles.detailValue}>{item.RewardDishName || "Unknown"}</Text>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Required Bills:</Text>
-                    <Text style={styles.detailValue}>{item.RequiredBills} Completed Bills</Text>
+                    <Text style={styles.detailLabel}>Required Qty:</Text>
+                    <Text style={styles.detailValue}>{item.RequiredBills} Quantities Purchased</Text>
                   </View>
                 </View>
 
@@ -523,10 +532,10 @@ export default function LoyaltyConfigScreen() {
                 )}
               </View>
 
-              {/* Required Bills & Status */}
+              {/* Required Quantity & Status */}
               <View style={{ flexDirection: "row", gap: 12 }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Required Bills *</Text>
+                  <Text style={styles.inputLabel}>Required Quantity *</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="e.g. 9"

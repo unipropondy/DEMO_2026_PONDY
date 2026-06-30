@@ -611,7 +611,13 @@ export default function MenuScreen() {
       ]}
     >
       <TouchableOpacity
-        onPress={() => router.replace("/(tabs)/category")}
+        onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace("/(tabs)/category");
+          }
+        }}
         style={[
           styles.backBtn,
           isPhone && isLandscape && { width: 36, height: 36, borderRadius: 8 },

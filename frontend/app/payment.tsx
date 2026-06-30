@@ -36,8 +36,10 @@ import {
 import { useAuthStore } from "../stores/authStore";
 import { useCartStore } from "../stores/cartStore";
 import { useCompanySettingsStore } from "../stores/companySettingsStore";
+import type { CompanySettings } from "../stores/companySettingsStore";
 import { useOrderContextStore } from "../stores/orderContextStore";
 import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
+import type { CachedPaymentMethod } from "../stores/paymentSettingsStore";
 import { useTableStatusStore } from "../stores/tableStatusStore";
 import { CustomerDisplaySync } from "../utils/CustomerDisplaySync";
 
@@ -398,7 +400,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [isUPIVisible, setIsUPIVisible] = useState(false);
   const [isPayNowVisible, setIsPayNowVisible] = useState(false);
-  const settingsStore = useCompanySettingsStore((state) => state.settings);
+  const settingsStore = useCompanySettingsStore((state: { settings: CompanySettings }) => state.settings);
   const currencySymbol = settingsStore.currencySymbol || "$";
   const gstRate = (settingsStore.gstPercentage || 0) / 100;
   const scRate = (settingsStore.serviceChargePercentage || 0) / 100;
@@ -719,7 +721,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
     try {
       const cached = usePaymentSettingsStore.getState().paymentMethods;
       
-      const mapped: PaymentMethod[] = cached.map((d) => ({
+      const mapped: PaymentMethod[] = cached.map((d: CachedPaymentMethod) => ({
         payMode: d.payMode || "",
         description: d.description || d.payMode || "",
         icon: getPaymodeIcon(d.payMode || ""),

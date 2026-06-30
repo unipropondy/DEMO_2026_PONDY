@@ -2561,7 +2561,22 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
         .query("SELECT LoyaltyCustomerId, VisitCount, TotalVisits, RewardPending FROM LoyaltyCustomer WITH (UPDLOCK) WHERE Phone = @Phone");
 
       if (custRes.recordset.length === 0) {
-        const initialVisitCount = !isSplitDuplicate && hasLoyaltyDishOrdered ? 1 : 0;
+        let initialVisitCount = 0;
+        const primaryRule = activeRules[0];
+        if (!isSplitDuplicate && primaryRule) {
+          const primaryPurchaseDishIdLower = String(primaryRule.PurchaseDishId).toLowerCase();
+          let transactionQty = 0;
+          for (const item of itemsList) {
+            if (String(item.DishId || item.dishId || item.id).toLowerCase() === primaryPurchaseDishIdLower) {
+              transactionQty += (item.Qty || item.qty || 1);
+            }
+          }
+          const blockSize = (primaryRule.RequiredBills || 9) + 1;
+          initialVisitCount = transactionQty % blockSize;
+        } else if (!isSplitDuplicate && hasLoyaltyDishOrdered) {
+          initialVisitCount = 1;
+        }
+
         const initialTotalVisits = isSplitDuplicate ? 0 : 1;
         const insertCustRes = await transaction.request()
           .input("Phone", sql.NVarChar(50), cleanPhone)
@@ -2578,27 +2593,43 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
       } else {
         const cust = custRes.recordset[0];
         customerId = cust.LoyaltyCustomerId;
+
+        // Fetch current states to calculate global visit count (carried forward balance of the main rule)
+        const primaryRule = activeRules[0];
+        let newVisitCount = cust.VisitCount;
+
+        if (!isSplitDuplicate && primaryRule) {
+          const stateRes = await transaction.request()
+            .input("CustomerId", sql.UniqueIdentifier, customerId)
+            .input("RuleId", sql.UniqueIdentifier, primaryRule.RuleId)
+            .query(`
+              SELECT CurrentCount FROM CustomerDishLoyaltyState WITH (UPDLOCK)
+              WHERE CustomerId = @CustomerId AND RuleId = @RuleId
+            `);
+          
+          let currentBalance = 0;
+          if (stateRes.recordset.length > 0) {
+            currentBalance = stateRes.recordset[0].CurrentCount || 0;
+          }
+
+          const primaryPurchaseDishIdLower = String(primaryRule.PurchaseDishId).toLowerCase();
+          let transactionQty = 0;
+          for (const item of itemsList) {
+            if (String(item.DishId || item.dishId || item.id).toLowerCase() === primaryPurchaseDishIdLower) {
+              transactionQty += (item.Qty || item.qty || 1);
+            }
+          }
+
+          // Compute new balance
+          const blockSize = (primaryRule.RequiredBills || 9) + 1;
+          newVisitCount = (currentBalance + transactionQty) % blockSize;
+        }
+
         if (!isSplitDuplicate) {
-          let newVisitCount = cust.VisitCount;
           let newTotalVisits = cust.TotalVisits + 1;
           let newRewardsEarned = 0;
           let newRewardsRedeemed = 0;
-          let newRewardPending = cust.RewardPending;
-
-          if (hasRewardClaimed) {
-            newVisitCount = 0;
-            newRewardsRedeemed = 1;
-            newRewardPending = 0;
-          } else if (hasLoyaltyDishOrdered) {
-            const primaryRule = activeRules[0];
-            const requiredBills = primaryRule ? primaryRule.RequiredBills : 9;
-            newVisitCount = cust.VisitCount + 1;
-            if (newVisitCount >= requiredBills) {
-              newVisitCount = 0;
-              newRewardPending = 1;
-              newRewardsEarned = 1;
-            }
-          }
+          let newRewardPending = 0; // We resolve rewards on the fly during payment, no need to hold pending flag
 
           await transaction.request()
             .input("LoyaltyCustomerId", sql.UniqueIdentifier, customerId)
@@ -2624,12 +2655,6 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
 
       // 5. Process Dish-Specific Loyalty Progress & Redemptions
       if (Array.isArray(itemsList) && activeRules.length > 0) {
-        // Separate items by unique DishId
-        const uniquePurchaseIds = [...new Set(itemsList.filter(i => {
-          const isReward = i.isDishReward === true || i.isDishReward === 1 || String(i.isDishReward).toLowerCase() === 'true';
-          return !isReward;
-        }).map(i => String(i.DishId || i.dishId || i.id).toLowerCase()))];
-
         const redeemedRewards = itemsList.filter(i => {
           const isReward = i.isDishReward === true || i.isDishReward === 1 || String(i.isDishReward).toLowerCase() === 'true';
           return isReward;
@@ -2639,7 +2664,14 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
         for (const rule of activeRules) {
           const rulePurchaseIdLower = String(rule.PurchaseDishId).toLowerCase();
           
-          if (uniquePurchaseIds.includes(rulePurchaseIdLower) && !isSplitDuplicate) {
+          let purchaseQty = 0;
+          for (const item of itemsList) {
+            if (String(item.DishId || item.dishId || item.id).toLowerCase() === rulePurchaseIdLower) {
+              purchaseQty += (item.Qty || item.qty || 1);
+            }
+          }
+
+          if (purchaseQty > 0 && !isSplitDuplicate) {
             // Get current state
             const stateRes = await transaction.request()
               .input("CustomerId", sql.UniqueIdentifier, customerId)
@@ -2649,38 +2681,32 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
                 WHERE CustomerId = @CustomerId AND RuleId = @RuleId
               `);
 
+            const blockSize = (rule.RequiredBills || 9) + 1;
+
             if (stateRes.recordset.length === 0) {
-              // Insert initial state
-              const initialCount = 1;
-              const rewardsEarned = initialCount >= rule.RequiredBills ? 1 : 0;
-              const finalCount = rewardsEarned > 0 ? 0 : initialCount;
+              const totalAccumulated = purchaseQty;
+              const finalCount = totalAccumulated % blockSize;
 
               await transaction.request()
                 .input("CustomerId", sql.UniqueIdentifier, customerId)
                 .input("RuleId", sql.UniqueIdentifier, rule.RuleId)
                 .input("Count", sql.Int, finalCount)
-                .input("Rewards", sql.Int, rewardsEarned)
                 .query(`
                   INSERT INTO CustomerDishLoyaltyState (CustomerId, RuleId, CurrentCount, RewardsAvailable, RewardCyclesCompleted)
-                  VALUES (@CustomerId, @RuleId, @Count, @Rewards, 0)
+                  VALUES (@CustomerId, @RuleId, @Count, 0, 0)
                 `);
             } else {
-              // Update state
               const state = stateRes.recordset[0];
-              const newCount = state.CurrentCount + 1;
-              const rewardsEarned = newCount >= rule.RequiredBills ? 1 : 0;
-              const finalCount = rewardsEarned > 0 ? 0 : newCount;
-              const finalRewards = state.RewardsAvailable + rewardsEarned;
+              const totalAccumulated = (state.CurrentCount || 0) + purchaseQty;
+              const finalCount = totalAccumulated % blockSize;
 
               await transaction.request()
                 .input("CustomerId", sql.UniqueIdentifier, customerId)
                 .input("RuleId", sql.UniqueIdentifier, rule.RuleId)
                 .input("Count", sql.Int, finalCount)
-                .input("Rewards", sql.Int, finalRewards)
                 .query(`
                   UPDATE CustomerDishLoyaltyState
                   SET CurrentCount = @Count,
-                      RewardsAvailable = @Rewards,
                       ModifiedOn = GETDATE()
                   WHERE CustomerId = @CustomerId AND RuleId = @RuleId
                 `);
@@ -2700,8 +2726,7 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
               .input("Qty", sql.Int, qty)
               .query(`
                 UPDATE CustomerDishLoyaltyState
-                SET RewardsAvailable = CASE WHEN RewardsAvailable >= @Qty THEN RewardsAvailable - @Qty ELSE 0 END,
-                    RewardCyclesCompleted = RewardCyclesCompleted + @Qty,
+                SET RewardCyclesCompleted = RewardCyclesCompleted + @Qty,
                     ModifiedOn = GETDATE()
                 WHERE CustomerId = @CustomerId AND RuleId = @RuleId
               `);

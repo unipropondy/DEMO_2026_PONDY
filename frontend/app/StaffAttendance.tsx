@@ -314,7 +314,16 @@ export default function StaffAttendanceScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace("/(tabs)/category" as any)} style={styles.backBtn}>
+        <TouchableOpacity 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)/category" as any);
+            }
+          }} 
+          style={styles.backBtn}
+        >
           <Ionicons name="arrow-back" size={20} color={Theme.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Staff Attendance</Text>

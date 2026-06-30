@@ -1957,7 +1957,16 @@ export default function SalesReport() {
             <Ionicons name="log-out" size={20} color={Theme.danger} />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity onPress={() => router.replace("/(tabs)/category" as any)} style={styles.backBtn}>
+          <TouchableOpacity 
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/(tabs)/category" as any);
+              }
+            }} 
+            style={styles.backBtn}
+          >
             <Ionicons name="arrow-back" size={20} color={Theme.textPrimary} />
           </TouchableOpacity>
         )}

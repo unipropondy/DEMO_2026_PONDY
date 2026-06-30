@@ -172,7 +172,16 @@ export default function WaiterHistoryScreen() {
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           {/* Header */}
           <View style={styles.headerBar}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.circularBack}>
+            <TouchableOpacity 
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace("/(tabs)/category" as any);
+                }
+              }} 
+              style={styles.circularBack}
+            >
               <Ionicons name="arrow-back" size={24} color={Theme.textPrimary} />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>

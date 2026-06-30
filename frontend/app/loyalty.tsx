@@ -283,7 +283,16 @@ export default function LoyaltyScreen() {
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace("/(tabs)/category" as any)} style={styles.backBtn}>
+        <TouchableOpacity 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)/category" as any);
+            }
+          }} 
+          style={styles.backBtn}
+        >
           <Ionicons name="arrow-back" size={20} color={Theme.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Loyalty Visitors</Text>
@@ -468,7 +477,7 @@ export default function LoyaltyScreen() {
                             </View>
                             <View style={styles.dishProgressFooter}>
                               <Text style={styles.dishProgressText}>
-                                {prog.CurrentCount} / {prog.RequiredBills} bills completed
+                                {prog.CurrentCount} / {prog.RequiredBills} quantities purchased
                               </Text>
                               <Text style={styles.dishRewardTarget}>
                                 Reward: Free {prog.RewardDishName}

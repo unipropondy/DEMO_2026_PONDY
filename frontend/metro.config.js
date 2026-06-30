@@ -19,6 +19,7 @@ config.resolver.extraNodeModules = {
   cors: STUB,
   dotenv: STUB,
   tedious: STUB,
+  '@unipro/customer-display': path.resolve(__dirname, '../packages/customer-display'),
   // Monorepo peer dependency mappings
   react: path.resolve(__dirname, 'node_modules/react'),
   'react-native': path.resolve(__dirname, 'node_modules/react-native'),

@@ -197,18 +197,18 @@ router.post("/calculate-bill-rewards", async (req, res) => {
       return res.json({ success: true, items: items, appliedRewards: [], totalDiscount: 0 });
     }
 
-    // 3. Fetch customer loyalty state for active rules
+    // 3. Fetch customer loyalty state for active rules (CurrentCount represents carried forward balance)
     const stateRes = await pool.request()
       .input("CustomerId", sql.UniqueIdentifier, customerId)
       .query(`
-        SELECT RuleId, RewardsAvailable FROM CustomerDishLoyaltyState
-        WHERE CustomerId = @CustomerId AND RewardsAvailable > 0
+        SELECT RuleId, CurrentCount FROM CustomerDishLoyaltyState
+        WHERE CustomerId = @CustomerId
       `);
 
     const userStates = stateRes.recordset || [];
-    const ruleRewardsMap = {}; // ruleId -> RewardsAvailable
+    const ruleCurrentCountMap = {}; // ruleId -> CurrentCount (carried forward balance)
     userStates.forEach(s => {
-      ruleRewardsMap[s.RuleId] = s.RewardsAvailable;
+      ruleCurrentCountMap[s.RuleId] = s.CurrentCount || 0;
     });
 
     const updatedItems = items.map(item => ({ ...item }));
@@ -217,14 +217,34 @@ router.post("/calculate-bill-rewards", async (req, res) => {
 
     // Evaluate each active rule
     for (const rule of activeRules) {
-      const rewardsAvail = ruleRewardsMap[rule.RuleId] || 0;
-      if (rewardsAvail <= 0) continue;
+      // Find all line items of the purchased dish in the cart
+      const purchaseDishIdLower = String(rule.PurchaseDishId).toLowerCase();
+      
+      // Calculate total quantity of this dish being purchased in this transaction
+      let purchaseQty = 0;
+      for (const item of updatedItems) {
+        if (String(item.DishId || item.dishId || item.id).toLowerCase() === purchaseDishIdLower && !item.isDishReward) {
+          purchaseQty += (item.Qty || 1);
+        }
+      }
+
+      if (purchaseQty <= 0) continue;
+
+      // Current balance carried forward
+      const currentBalance = ruleCurrentCountMap[rule.RuleId] || 0;
+      const totalAccumulated = currentBalance + purchaseQty;
+
+      // For every RequiredBills + 1 items, 1 is free.
+      const blockSize = (rule.RequiredBills || 9) + 1;
+      const rewardsToApply = Math.floor(totalAccumulated / blockSize);
+      if (rewardsToApply <= 0) continue;
 
       let rewardsApplied = 0;
+      // We will traverse the purchase line items to deduct the free quantities and add free line items
       for (let i = 0; i < updatedItems.length; i++) {
         const item = updatedItems[i];
-        if (String(item.DishId).toLowerCase() === String(rule.RewardDishId).toLowerCase() && !item.isDishReward) {
-          const qtyToFree = Math.min(item.Qty || 1, rewardsAvail - rewardsApplied);
+        if (String(item.DishId || item.dishId || item.id).toLowerCase() === purchaseDishIdLower && !item.isDishReward) {
+          const qtyToFree = Math.min(item.Qty || 1, rewardsToApply - rewardsApplied);
           if (qtyToFree > 0) {
             const originalPrice = parseFloat(item.Price || 0);
             
@@ -250,14 +270,14 @@ router.post("/calculate-bill-rewards", async (req, res) => {
             }
 
             rewardsApplied += qtyToFree;
-            totalDiscount += (originalPrice) * qtyToFree;
+            totalDiscount += originalPrice * qtyToFree;
             appliedRewards.push({
               ruleId: rule.RuleId,
               rewardDishId: rule.RewardDishId,
               qty: qtyToFree
             });
 
-            if (rewardsApplied >= rewardsAvail) {
+            if (rewardsApplied >= rewardsToApply) {
               break;
             }
           }
@@ -342,7 +362,22 @@ router.post("/log-visit", async (req, res) => {
         .query("SELECT LoyaltyCustomerId, VisitCount, TotalVisits, RewardPending FROM LoyaltyCustomer WITH (UPDLOCK) WHERE Phone = @Phone");
 
       if (custRes.recordset.length === 0) {
-        const initialVisitCount = !isSplitDuplicate && hasLoyaltyDishOrdered ? 1 : 0;
+        let initialVisitCount = 0;
+        const primaryRule = activeRules[0];
+        if (!isSplitDuplicate && primaryRule) {
+          const primaryPurchaseDishIdLower = String(primaryRule.PurchaseDishId).toLowerCase();
+          let transactionQty = 0;
+          for (const item of itemsList) {
+            if (String(item.DishId || item.dishId || item.id).toLowerCase() === primaryPurchaseDishIdLower) {
+              transactionQty += (item.Qty || item.qty || 1);
+            }
+          }
+          const blockSize = (primaryRule.RequiredBills || 9) + 1;
+          initialVisitCount = transactionQty % blockSize;
+        } else if (!isSplitDuplicate && hasLoyaltyDishOrdered) {
+          initialVisitCount = 1;
+        }
+
         const initialTotalVisits = isSplitDuplicate ? 0 : 1;
         const insertCustRes = await transaction.request()
           .input("Phone", sql.NVarChar(50), cleanPhone)
@@ -360,23 +395,40 @@ router.post("/log-visit", async (req, res) => {
         const cust = custRes.recordset[0];
         customerId = cust.LoyaltyCustomerId;
 
-        if (!isSplitDuplicate) {
-          let newVisitCount = cust.VisitCount;
-          let newTotalVisits = cust.TotalVisits + 1;
-          let newRewardPending = cust.RewardPending;
+        // Fetch current states to calculate global visit count (carried forward balance of the main rule)
+        const primaryRule = activeRules[0];
+        let newVisitCount = cust.VisitCount;
 
-          if (hasRewardClaimed) {
-            newVisitCount = 0;
-            newRewardPending = 0;
-          } else if (hasLoyaltyDishOrdered) {
-            newVisitCount = cust.VisitCount + 1;
-            if (newVisitCount === 9) {
-              newRewardPending = 1;
-            } else if (newVisitCount >= 10) {
-              newVisitCount = 1;
-              newRewardPending = 0;
+        if (!isSplitDuplicate && primaryRule) {
+          const stateRes = await transaction.request()
+            .input("CustomerId", sql.UniqueIdentifier, customerId)
+            .input("RuleId", sql.UniqueIdentifier, primaryRule.RuleId)
+            .query(`
+              SELECT CurrentCount FROM CustomerDishLoyaltyState WITH (UPDLOCK)
+              WHERE CustomerId = @CustomerId AND RuleId = @RuleId
+            `);
+          
+          let currentBalance = 0;
+          if (stateRes.recordset.length > 0) {
+            currentBalance = stateRes.recordset[0].CurrentCount || 0;
+          }
+
+          const primaryPurchaseDishIdLower = String(primaryRule.PurchaseDishId).toLowerCase();
+          let transactionQty = 0;
+          for (const item of itemsList) {
+            if (String(item.DishId || item.dishId || item.id).toLowerCase() === primaryPurchaseDishIdLower) {
+              transactionQty += (item.Qty || item.qty || 1);
             }
           }
+
+          // Compute new balance
+          const blockSize = (primaryRule.RequiredBills || 9) + 1;
+          newVisitCount = (currentBalance + transactionQty) % blockSize;
+        }
+
+        if (!isSplitDuplicate) {
+          let newTotalVisits = cust.TotalVisits + 1;
+          let newRewardPending = 0; // We resolve rewards on the fly during payment, no need to hold pending flag
 
           await transaction.request()
             .input("LoyaltyCustomerId", sql.UniqueIdentifier, customerId)
@@ -397,16 +449,24 @@ router.post("/log-visit", async (req, res) => {
       }
 
       // 5. Process Dish-Specific Loyalty Progress & Redemptions
-      if (Array.isArray(items) && activeRules.length > 0) {
-        // Separate items by unique DishId
-        const uniquePurchaseIds = [...new Set(items.filter(i => !i.isDishReward).map(i => String(i.DishId).toLowerCase()))];
-        const redeemedRewards = items.filter(i => i.isDishReward);
+      if (Array.isArray(itemsList) && activeRules.length > 0) {
+        const redeemedRewards = itemsList.filter(i => {
+          const isReward = i.isDishReward === true || i.isDishReward === 1 || String(i.isDishReward).toLowerCase() === 'true';
+          return isReward;
+        });
 
         // A. Process Paid Items (Increments)
         for (const rule of activeRules) {
           const rulePurchaseIdLower = String(rule.PurchaseDishId).toLowerCase();
           
-          if (uniquePurchaseIds.includes(rulePurchaseIdLower) && !isSplitDuplicate) {
+          let purchaseQty = 0;
+          for (const item of itemsList) {
+            if (String(item.DishId || item.dishId || item.id).toLowerCase() === rulePurchaseIdLower) {
+              purchaseQty += (item.Qty || item.qty || 1);
+            }
+          }
+
+          if (purchaseQty > 0 && !isSplitDuplicate) {
             // Get current state
             const stateRes = await transaction.request()
               .input("CustomerId", sql.UniqueIdentifier, customerId)
@@ -416,38 +476,32 @@ router.post("/log-visit", async (req, res) => {
                 WHERE CustomerId = @CustomerId AND RuleId = @RuleId
               `);
 
+            const blockSize = (rule.RequiredBills || 9) + 1;
+
             if (stateRes.recordset.length === 0) {
-              // Insert initial state
-              const initialCount = 1;
-              const rewardsEarned = initialCount >= rule.RequiredBills ? 1 : 0;
-              const finalCount = rewardsEarned > 0 ? 0 : initialCount;
+              const totalAccumulated = purchaseQty;
+              const finalCount = totalAccumulated % blockSize;
 
               await transaction.request()
                 .input("CustomerId", sql.UniqueIdentifier, customerId)
                 .input("RuleId", sql.UniqueIdentifier, rule.RuleId)
                 .input("Count", sql.Int, finalCount)
-                .input("Rewards", sql.Int, rewardsEarned)
                 .query(`
                   INSERT INTO CustomerDishLoyaltyState (CustomerId, RuleId, CurrentCount, RewardsAvailable, RewardCyclesCompleted)
-                  VALUES (@CustomerId, @RuleId, @Count, @Rewards, 0)
+                  VALUES (@CustomerId, @RuleId, @Count, 0, 0)
                 `);
             } else {
-              // Update state
               const state = stateRes.recordset[0];
-              const newCount = state.CurrentCount + 1;
-              const rewardsEarned = newCount >= rule.RequiredBills ? 1 : 0;
-              const finalCount = rewardsEarned > 0 ? 0 : newCount;
-              const finalRewards = state.RewardsAvailable + rewardsEarned;
+              const totalAccumulated = (state.CurrentCount || 0) + purchaseQty;
+              const finalCount = totalAccumulated % blockSize;
 
               await transaction.request()
                 .input("CustomerId", sql.UniqueIdentifier, customerId)
                 .input("RuleId", sql.UniqueIdentifier, rule.RuleId)
                 .input("Count", sql.Int, finalCount)
-                .input("Rewards", sql.Int, finalRewards)
                 .query(`
                   UPDATE CustomerDishLoyaltyState
                   SET CurrentCount = @Count,
-                      RewardsAvailable = @Rewards,
                       ModifiedOn = GETDATE()
                   WHERE CustomerId = @CustomerId AND RuleId = @RuleId
                 `);
@@ -455,10 +509,10 @@ router.post("/log-visit", async (req, res) => {
           }
         }
 
-        // B. Process Redemptions (Decrements)
+        // B. Process Redemptions (Decrements / Cycle Counter)
         for (const redeemed of redeemedRewards) {
-          const ruleId = redeemed.rewardRuleId;
-          const qty = redeemed.Qty || 1;
+          const ruleId = redeemed.rewardRuleId || redeemed.RewardRuleId;
+          const qty = redeemed.Qty || redeemed.qty || 1;
 
           if (ruleId) {
             await transaction.request()
@@ -467,8 +521,7 @@ router.post("/log-visit", async (req, res) => {
               .input("Qty", sql.Int, qty)
               .query(`
                 UPDATE CustomerDishLoyaltyState
-                SET RewardsAvailable = CASE WHEN RewardsAvailable >= @Qty THEN RewardsAvailable - @Qty ELSE 0 END,
-                    RewardCyclesCompleted = RewardCyclesCompleted + @Qty,
+                SET RewardCyclesCompleted = RewardCyclesCompleted + @Qty,
                     ModifiedOn = GETDATE()
                 WHERE CustomerId = @CustomerId AND RuleId = @RuleId
               `);
@@ -567,6 +620,10 @@ router.delete("/customer/:phone", async (req, res) => {
     
     const customerId = custRes.recordset[0].LoyaltyCustomerId;
     
+    await pool.request()
+      .input("CustomerId", sql.UniqueIdentifier, customerId)
+      .query("DELETE FROM CustomerDishLoyaltyState WHERE CustomerId = @CustomerId");
+
     await pool.request()
       .input("LoyaltyCustomerId", sql.UniqueIdentifier, customerId)
       .query("DELETE FROM LoyaltyVisit WHERE LoyaltyCustomerId = @LoyaltyCustomerId");
