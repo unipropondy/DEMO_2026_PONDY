@@ -6,6 +6,7 @@ import { CartItem, DiscountInfo, getContextId, useCartStore } from "./cartStore"
 import { OrderContext } from "./orderContextStore";
 import { API_URL } from "../constants/Config";
 import { socket } from "../constants/socket";
+import { useAuthStore } from "./authStore";
 
 
 /* ================= TYPES ================= */
