@@ -13,13 +13,13 @@ const dbConfig = {
     encrypt: false,
     trustServerCertificate: true,
     enableArithAbort: true,
-    connectTimeout: 180000, 
-    requestTimeout: 180000,
+    connectTimeout: 15000, 
+    requestTimeout: 15000,
     appName: "POS_System",
     keepAlive: true // Enable TCP keepAlive
   },
-  connectionTimeout: 180000,
-  requestTimeout: 180000,
+  connectionTimeout: 15000,
+  requestTimeout: 15000,
   pool: {
     max: 100,
     min: 0,

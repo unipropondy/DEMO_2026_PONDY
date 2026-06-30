@@ -583,10 +583,22 @@ async function syncTableStatus(req, tableId) {
     OR (Tableno = @TableNo AND (isOrderClosed = 0 OR isOrderClosed IS NULL))
     ORDER BY CASE WHEN OrderNumber = (SELECT CurrentOrderId FROM TableMaster WHERE TableId = @tid) THEN 0 ELSE 1 END, CreatedOn DESC;
 
-    -- Calculate Totals strictly
-    SELECT @count = COUNT(*), @total = ISNULL(SUM(ActualAmount), 0) 
+    -- Calculate Totals strictly including Service Charge and GST
+    DECLARE @subtotal DECIMAL(18,2) = 0;
+    DECLARE @serviceCharge DECIMAL(18,2) = 0;
+    DECLARE @gstRate DECIMAL(18,2) = 0.09; -- default 9%
+
+    SELECT 
+        @count = COUNT(*), 
+        @subtotal = ISNULL(SUM(ActualAmount), 0),
+        @serviceCharge = ISNULL(SUM(ServiceCharge), 0)
     FROM RestaurantOrderDetailCur 
     WHERE OrderId = @ActualOrderId AND StatusCode <> 0;
+
+    SELECT TOP 1 @gstRate = ISNULL(GSTPercentage, 0) / 100.0 FROM CompanySettings;
+    IF @gstRate IS NULL SET @gstRate = 0.09;
+
+    SET @total = ROUND(@subtotal + @serviceCharge + ((@subtotal + @serviceCharge) * @gstRate), 2);
 
     -- 🛡️ SHIELD 1: ATOMIC SYNC - If no items, force close the order to prevent ghosts
     IF @count = 0 AND @ActualOrderId IS NOT NULL

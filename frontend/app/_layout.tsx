@@ -97,7 +97,8 @@ const classifyRequest = (url: string): NetworkPolicy => {
     "/save",
     "print",
     "update-item-status",
-    "log-visit"
+    "log-visit",
+    "settings"
   ];
 
   const isCritical = criticalKeywords.some((keyword) => url.includes(keyword));
