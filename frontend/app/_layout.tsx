@@ -256,12 +256,15 @@ export default function RootLayout() {
         // 🚀 PARALLEL PREFETCH: Load static payment config immediately after connection
         // is confirmed. This ensures the Payment screen reads from cache instead of
         // making sequential network requests on every open.
-        import("@/stores/paymentSettingsStore").then((m) => {
-          Promise.all([
-            m.usePaymentSettingsStore.getState().fetchSettings(),
-            m.usePaymentSettingsStore.getState().fetchPaymentMethods(),
-          ]).catch(() => {/* Non-fatal — payment screen still works on miss */});
-        });
+        const token = useAuthStore.getState().token;
+        if (token) {
+          import("@/stores/paymentSettingsStore").then((m) => {
+            Promise.all([
+              m.usePaymentSettingsStore.getState().fetchSettings(),
+              m.usePaymentSettingsStore.getState().fetchPaymentMethods(),
+            ]).catch(() => {/* Non-fatal — payment screen still works on miss */});
+          });
+        }
       } catch (err: any) {
         if (__DEV__) {
           console.warn(`🌐 [App Startup] API warmup ping failed (expected if backend container is booting up):`, err.message || err);

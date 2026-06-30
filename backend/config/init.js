@@ -710,6 +710,20 @@ async function initDB(pool) {
       END
     `);
 
+    // 26. Create PrintReport table
+    await runQuery("Create PrintReport table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PrintReport]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[PrintReport](
+              [ID] [int] IDENTITY(1,1) NOT NULL PRIMARY KEY,
+              [OrderId] [uniqueidentifier] NULL,
+              [Ordernumber] [nvarchar](50) NULL,
+              [PrintType] [int] NULL,
+              [orderDate] [datetime] DEFAULT GETDATE()
+          )
+      END
+    `);
+
     console.log("✅ Database schema and performance indexes are up to date.");
 
 

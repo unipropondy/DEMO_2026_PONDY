@@ -352,6 +352,12 @@ const storeCreator: StateCreator<
       const { isFetching } = get();
       if (isFetching) return;
       
+      // Do not fetch if not logged in to prevent 401 errors
+      const token = useAuthStore.getState().token;
+      if (!token) {
+        return;
+      }
+      
       set({ isFetching: true });
       try {
         const res = await fetch(`${API_URL}/api/orders/active-kitchen`);
