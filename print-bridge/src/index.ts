@@ -1,11 +1,26 @@
+import { app as electronApp } from 'electron';
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import { config } from './config';
 import { startPoller, pollerStats } from './poller';
 import { sendToPrinter } from './printer';
 import { logger } from './logger';
+import {
+  startMonitorWatcher,
+  monitorEvents,
+  getSecondaryDisplay,
+} from './customerDisplay/MonitorService';
+import {
+  launchCustomerDisplay,
+  closeCustomerDisplay,
+  pushStateToDisplay,
+} from './customerDisplay/CustomerDisplayManager';
+import { loadPersistedState, getCurrentState } from './customerDisplay/DisplayStateStore';
+import displayRouter from './customerDisplay/displayRoutes';
 
 const app = express();
 app.use(express.json());
+app.use(cors({ origin: '*' }));
 
 // 1. GET /health - Local health check of the print bridge
 app.get('/health', (req: Request, res: Response) => {
@@ -21,8 +36,7 @@ app.post('/test-print', async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, error: 'Missing printer IP address' });
   }
 
-  // Basic ESC/POS sequence to test printing
-  const testContent = 
+  const testContent =
     '\x1B\x40' +                      // Initialize printer
     '\x1B\x61\x01' +                  // Center alignment
     'UniPro Print Bridge Test\n' +
@@ -61,10 +75,48 @@ app.post('/direct-test-print', async (req: Request, res: Response) => {
   }
 });
 
-// Start express server and launch the print poller
-app.listen(config.port, () => {
-  logger.info(`UniPro Print Bridge server listening locally on port ${config.port}`);
+// Mount new customer display endpoints
+app.use('/customer-display', displayRouter);
+
+// Initialize Electron Lifecycle
+electronApp.whenReady().then(() => {
+  logger.info('[Electron] Platform ready. Starting services...');
   
-  // Begin polling Railway for print jobs
-  startPoller();
+  loadPersistedState();
+  startMonitorWatcher();
+
+  // If a secondary display is already plugged in on start, launch display
+  if (getSecondaryDisplay()) {
+    launchCustomerDisplay();
+  }
+
+  // Handle display changes (added/removed/metrics changes)
+  monitorEvents.on('display-changed', () => {
+    if (getSecondaryDisplay()) {
+      launchCustomerDisplay();
+      // Re-push the current state so the display isn't blank/stale after connecting
+      setTimeout(() => {
+        pushStateToDisplay(getCurrentState());
+      }, 2000);
+    } else {
+      closeCustomerDisplay();
+    }
+  });
+
+  // Windows Startup Registry Configuration
+  electronApp.setLoginItemSettings({
+    openAtLogin: true,
+    name: 'UniPro Print Bridge',
+  });
+
+  // Launch the Express listener + poller
+  app.listen(config.port, () => {
+    logger.info(`UniPro Print Bridge server listening locally on port ${config.port}`);
+    startPoller();
+  });
+});
+
+// Avoid app shutdown when window closes (our tray/express server remains running)
+electronApp.on('window-all-closed', (e: Event) => {
+  e.preventDefault();
 });

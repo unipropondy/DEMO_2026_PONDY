@@ -9,9 +9,11 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build:web": "expo export --platform web",
+    "build:customer-display-web": "expo export --platform web --output-dir ../print-bridge/customer-display-web",
     "lint": "expo lint"
   },
   "dependencies": {
+    "@unipro/customer-display": "file:../packages/customer-display",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.0.3",

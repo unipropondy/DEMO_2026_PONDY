@@ -1,9 +1,16 @@
+export interface CustomerDisplayConfig {
+  enabled: boolean;
+  fullscreen: boolean;
+  autoRecovery: boolean;
+}
+
 export interface BridgeConfig {
   storeId: string;
   bridgeToken: string;
   apiUrl: string;
   pollIntervalMs: number;
   port: number;
+  customerDisplay?: CustomerDisplayConfig;
 }
 
 export interface PrintJob {

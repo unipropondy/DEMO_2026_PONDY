@@ -9,6 +9,18 @@ import { API_URL } from "@/constants/Config";
 
 const { SunmiCustomerDisplay } = NativeModules;
 
+const PRINT_BRIDGE_URL = "http://localhost:3050";
+
+function pushToLocalBridge(payload: any): void {
+  if (Platform.OS !== "web") return;
+  fetch(`${PRINT_BRIDGE_URL}/customer-display/update`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => {}); // silent catch if offline
+}
+
+
 export interface SyncCartParams {
   orderContext: {
     tableId?: string;
@@ -191,6 +203,7 @@ export const CustomerDisplaySync = {
 
       console.log("🖥️ [CustomerDisplaySync] Emitting cart update for Table/Takeaway:", payload.tableNo, "| Terminal:", payload.terminalCode);
       socket.emit("customer_display_sync", payload);
+      pushToLocalBridge(payload);
 
       if (Platform.OS === "android" && SunmiCustomerDisplay) {
         SunmiCustomerDisplay.updateCustomerDisplay(JSON.stringify(payload));
@@ -233,6 +246,7 @@ export const CustomerDisplaySync = {
 
         console.log("🖥️ [CustomerDisplaySync] Emitting idle attract loop | Terminal:", getTerminalCode());
         socket.emit("customer_display_sync", payload);
+        pushToLocalBridge(payload);
 
         if (Platform.OS === "android" && SunmiCustomerDisplay) {
           SunmiCustomerDisplay.updateCustomerDisplay(JSON.stringify(payload));
@@ -273,6 +287,7 @@ export const CustomerDisplaySync = {
 
       console.log("🖥️ [CustomerDisplaySync] Emitting payment success:", params.orderId, "| Terminal:", getTerminalCode());
       socket.emit("customer_display_sync", payload);
+      pushToLocalBridge(payload);
 
       if (Platform.OS === "android" && SunmiCustomerDisplay) {
         SunmiCustomerDisplay.updateCustomerDisplay(JSON.stringify(payload));

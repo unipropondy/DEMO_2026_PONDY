@@ -3,6 +3,9 @@ const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
+// Watch the shared customer-display package for live reload during development
+config.watchFolders = [path.resolve(__dirname, '../packages/customer-display')];
+
 // mssql / express / etc. are Node.js-only packages that use `import.meta`.
 // They cannot be bundled by Metro for web/RN → stub them out.
 const STUB = path.resolve(__dirname, 'shims/empty-module.js');
@@ -16,6 +19,17 @@ config.resolver.extraNodeModules = {
   cors: STUB,
   dotenv: STUB,
   tedious: STUB,
+  // Monorepo peer dependency mappings
+  react: path.resolve(__dirname, 'node_modules/react'),
+  'react-native': path.resolve(__dirname, 'node_modules/react-native'),
+  'react-native-web': path.resolve(__dirname, 'node_modules/react-native-web'),
+  zustand: path.resolve(__dirname, 'node_modules/zustand'),
+  'socket.io-client': path.resolve(__dirname, 'node_modules/socket.io-client'),
+  'react-native-svg': path.resolve(__dirname, 'node_modules/react-native-svg'),
+  'react-native-qrcode-svg': path.resolve(__dirname, 'node_modules/react-native-qrcode-svg'),
+  '@expo/vector-icons': path.resolve(__dirname, 'node_modules/@expo/vector-icons'),
+  '@react-native-async-storage/async-storage': path.resolve(__dirname, 'node_modules/@react-native-async-storage/async-storage'),
+  'expo-router': path.resolve(__dirname, 'node_modules/expo-router'),
 };
 
 config.resolver.unstable_enablePackageExports = false;

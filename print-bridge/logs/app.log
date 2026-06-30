@@ -1,0 +1,17 @@
+[INFO] [2026-06-30T04:58:05.868Z] Loaded configurations successfully from: C:\Users\User\Desktop\DEMO_2026_PONDY\print-bridge\config.json
+[INFO] [2026-06-30T04:58:07.614Z] [Electron] Platform ready. Starting services...
+[INFO] [2026-06-30T04:58:07.617Z] [Monitor] Screen watcher initialized.
+[INFO] [2026-06-30T04:58:07.634Z] UniPro Print Bridge server listening locally on port 3050
+[INFO] [2026-06-30T04:58:07.636Z] Initializing UniPro Print Bridge Poller...
+[INFO] [2026-06-30T04:58:07.637Z] Authenticating bridge against backend: https://demo2026pondy-production.up.railway.app
+[INFO] [2026-06-30T04:58:08.795Z] Bridge successfully authenticated and registered with backend.
+[INFO] [2026-06-30T05:07:13.662Z] Retrieved 1 pending print job(s) from Railway.
+[INFO] [2026-06-30T05:07:13.669Z] Starting execution of Job 4D62BF4C-02C5-4D1F-8899-8A8F1D0D1BA1 for printer IP :9100
+[INFO] [2026-06-30T05:07:13.672Z] [PRINT BRIDGE] Preparing job for printer at :9100
+[INFO] [2026-06-30T05:07:13.674Z] [PRINT BRIDGE] Current timeout setting: 30000ms
+[INFO] [2026-06-30T05:07:13.675Z] [PRINT BRIDGE] Content preview (first 300 chars): "G3AAGRk="
+[INFO] [2026-06-30T05:07:13.677Z] [PRINT BRIDGE] Detected base64 binary payload
+[INFO] [2026-06-30T05:07:13.678Z] [PRINT BRIDGE] Connecting to printer... IP: , Port: 9100, Payload length: 5 bytes
+[ERROR] [2026-06-30T05:07:13.692Z] [PRINT BRIDGE] TCP Socket error after 21ms: - Error: AggregateError
+[ERROR] [2026-06-30T05:07:13.694Z] Printing job 4D62BF4C-02C5-4D1F-8899-8A8F1D0D1BA1 failed: TCP Socket Connection Failed
+[INFO] [2026-06-30T05:07:13.700Z] [PRINT BRIDGE] Socket closed (Total elapsed: 29ms)
