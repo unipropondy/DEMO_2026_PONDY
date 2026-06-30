@@ -20,7 +20,23 @@ import displayRouter from './customerDisplay/displayRoutes';
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: '*' }));
+
+// Enable CORS globally with support for credentials (which doesn't allow '*')
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like curl, postman, or mobile apps)
+    if (!origin) return callback(null, true);
+    
+    // Dynamically allow any HTTP/HTTPS origin (localhost, local IP, or Cloudflare Workers POS domain)
+    callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+}));
+
+// Handle preflight OPTIONS requests globally before routes
+app.options('*', cors());
 
 // Request single-instance lock
 const gotTheLock = electronApp.requestSingleInstanceLock();
