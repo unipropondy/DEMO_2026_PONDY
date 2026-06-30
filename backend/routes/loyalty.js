@@ -185,9 +185,11 @@ router.post("/calculate-bill-rewards", async (req, res) => {
 
     // 2. Fetch active rules
     const rulesRes = await pool.request().query(`
-      SELECT r.RuleId, r.PurchaseDishId, r.RewardDishId, r.RequiredBills
+      SELECT r.RuleId, r.PurchaseDishId, r.RewardDishId, r.RequiredBills,
+             d.Name AS RewardDishName, d.currentcost AS RewardDishPrice
       FROM LoyaltyRule r
       INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
+      LEFT JOIN DishMaster d ON r.RewardDishId = d.DishId
       WHERE r.IsActive = 1 AND c.IsActive = 1
         AND GETDATE() BETWEEN c.StartDate AND c.EndDate
     `);
@@ -197,18 +199,20 @@ router.post("/calculate-bill-rewards", async (req, res) => {
       return res.json({ success: true, items: items, appliedRewards: [], totalDiscount: 0 });
     }
 
-    // 3. Fetch customer loyalty state for active rules (CurrentCount represents carried forward balance)
+    // 3. Fetch customer loyalty state for active rules
     const stateRes = await pool.request()
       .input("CustomerId", sql.UniqueIdentifier, customerId)
       .query(`
-        SELECT RuleId, CurrentCount FROM CustomerDishLoyaltyState
+        SELECT RuleId, CurrentCount, RewardsAvailable FROM CustomerDishLoyaltyState
         WHERE CustomerId = @CustomerId
       `);
 
     const userStates = stateRes.recordset || [];
     const ruleCurrentCountMap = {}; // ruleId -> CurrentCount (carried forward balance)
+    const ruleRewardsAvailableMap = {}; // ruleId -> RewardsAvailable
     userStates.forEach(s => {
       ruleCurrentCountMap[s.RuleId] = s.CurrentCount || 0;
+      ruleRewardsAvailableMap[s.RuleId] = s.RewardsAvailable || 0;
     });
 
     const updatedItems = items.map(item => ({ ...item }));
@@ -217,8 +221,8 @@ router.post("/calculate-bill-rewards", async (req, res) => {
 
     // Evaluate each active rule
     for (const rule of activeRules) {
-      // Find all line items of the purchased dish in the cart
       const purchaseDishIdLower = String(rule.PurchaseDishId).toLowerCase();
+      const rewardDishIdLower = String(rule.RewardDishId || "").toLowerCase();
       
       // Calculate total quantity of this dish being purchased in this transaction
       let purchaseQty = 0;
@@ -228,34 +232,52 @@ router.post("/calculate-bill-rewards", async (req, res) => {
         }
       }
 
-      if (purchaseQty <= 0) continue;
+      // Check how many of the reward dish are present in the cart
+      let availableRewardDishQty = 0;
+      for (const item of updatedItems) {
+        if (String(item.DishId || item.dishId || item.id).toLowerCase() === rewardDishIdLower && !item.isDishReward) {
+          availableRewardDishQty += (item.Qty || 1);
+        }
+      }
 
-      // Current balance carried forward
+      // 1. Stored rewards from previous visits
+      const storedRewards = ruleRewardsAvailableMap[rule.RuleId] || 0;
+
+      // 2. New rewards earned in this transaction
       const currentBalance = ruleCurrentCountMap[rule.RuleId] || 0;
       const totalAccumulated = currentBalance + purchaseQty;
-
-      // For every RequiredBills + 1 items, 1 is free.
       const blockSize = (rule.RequiredBills || 9) + 1;
-      const rewardsToApply = Math.floor(totalAccumulated / blockSize);
-      if (rewardsToApply <= 0) continue;
+      const newRewardsEarned = Math.floor(totalAccumulated / blockSize);
+
+      const totalRewardsToApply = storedRewards + newRewardsEarned;
+      if (totalRewardsToApply <= 0) continue;
+
+      // The free reward should not reduce the bill unless the reward dish is in the cart
+      const rewardsForThisBill = Math.min(totalRewardsToApply, availableRewardDishQty);
+      if (rewardsForThisBill <= 0) continue;
 
       let rewardsApplied = 0;
-      // We will traverse the purchase line items to deduct the free quantities and add free line items
+      // We will traverse the reward dish line items to deduct the free quantities and add free line items
       for (let i = 0; i < updatedItems.length; i++) {
         const item = updatedItems[i];
-        if (String(item.DishId || item.dishId || item.id).toLowerCase() === purchaseDishIdLower && !item.isDishReward) {
-          const qtyToFree = Math.min(item.Qty || 1, rewardsToApply - rewardsApplied);
+        if (String(item.DishId || item.dishId || item.id).toLowerCase() === rewardDishIdLower && !item.isDishReward) {
+          const qtyToFree = Math.min(item.Qty || 1, rewardsForThisBill - rewardsApplied);
           if (qtyToFree > 0) {
-            const originalPrice = parseFloat(item.Price || 0);
+            const originalPrice = parseFloat(item.Price || item.price || 0);
+            const crypto = require("crypto");
             
             if (item.Qty > qtyToFree) {
               // Split line item
               item.Qty = item.Qty - qtyToFree;
+              if (item.qty !== undefined) item.qty = item.Qty;
 
               updatedItems.push({
                 ...item,
+                lineItemId: crypto.randomUUID(),
                 Qty: qtyToFree,
+                qty: qtyToFree,
                 Price: 0,
+                price: 0,
                 originalPrice: originalPrice,
                 isDishReward: true,
                 rewardRuleId: rule.RuleId,
@@ -264,6 +286,7 @@ router.post("/calculate-bill-rewards", async (req, res) => {
             } else {
               item.originalPrice = originalPrice;
               item.Price = 0;
+              item.price = 0;
               item.isDishReward = true;
               item.rewardRuleId = rule.RuleId;
               item.rewardDishId = rule.RewardDishId;
@@ -277,7 +300,7 @@ router.post("/calculate-bill-rewards", async (req, res) => {
               qty: qtyToFree
             });
 
-            if (rewardsApplied >= rewardsToApply) {
+            if (rewardsApplied >= rewardsForThisBill) {
               break;
             }
           }
@@ -480,28 +503,33 @@ router.post("/log-visit", async (req, res) => {
 
             if (stateRes.recordset.length === 0) {
               const totalAccumulated = purchaseQty;
+              const newRewards = Math.floor(totalAccumulated / blockSize);
               const finalCount = totalAccumulated % blockSize;
 
               await transaction.request()
                 .input("CustomerId", sql.UniqueIdentifier, customerId)
                 .input("RuleId", sql.UniqueIdentifier, rule.RuleId)
                 .input("Count", sql.Int, finalCount)
+                .input("NewRewards", sql.Int, newRewards)
                 .query(`
                   INSERT INTO CustomerDishLoyaltyState (CustomerId, RuleId, CurrentCount, RewardsAvailable, RewardCyclesCompleted)
-                  VALUES (@CustomerId, @RuleId, @Count, 0, 0)
+                  VALUES (@CustomerId, @RuleId, @Count, @NewRewards, 0)
                 `);
             } else {
               const state = stateRes.recordset[0];
               const totalAccumulated = (state.CurrentCount || 0) + purchaseQty;
+              const newRewards = Math.floor(totalAccumulated / blockSize);
               const finalCount = totalAccumulated % blockSize;
 
               await transaction.request()
                 .input("CustomerId", sql.UniqueIdentifier, customerId)
                 .input("RuleId", sql.UniqueIdentifier, rule.RuleId)
                 .input("Count", sql.Int, finalCount)
+                .input("NewRewards", sql.Int, newRewards)
                 .query(`
                   UPDATE CustomerDishLoyaltyState
                   SET CurrentCount = @Count,
+                      RewardsAvailable = RewardsAvailable + @NewRewards,
                       ModifiedOn = GETDATE()
                   WHERE CustomerId = @CustomerId AND RuleId = @RuleId
                 `);
@@ -522,6 +550,7 @@ router.post("/log-visit", async (req, res) => {
               .query(`
                 UPDATE CustomerDishLoyaltyState
                 SET RewardCyclesCompleted = RewardCyclesCompleted + @Qty,
+                    RewardsAvailable = CASE WHEN RewardsAvailable >= @Qty THEN RewardsAvailable - @Qty ELSE 0 END,
                     ModifiedOn = GETDATE()
                 WHERE CustomerId = @CustomerId AND RuleId = @RuleId
               `);

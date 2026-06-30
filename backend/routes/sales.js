@@ -2685,28 +2685,33 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
 
             if (stateRes.recordset.length === 0) {
               const totalAccumulated = purchaseQty;
+              const newRewards = Math.floor(totalAccumulated / blockSize);
               const finalCount = totalAccumulated % blockSize;
 
               await transaction.request()
                 .input("CustomerId", sql.UniqueIdentifier, customerId)
                 .input("RuleId", sql.UniqueIdentifier, rule.RuleId)
                 .input("Count", sql.Int, finalCount)
+                .input("NewRewards", sql.Int, newRewards)
                 .query(`
                   INSERT INTO CustomerDishLoyaltyState (CustomerId, RuleId, CurrentCount, RewardsAvailable, RewardCyclesCompleted)
-                  VALUES (@CustomerId, @RuleId, @Count, 0, 0)
+                  VALUES (@CustomerId, @RuleId, @Count, @NewRewards, 0)
                 `);
             } else {
               const state = stateRes.recordset[0];
               const totalAccumulated = (state.CurrentCount || 0) + purchaseQty;
+              const newRewards = Math.floor(totalAccumulated / blockSize);
               const finalCount = totalAccumulated % blockSize;
 
               await transaction.request()
                 .input("CustomerId", sql.UniqueIdentifier, customerId)
                 .input("RuleId", sql.UniqueIdentifier, rule.RuleId)
                 .input("Count", sql.Int, finalCount)
+                .input("NewRewards", sql.Int, newRewards)
                 .query(`
                   UPDATE CustomerDishLoyaltyState
                   SET CurrentCount = @Count,
+                      RewardsAvailable = RewardsAvailable + @NewRewards,
                       ModifiedOn = GETDATE()
                   WHERE CustomerId = @CustomerId AND RuleId = @RuleId
                 `);
@@ -2727,6 +2732,7 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
               .query(`
                 UPDATE CustomerDishLoyaltyState
                 SET RewardCyclesCompleted = RewardCyclesCompleted + @Qty,
+                    RewardsAvailable = CASE WHEN RewardsAvailable >= @Qty THEN RewardsAvailable - @Qty ELSE 0 END,
                     ModifiedOn = GETDATE()
                 WHERE CustomerId = @CustomerId AND RuleId = @RuleId
               `);
