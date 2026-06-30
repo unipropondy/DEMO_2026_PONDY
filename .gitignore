@@ -75,5 +75,6 @@ UCS_PONDY/
 print-bridge/out/
 print-bridge/customer-display-web/
 print-bridge/dist/
+print-bridge/dist-installer/
 print-bridge/logs/
 packages/customer-display/node_modules/
