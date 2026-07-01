@@ -2,14 +2,18 @@
  * Timezone utilities to enforce Asia/Singapore (SGT, UTC+8) timezone in the frontend.
  */
 
+// Helper to shift a Date to Singapore Time (UTC+8) so we can format it as UTC
+function toSgtDate(date: Date): Date {
+  // SGT is UTC+8
+  return new Date(date.getTime() + 8 * 60 * 60 * 1000);
+}
+
 export function getSingaporeDateString(date: Date = new Date()): string {
-  // Returns "YYYY-MM-DD" in Asia/Singapore (SGT)
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Singapore',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(date);
+  const sgt = toSgtDate(date);
+  const year = sgt.getUTCFullYear();
+  const month = String(sgt.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(sgt.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export function formatToSingaporeDate(
@@ -19,10 +23,11 @@ export function formatToSingaporeDate(
   if (!dateInput) return "";
   const date = parseDatabaseDate(dateInput);
   if (isNaN(date.getTime())) return "";
+  const sgt = toSgtDate(date);
   return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Singapore',
-    ...options
-  }).format(date);
+    ...options,
+    timeZone: 'UTC'
+  }).format(sgt);
 }
 
 export function formatToSingaporeTime(
@@ -32,10 +37,11 @@ export function formatToSingaporeTime(
   if (!dateInput) return "";
   const date = parseDatabaseDate(dateInput);
   if (isNaN(date.getTime())) return "";
+  const sgt = toSgtDate(date);
   return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Singapore',
-    ...options
-  }).format(date);
+    ...options,
+    timeZone: 'UTC'
+  }).format(sgt);
 }
 
 export function formatToSingaporeDateTime(dateInput: Date | string | number): string {
@@ -48,32 +54,14 @@ export function formatToSingaporeDateTime(dateInput: Date | string | number): st
 }
 
 export function getSingaporeDate(): Date {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Singapore',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  }).formatToParts(new Date());
-
-  const year = parseInt(parts.find(p => p.type === 'year')?.value || '2026', 10);
-  const month = parseInt(parts.find(p => p.type === 'month')?.value || '1', 10) - 1;
-  const day = parseInt(parts.find(p => p.type === 'day')?.value || '1', 10);
-  let hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
-  if (hour === 24) hour = 0;
-  const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
-  const second = parseInt(parts.find(p => p.type === 'second')?.value || '0', 10);
-
-  return new Date(year, month, day, hour, minute, second);
+  const now = new Date();
+  return toSgtDate(now);
 }
 
 export function getSingaporeTimeTodayRange(): { from: Date; to: Date } {
   const nowSgt = getSingaporeDate();
   const from = new Date(nowSgt);
-  from.setHours(0, 0, 0, 0);
+  from.setUTCHours(0, 0, 0, 0);
   const to = new Date(nowSgt);
   return { from, to };
 }
