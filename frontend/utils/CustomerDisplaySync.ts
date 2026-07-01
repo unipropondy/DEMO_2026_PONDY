@@ -55,13 +55,13 @@ export interface PaymentSuccessParams {
 
 /* ─────────────────────────────────────────────────────────────────────────
    ROLE GUARD
-   Only ADMIN users are allowed to trigger Customer Display updates.
-   Waiter, Cashier, KDS, and all other roles are silently blocked.
+   ADMIN and CASHIER users are allowed to trigger Customer Display updates.
+   Waiter, KDS, and all other roles are silently blocked.
    ───────────────────────────────────────────────────────────────────────── */
 const isAllowedRole = (): boolean => {
   const user = useAuthStore.getState().user;
   if (!user) return false;
-  return user.role === "ADMIN";
+  return user.role === "ADMIN" || user.role === "CASHIER";
 };
 
 /* ─────────────────────────────────────────────────────────────────────────

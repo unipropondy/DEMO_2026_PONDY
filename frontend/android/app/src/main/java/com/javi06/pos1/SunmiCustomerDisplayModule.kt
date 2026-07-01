@@ -56,36 +56,13 @@ class SunmiCustomerDisplayModule(private val reactContext: ReactApplicationConte
     private fun showPresentationInternal() {
         val display = getSecondaryDisplay()
         if (display == null) {
-            Log.d(TAG, "No secondary display available to show Presentation")
+            Log.d(TAG, "No secondary display available — skipping native Presentation")
             return
         }
-
-        val activity = currentActivityRef ?: reactContext.currentActivity ?: return
-        // We comment out the native Java presentation so that the React Native ExternalDisplay UI is not covered/blocked by this native view.
-        /*
-        if (presentation == null) {
-            try {
-                Log.d(TAG, "Creating new CustomerDisplayPresentation instance")
-                presentation = CustomerDisplayPresentation(activity, display)
-                presentation?.show()
-                // Re-apply last data if available
-                lastDataJson?.let {
-                    presentation?.updateData(it)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error showing presentation", e)
-            }
-        } else {
-            // Re-show if dismissed
-            if (!presentation!!.isShowing) {
-                try {
-                    presentation?.show()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error re-showing presentation", e)
-                }
-            }
-        }
-        */
+        // The React Native react-native-external-display library renders
+        // CustomerDisplayContent on the secondary screen via the JS ExternalDisplay
+        // component. This native Kotlin Presentation path is intentionally unused.
+        Log.d(TAG, "Secondary display ${display.displayId} detected — handled by react-native-external-display (JS layer)")
     }
 
     private fun hidePresentationInternal() {

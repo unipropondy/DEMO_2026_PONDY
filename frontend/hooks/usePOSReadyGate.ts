@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { socket } from "../constants/socket";
 import { useCompanySettingsStore } from "../stores/companySettingsStore";
 import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
@@ -12,10 +12,15 @@ import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
  *
  * Resolution conditions (ALL must be true):
  *   1. Fonts are loaded (passed in from RootLayout via the fontsLoaded param)
- *   2. companySettings have been fetched (name is non-empty, or cache exists)
+ *   2. companySettings have been fetched (companyLoading is false)
  *   3. paymentSettings are not currently loading
  *   4. Socket is connected  —OR—  5 seconds have elapsed since mount
- *      (graceful timeout so a slow backend never blocks the display forever)
+ *      (graceful timeout so a slow backend never blocks the display)
+ *
+ * Additionally:
+ *   5. Absolute 10-second timeout: if fonts load but settings are still
+ *      pending after 10s (e.g. slow network on first boot), the gate opens
+ *      anyway so the display doesn't stay blank indefinitely.
  *
  * Once the gate opens it never closes; the display stays mounted for the
  * lifetime of the app and the CustomerDisplayManager handles hot-reconnect.
@@ -23,6 +28,7 @@ import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
 export function usePOSReadyGate(fontsLoaded: boolean): boolean {
   const [isPOSReady, setIsPOSReady] = useState(false);
   const [socketReady, setSocketReady] = useState(socket.connected);
+  const absoluteTimeoutFired = useRef(false);
 
   const companyName = useCompanySettingsStore((s) => s.settings.name);
   const companyLoading = useCompanySettingsStore((s) => s.loading);
@@ -51,6 +57,23 @@ export function usePOSReadyGate(fontsLoaded: boolean): boolean {
       socket.off("connect", handleConnect);
       clearTimeout(timeout);
     };
+  }, []);
+
+  // ── Absolute 10-second fallback: open gate even if settings are slow ──
+  useEffect(() => {
+    if (isPOSReady) return;
+    const absoluteTimeout = setTimeout(() => {
+      if (!absoluteTimeoutFired.current) {
+        absoluteTimeoutFired.current = true;
+        console.warn(
+          "⏱️ [POSReadyGate] Absolute 10s timeout reached — opening gate regardless of settings state. " +
+            `(fontsLoaded=${fontsLoaded}, companyLoading=${companyLoading}, paymentLoading=${paymentLoading})`
+        );
+        setIsPOSReady(true);
+      }
+    }, 10000);
+
+    return () => clearTimeout(absoluteTimeout);
   }, []);
 
   // ── Resolve the gate when all conditions are met ──
