@@ -92,7 +92,7 @@ router.get("/dishes/all", async (req, res) => {
         d.DishCode, d.Description,
         d.Imageid AS Image, CASE WHEN d.Imageid IS NOT NULL THEN 1 ELSE 0 END AS HasImage,
         ISNULL(d.IsOpenItem, 0) AS IsOpenItem,
-        ISNULL(d.isServiceCharge, 0) AS isServiceCharge,
+        ISNULL(d.isServiceCharge, 1) AS isServiceCharge,
         ISNULL(ckt.KitchenTypeCode, '2') as KitchenTypeCode,
         ISNULL(ISNULL(ckt.KitchenTypeName, cat.CategoryName), 'KITCHEN') as KitchenTypeName,
         pm.PrinterPath AS PrinterIP
@@ -133,7 +133,7 @@ router.get("/dishes/group/:DishGroupId", async (req, res) => {
               d.Description,
               d.Imageid AS Image,
               CASE WHEN d.Imageid IS NOT NULL THEN 1 ELSE 0 END AS HasImage,
-              ISNULL(d.isServiceCharge, 0) AS isServiceCharge,
+              ISNULL(d.isServiceCharge, 1) AS isServiceCharge,
               ISNULL(d.IsOpenItem, 0) AS IsOpenItem,
               ISNULL(ckt.KitchenTypeCode, '2') AS KitchenTypeCode,
               ISNULL(ISNULL(ckt.KitchenTypeName, cat.CategoryName), 'KITCHEN') AS KitchenTypeName,

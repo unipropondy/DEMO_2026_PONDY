@@ -1054,7 +1054,7 @@ router.get("/cart/:tableId", async (req, res) => {
           ISNULL(ckt.KitchenTypeCode, '2') as KitchenTypeCode, 
           ISNULL(ISNULL(ckt.KitchenTypeName, cat.CategoryName), 'KITCHEN') as KitchenTypeName,
           pm.PrinterPath as PrinterIP,
-          ISNULL(dish.isServiceCharge, 0) as isServiceCharge
+          ISNULL(dish.isServiceCharge, 1) as isServiceCharge
         FROM RestaurantOrderDetailCur d 
         JOIN RestaurantOrderCur h ON d.OrderId = h.OrderId 
         LEFT JOIN DishMaster dish ON d.DishId = dish.DishId
