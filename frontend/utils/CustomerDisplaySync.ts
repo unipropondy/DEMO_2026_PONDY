@@ -193,6 +193,7 @@ export const CustomerDisplaySync = {
           isVoided,
           note: item.note || item.notes || "",
           modifiers: item.modifiers || [],
+          isServiceCharge: Number(item.isServiceCharge) === 1 || item.isServiceCharge === true,
         };
       });
 

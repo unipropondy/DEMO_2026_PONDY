@@ -574,14 +574,21 @@ const [paymentMessage, setPaymentMessage] = useState("");
     CustomerDisplaySync.isPaymentActive = true;
 
     if (context && finalItems.length > 0) {
-      // Distinguish YeahPay PayNow from regular PayNow so customer display
-      // doesn't show the static PayNow QR for gateway-routed payments.
+      // Distinguish YeahPay PayNow and YeahPay Card from regular payment modes
+      // so the customer display shows custom cards and avoids static QRs.
       const selectedMethodObj = paymentMethods.find((m: any) => m.payMode === method);
       const isYeahPayMode = selectedMethodObj?.yeahPayEnabled === true;
       const isPayNowPayMode = /PAYNOW|PAY-NOW/i.test(method);
-      const displayPaymentMethod = isYeahPayMode && isPayNowPayMode
-        ? 'YEAHPAY_PAYNOW'
-        : method;
+      const isCardPayMode = /CARD/i.test(method);
+      
+      let displayPaymentMethod = method;
+      if (isYeahPayMode) {
+        if (isPayNowPayMode) {
+          displayPaymentMethod = 'YEAHPAY_PAYNOW';
+        } else if (isCardPayMode) {
+          displayPaymentMethod = 'YEAHPAY_CARD';
+        }
+      }
 
       // Include member name when MEMBER or CREDIT mode is selected
       const isMemberMode = /^(MEMBER|CREDIT)$/i.test((method || '').trim());

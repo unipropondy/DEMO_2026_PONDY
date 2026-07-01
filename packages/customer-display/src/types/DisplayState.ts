@@ -19,6 +19,7 @@ export interface DisplayItem {
   isVoided: boolean;
   note: string;
   modifiers: Array<{ ModifierName: string }>;
+  isServiceCharge?: boolean;
 }
 
 export interface DisplayState {

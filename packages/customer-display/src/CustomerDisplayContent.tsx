@@ -450,7 +450,7 @@ export default function CustomerDisplayContent() {
         </View>
 
         {/* Unipro Footer on Success Screen */}
-        <View style={styles.idleUniproFooter}>
+        <View style={[styles.idleUniproFooter, { marginTop: 24, transform: [{ scale: 0.85 }] }]}>
           <Image
             source={require("./assets/images/unipro_logo.png")}
             style={styles.uniproLogoImage}
@@ -473,6 +473,9 @@ export default function CustomerDisplayContent() {
       !isYeahPayPayNow &&
       (/^(PAYNOW|PAY-NOW|QR)$/i.test(pm) ||
         (displayState.paymentMethod === undefined && paymentSettings.payNowQrUrl));
+
+    const activeItems = displayState.items || [];
+    const allItemsHaveSC = activeItems.length > 0 && activeItems.every((item: any) => Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
 
     return (
       <View style={styles.checkoutContainer}>
@@ -581,6 +584,8 @@ export default function CustomerDisplayContent() {
                   };
                   if (/^(CAS|CASH)$/i.test(m)) {
                     info = { label: "CASH", icon: "cash-outline", color: "#10B981" };
+                  } else if (m === 'YEAHPAY_CARD') {
+                    info = { label: "YEAHPAY (CARD)", icon: "card-outline", color: "#0284C7" };
                   } else if (/CARD/i.test(m)) {
                     info = { label: "CARD PAYMENT", icon: "card-outline", color: "#3B82F6" };
                   } else if (/^(UPI|GPAY|PHONEPE|PAYTM|BHIM)$/i.test(m)) {
@@ -683,71 +688,80 @@ export default function CustomerDisplayContent() {
               showsVerticalScrollIndicator={false}
               style={styles.receiptItemsScroll}
             >
-              {displayState.items.map((item, idx) => (
-                <View
-                  key={`${item.lineItemId}-${idx}`}
-                  style={[
-                    styles.receiptItemRow,
-                    item.isVoided && styles.voidedRow,
-                  ]}
-                >
-                  <View style={styles.cellDesc}>
-                    <Text
-                      style={[
-                        styles.receiptItemName,
-                        item.isVoided && styles.voidedText,
-                      ]}
-                    >
-                      {item.name}
-                      {item.isVoided && " (VOIDED)"}
-                    </Text>
-                    {item.discountAmount > 0 && !item.isVoided ? (
-                      <Text style={styles.receiptItemDiscount}>
-                        ðŸ·ï¸ Discount: -{companySettings.currencySymbol || "$"}
-                        {item.discountAmount.toFixed(2)}
-                        {item.discountPercent > 0
-                          ? ` (${item.discountPercent}%)`
-                          : ""}
-                      </Text>
-                    ) : null}
-                    {item.note ? (
-                      <Text style={styles.receiptItemNote}>ðŸ“ {item.note}</Text>
-                    ) : null}
-                    {item.modifiers &&
-                      item.modifiers.map((m: any, mIdx: number) => (
-                        <Text key={mIdx} style={styles.receiptItemModifier}>
-                          + {m.ModifierName}
-                        </Text>
-                      ))}
-                  </View>
-                  <Text
+              {displayState.items.map((item, idx) => {
+                const allItemsHaveSC = displayState.items.every(i => (Number(i.isServiceCharge) === 1 || i.isServiceCharge === true));
+                return (
+                  <View
+                    key={`${item.lineItemId}-${idx}`}
                     style={[
-                      styles.receiptItemQty,
-                      styles.cellQty,
-                      item.isVoided && styles.voidedText,
+                      styles.receiptItemRow,
+                      item.isVoided && styles.voidedRow,
                     ]}
                   >
-                    {(item.qty || 0).toFixed(2)}
-                  </Text>
-                  <View style={styles.cellTotal}>
-                    {item.discountAmount > 0 && !item.isVoided ? (
-                      <Text style={styles.receiptItemOriginalPrice}>
-                        {companySettings.currencySymbol || "$"}
-                        {(item.originalPrice || 0).toFixed(2)}
+                    <View style={styles.cellDesc}>
+                      <Text
+                        style={[
+                          styles.receiptItemName,
+                          item.isVoided && styles.voidedText,
+                        ]}
+                      >
+                        {item.name}
+                        {(Number(item.isServiceCharge) === 1 || item.isServiceCharge === true) && " *"}
+                        {item.isVoided && " (VOIDED)"}
                       </Text>
-                    ) : null}
+                      {(Number(item.isServiceCharge) === 1 || item.isServiceCharge === true) && !item.isVoided ? (
+                        <Text style={[styles.receiptItemModifier, { color: Theme.danger, fontSize: 11 }]}>
+                          * Subject to Service Charge
+                        </Text>
+                      ) : null}
+                      {item.discountAmount > 0 && !item.isVoided ? (
+                        <Text style={styles.receiptItemDiscount}>
+                          ðŸ ·ï¸  Discount: -{companySettings.currencySymbol || "$"}
+                          {item.discountAmount.toFixed(2)}
+                          {item.discountPercent > 0
+                            ? ` (${item.discountPercent}%)`
+                            : ""}
+                        </Text>
+                      ) : null}
+                      {item.note ? (
+                        <Text style={styles.receiptItemNote}>ðŸ“  {item.note}</Text>
+                      ) : null}
+                      {item.modifiers &&
+                        item.modifiers.map((m: any, mIdx: number) => (
+                          <Text key={mIdx} style={styles.receiptItemModifier}>
+                            + {m.ModifierName}
+                          </Text>
+                        ))}
+                    </View>
                     <Text
                       style={[
-                        styles.receiptItemTotal,
+                        styles.receiptItemQty,
+                        styles.cellQty,
                         item.isVoided && styles.voidedText,
                       ]}
                     >
-                      {companySettings.currencySymbol || "$"}
-                      {(item.finalPrice || 0).toFixed(2)}
+                      {(item.qty || 0).toFixed(2)}
                     </Text>
+                    <View style={styles.cellTotal}>
+                      {item.discountAmount > 0 && !item.isVoided ? (
+                        <Text style={styles.receiptItemOriginalPrice}>
+                          {companySettings.currencySymbol || "$"}
+                          {(item.originalPrice || 0).toFixed(2)}
+                        </Text>
+                      ) : null}
+                      <Text
+                        style={[
+                          styles.receiptItemTotal,
+                          item.isVoided && styles.voidedText,
+                        ]}
+                      >
+                        {companySettings.currencySymbol || "$"}
+                        {(item.finalPrice || 0).toFixed(2)}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </ScrollView>
 
             {/* Summary details */}
@@ -795,7 +809,7 @@ export default function CustomerDisplayContent() {
                 {displayState.serviceChargeAmount && displayState.serviceChargeAmount > 0 ? (
                   <View style={styles.breakdownItem}>
                     <Text style={styles.breakdownLabel}>
-                      Service Charge ({displayState.serviceChargePercentage || 0}%)
+                      {displayState.items.every(i => (Number(i.isServiceCharge) === 1 || i.isServiceCharge === true)) ? "Service Charge" : "Item Service Charge"} ({displayState.serviceChargePercentage || 0}%)
                     </Text>
                     <Text style={styles.breakdownValue}>
                       {companySettings.currencySymbol || "$"}
@@ -1418,7 +1432,7 @@ const styles = StyleSheet.create({
   successCard: {
     backgroundColor: "#fff",
     borderRadius: 32,
-    padding: 40,
+    padding: 24,
     width: "90%",
     maxWidth: 450,
     alignItems: "center",
