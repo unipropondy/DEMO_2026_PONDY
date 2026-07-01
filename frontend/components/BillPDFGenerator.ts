@@ -723,7 +723,7 @@ private static escapeHtml(str: string): string {
             <div class="detail-row">
               <span class="detail-label">DATE:</span>
               <span class="detail-value">
-                ${new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', day: '2-digit', month: '2-digit', year: 'numeric' }).format(saleDate)} ${formatToSingaporeTime(saleDate)}
+                ${formatToSingaporeDate(saleDate, { day: '2-digit', month: '2-digit', year: 'numeric' })} ${formatToSingaporeTime(saleDate)}
               </span>
             </div>
             

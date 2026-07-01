@@ -1,7 +1,7 @@
 // components/SunmiPrinterService.ts - AUTOMATIC 58MM/80MM DETECTOR AND FORMATTER
 import { Platform, NativeModules } from "react-native";
 import { API_URL } from "../constants/Config";
-import { formatToSingaporeTime, parseDatabaseDate } from "../utils/timezoneHelper";
+import { formatToSingaporeDate, formatToSingaporeTime, parseDatabaseDate } from "../utils/timezoneHelper";
 
 const { SunmiPrinterDetector } = NativeModules;
 
@@ -357,7 +357,7 @@ class SunmiPrinterService {
       const saleDate = saleData.originalDate ? parseDatabaseDate(saleData.originalDate) : 
                        saleData.date ? parseDatabaseDate(saleData.date) : 
                        new Date();
-      const dateStr = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', day: '2-digit', month: '2-digit', year: 'numeric' }).format(saleDate);
+      const dateStr = formatToSingaporeDate(saleDate, { day: '2-digit', month: '2-digit', year: 'numeric' });
       const timeStr = formatToSingaporeTime(saleDate);
 
       await SunmiModule.printText(formatter.left(`INVOICE NO: ${saleData.invoiceNumber || saleData.id}`));
@@ -613,7 +613,7 @@ class SunmiPrinterService {
       const orderNo = data.orderNo || data.orderId || "N/A";
       const waiter = data.waiterName || "Staff";
       const now = new Date();
-      const dateStr = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', day: '2-digit', month: '2-digit' }).format(now);
+      const dateStr = formatToSingaporeDate(now, { day: '2-digit', month: '2-digit' });
       const timeStr = formatToSingaporeTime(now, { hour: '2-digit', minute: '2-digit', hour12: false });
       const timestamp = `${dateStr} ${timeStr}`;
 
