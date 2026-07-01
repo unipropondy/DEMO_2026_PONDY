@@ -1440,7 +1440,7 @@ export default function SalesReport() {
         change: 0,
         items: mappedItems,
         roundOff: Number(selectedOrder.RoundedBy ?? 0),
-        date: selectedOrder.SettlementDate || new Date().toISOString(),
+        date: selectedOrder.SettlementDate || new Date(),
         isReprint: true,
         // Sunmi template details
         discountAmount: Number(selectedOrder.DiscountAmount ?? 0),

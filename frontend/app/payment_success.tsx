@@ -173,7 +173,7 @@ export default function PaymentSuccess() {
         payments: payments,
         roundOff: parseFloat(roundOff) || 0,
         waiterName: waiterName || (isLedger ? "Cashier" : ""),
-        date: new Date().toISOString(),
+        date: new Date(),
         // ✅ Discount fields for Sunmi receipt (discountInfo handles LAN/PDF)
         discountAmount: discountInfo?.amount ?? 0,
         discountType: discountInfo?.type ?? null,
