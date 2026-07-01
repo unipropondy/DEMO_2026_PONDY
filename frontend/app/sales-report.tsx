@@ -959,18 +959,63 @@ export default function SalesReport() {
     return result;
   }, [sales, selectedFilter, selectedDate, rangeStart, rangeEnd]);
 
+  const groupedSales = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    const orderOfSettlements: string[] = [];
+    dateScopedSales.forEach((row) => {
+      if (!row.SettlementID) return;
+      if (!groups[row.SettlementID]) {
+        groups[row.SettlementID] = [];
+        orderOfSettlements.push(row.SettlementID);
+      }
+      groups[row.SettlementID].push(row);
+    });
+
+    const grouped: any[] = [];
+    orderOfSettlements.forEach((settlementId) => {
+      const group = groups[settlementId];
+      let row = { ...group[0] };
+
+      if (group.length > 1) {
+        const totalSysAmount = group.reduce((sum, r) => sum + (r.SysAmount || 0), 0);
+        const totalManualAmount = group.reduce((sum, r) => sum + (r.ManualAmount || 0), 0);
+        const payModes = group.map((r) => String(r.PayMode || "CASH").trim()).filter(Boolean);
+        const uniquePayModes = Array.from(new Set(payModes));
+
+        row.PayMode = uniquePayModes.join(" + ");
+        row.SysAmount = totalSysAmount;
+        row.ManualAmount = totalManualAmount;
+        row.isSplit = false;
+        row.splitNo = "";
+      } else {
+        if (row.BillNo && row.BillNo.includes('-S')) {
+          row.isSplit = true;
+          row.splitNo = 'S' + row.BillNo.split('-S').pop();
+        } else {
+          row.isSplit = false;
+          row.splitNo = "";
+        }
+      }
+      grouped.push(row);
+    });
+    return grouped;
+  }, [dateScopedSales]);
+
   const baseFilteredSales = useMemo(() => {
-    return dateScopedSales.filter((s) => {
+    return groupedSales.filter((s) => {
       const modeUpper = s.PayMode?.toUpperCase().trim() || "";
       const isUpiMode = modeUpper.includes("UPI") || modeUpper.includes("GPAY");
       const typeUpper = s.OrderType?.toUpperCase().trim() || "";
 
+      // Support checking components of combined payment modes (e.g. "CASH + NETS")
+      const splitModes = modeUpper.includes("+") ? modeUpper.split("+").map((m: string) => m.trim()) : [modeUpper];
+
       const modeMatch =
-        activePaymentModes.includes(modeUpper) ||
+        splitModes.some((m: string) => activePaymentModes.includes(m)) ||
         (activePaymentModes.includes("UPI") && isUpiMode) ||
         (showCancelledOrders && s.IsCancelled) ||
         (typeUpper === 'LEDGER' && (
-          activePaymentModes.includes(modeUpper) ||
+          splitModes.some((m: string) => activePaymentModes.includes(m)) ||
           (s.OrderId?.toLowerCase().includes("member") && activePaymentModes.includes("MEMBER")) ||
           (s.OrderId?.toLowerCase().includes("credit") && activePaymentModes.includes("CREDIT"))
         ));
@@ -983,7 +1028,7 @@ export default function SalesReport() {
       return modeMatch && typeMatch;
     });
   }, [
-    dateScopedSales,
+    groupedSales,
     activePaymentModes,
     activeOrderTypes,
     showCancelledOrders,

@@ -405,21 +405,7 @@ router.get("/all", async (req, res) => {
         }
       }
 
-      // Group split payment transactions under the same SettlementID
-      const groups = {};
-      const orderOfSettlements = [];
       records.forEach(row => {
-        if (!row.SettlementID) return;
-        if (!groups[row.SettlementID]) {
-          groups[row.SettlementID] = [];
-          orderOfSettlements.push(row.SettlementID);
-        }
-        groups[row.SettlementID].push(row);
-      });
-
-      orderOfSettlements.forEach(settlementId => {
-        const group = groups[settlementId];
-        let row = { ...group[0] };
         const parentId = row.MasterOrderId ? String(row.MasterOrderId).toLowerCase() : null;
         
         // 1. Merge details
@@ -431,28 +417,13 @@ router.get("/all", async (req, res) => {
           row.mergedDetails = "";
         }
 
-        // 2. Split/Paymode details
-        if (group.length > 1) {
-          // It's a split payment! Sum amounts and combine payment modes
-          const totalSysAmount = group.reduce((sum, r) => sum + (r.SysAmount || 0), 0);
-          const totalManualAmount = group.reduce((sum, r) => sum + (r.ManualAmount || 0), 0);
-          const payModes = group.map(r => String(r.PayMode || "CASH").trim()).filter(Boolean);
-          const uniquePayModes = Array.from(new Set(payModes));
-          
-          row.PayMode = uniquePayModes.join(" + ");
-          row.SysAmount = totalSysAmount;
-          row.ManualAmount = totalManualAmount;
+        // Standard check for split by item that already has suffix in BillNo
+        if (row.BillNo && row.BillNo.includes('-S')) {
+          row.isSplit = true;
+          row.splitNo = 'S' + row.BillNo.split('-S').pop();
+        } else {
           row.isSplit = false;
           row.splitNo = "";
-        } else {
-          // Standard check for split by item that already has suffix in BillNo
-          if (row.BillNo && row.BillNo.includes('-S')) {
-            row.isSplit = true;
-            row.splitNo = 'S' + row.BillNo.split('-S').pop();
-          } else {
-            row.isSplit = false;
-            row.splitNo = "";
-          }
         }
         finalRecords.push(row);
       });
