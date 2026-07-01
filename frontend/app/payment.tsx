@@ -3102,12 +3102,16 @@ const confirmPayment = async () => {
                       <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Order Items</Text>
                       </View>
-                      <FlatList
-                        data={finalItems}
-                        keyExtractor={(_, index) => index.toString()}
-                        renderItem={renderItem}
-                        scrollEnabled={false}
-                      />
+                      <View style={{ maxHeight: 380 }}>
+                        <FlatList
+                          data={finalItems}
+                          keyExtractor={(_, index) => index.toString()}
+                          renderItem={renderItem}
+                          scrollEnabled={true}
+                          nestedScrollEnabled={true}
+                          showsVerticalScrollIndicator={true}
+                        />
+                      </View>
                     </View>
                   )}
                 </View>
