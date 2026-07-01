@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   View,
   StatusBar,
+  Platform,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Theme } from "../constants/theme";
@@ -68,7 +70,11 @@ export default function PaymentSuccess() {
 
   React.useEffect(() => {
     CustomerDisplaySync.isPaymentActive = false;
-    // Clear cart and context on success screen mount
+    // Clear cart and context on success screen mount (skip if split payment with remaining balance)
+    if (params.isSplit === "true") {
+      console.log("[payment_success] Split payment: skipping cart/context cleanup.");
+      return;
+    }
     const cleanup = async () => {
       try {
         const { clearCart } = await import("../stores/cartStore");
@@ -80,7 +86,7 @@ export default function PaymentSuccess() {
       }
     };
     cleanup();
-  }, []);
+  }, [params.isSplit]);
 
   const handleDone = () => {
     CustomerDisplaySync.isSuccessActive = false;
@@ -92,7 +98,38 @@ export default function PaymentSuccess() {
         router.replace("/receivables");
       }
     } else if (params.isSplit === "true") {
-      router.replace("/summary");
+      if (Platform.OS === "web") {
+        const payRemaining = window.confirm("Split payment successful! Would you like to pay the remaining balance now?");
+        if (payRemaining) {
+          router.replace({
+            pathname: "/summary",
+            params: { autoPay: "true" }
+          });
+        } else {
+          router.replace("/summary");
+        }
+      } else {
+        Alert.alert(
+          "Balance Remaining",
+          "Would you like to pay the remaining balance now?",
+          [
+            {
+              text: "No, Go to Summary",
+              onPress: () => router.replace("/summary"),
+              style: "cancel",
+            },
+            {
+              text: "Yes, Pay Balance",
+              onPress: () => {
+                router.replace({
+                  pathname: "/summary",
+                  params: { autoPay: "true" },
+                });
+              },
+            },
+          ]
+        );
+      }
     } else {
       router.replace({
         pathname: "/(tabs)/category",

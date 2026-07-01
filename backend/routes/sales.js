@@ -2284,7 +2284,7 @@ router.post("/save", async (req, res) => {
       console.log(`[Loyalty Debug] Loyalty phone was empty or missing. Skipping trigger.`);
     }
 
-    res.json({ success: true, settlementId, billNo: displayOrderId, orderId: displayOrderId });
+    res.json({ success: true, settlementId, billNo: finalBillNo || displayOrderId, orderId: displayOrderId });
   } catch (err) {
     console.error("SAVE SALE ERROR:", err);
     res.status(500).json({ success: false, error: err.message });

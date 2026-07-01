@@ -1,5 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -84,6 +84,7 @@ const getInitials = (name?: string) => {
 
 export default function SummaryScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { showToast } = useToast();
 
   const context = useOrderContextStore((state) => state.currentOrder);
@@ -340,6 +341,19 @@ export default function SummaryScreen() {
       setLoyaltyName(name);
     }
   }, [activeOrder, tableState]);
+
+  useEffect(() => {
+    if (params.autoPay === "true" && context) {
+      router.setParams({ autoPay: undefined });
+      router.push({
+        pathname: "/payment",
+        params: {
+          mobileNo: loyaltyPhone ? `${selectedCountry.code} ${loyaltyPhone.trim()}` : "",
+          customerName: loyaltyName || "",
+        },
+      });
+    }
+  }, [params.autoPay, context, loyaltyPhone, selectedCountry, loyaltyName]);
 
   const settings = useCompanySettingsStore((state: any) => state.settings);
   const currencySymbol = settings.currencySymbol || "$";
