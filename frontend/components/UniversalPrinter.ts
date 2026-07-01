@@ -1007,63 +1007,63 @@ class UniversalPrinter {
           targetIp = cashierIp || company.printerIp || "";
         }
 
-        // ✅ 1. Try WiFi Printer with 3s Timeout
-        let isReachable = false;
-        if (targetIp && targetIp.trim().length > 0) {
-          isReachable = await this.isIpReachable(targetIp);
-        }
+        const hasConfiguredIp = targetIp && targetIp.trim().length > 0;
 
-        if (isReachable) {
-          console.log(
-            `🌐 Trying WiFi (${isTakeaway ? "TakeAway" : "Cashier"}): ${targetIp}`,
-          );
-          try {
-            const printPromise = this.printNetwork(
-              saleData,
-              outletId,
-              {
-                type: "network",
-                address: targetIp,
-              } as any,
-              discountInfo,
-            );
-
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("WiFi Timeout")), 1500),
-            );
-            const printed = await Promise.race([printPromise, timeoutPromise]);
-
-            if (printed) return;
-          } catch (err) {
-            console.log("WiFi failed/timeout");
+        if (hasConfiguredIp) {
+          console.log(`🌐 Trying configured printer: ${targetIp}`);
+          const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(targetIp.trim());
+          let isReachable = false;
+          if (isIp) {
+            isReachable = await this.isIpReachable(targetIp);
+          } else {
+            isReachable = true; // For Bluetooth MAC addresses etc.
           }
+
+          if (isReachable) {
+            try {
+              const printPromise = this.printNetwork(
+                saleData,
+                outletId,
+                {
+                  type: isIp ? "network" : "bluetooth",
+                  address: targetIp,
+                } as any,
+                discountInfo,
+              );
+
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("WiFi Timeout")), 3000),
+              );
+              const printed = await Promise.race([printPromise, timeoutPromise]);
+
+              if (printed) return;
+            } catch (err) {
+              console.log("WiFi failed/timeout:", err);
+            }
+          }
+          Alert.alert(
+            "Printer Connection Error",
+            `Could not connect to the configured LAN/Wi-Fi printer at ${targetIp}. Opening print preview...`,
+          );
+          await this.offerPDFFallback(saleData, outletId, t, discountInfo);
+          return;
         }
 
-        // ✅ 2. Sunmi Detection with Timeout
+        // If no IP is configured, print using the Sunmi built-in printer
+        console.log("🖨️ No printer IP configured. Printing to Sunmi built-in printer.");
         try {
-          const detectorPromise = PrinterDetector.detectPrinter();
-          const timeoutPromise = new Promise<string>((_, reject) =>
-            setTimeout(() => reject(new Error("Sunmi Timeout")), 2000),
+          const printed = await this.printThermalReceipt(
+            saleData,
+            outletId,
+            undefined,
+            discountInfo,
           );
-          const printerType = await Promise.race([
-            detectorPromise,
-            timeoutPromise,
-          ]).catch(() => "none");
-
-          if (printerType === "sunmi") {
-            const printed = await this.printThermalReceipt(
-              saleData,
-              outletId,
-              undefined,
-              discountInfo,
-            );
-            if (printed) return;
-          }
+          if (printed) return;
         } catch (e) {
-          console.log("Sunmi failed/timeout");
+          console.log("Sunmi failed/timeout", e);
         }
 
-        // ✅ 3. Fallback to PDF/Web (Guaranteed)
+        // Fallback to PDF/Web (Guaranteed)
         console.log("🔄 Fallback to PDF Preview");
         await this.offerPDFFallback(saleData, outletId, t, discountInfo);
       } catch (error) {

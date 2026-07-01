@@ -172,18 +172,23 @@ export class SunmiPrinterManager {
     
     console.log("🖨️ [SunmiPrinterManager] Detected Sunmi printer");
     try {
-      if (Platform.OS === "android" && SunmiPrinterDetector) {
-        console.log("🖨️ [SunmiPrinterManager] Querying printer capabilities natively...");
+      const model = ((Platform.constants as any).Model || '').toUpperCase();
+      console.log(`🖨️ [SunmiPrinterManager] Device Model: ${model}`);
+      if (model.includes("D3")) {
+        this.paperSize = "80mm";
+      } else if (model.includes("T2")) {
+        this.paperSize = "58mm";
+      } else if (Platform.OS === "android" && SunmiPrinterDetector) {
+        // Fallback to native capabilities detector if model is ambiguous
         const size = await SunmiPrinterDetector.getPrinterPaperSize();
-        console.log(`🖨️ [SunmiPrinterManager] Printer width: ${size}`);
         this.paperSize = size === "80mm" ? "80mm" : "58mm";
       } else {
-        console.log("🖨️ [SunmiPrinterManager] Detector unavailable, defaulting to 58mm");
-        this.paperSize = "58mm";
+        // Default fallback prioritizes 80mm
+        this.paperSize = "80mm";
       }
     } catch (e) {
-      console.warn("🖨️ [SunmiPrinterManager] Size detection failed, falling back to 58mm", e);
-      this.paperSize = "58mm";
+      console.warn("🖨️ [SunmiPrinterManager] Size detection failed, falling back to 80mm", e);
+      this.paperSize = "80mm";
     }
 
     if (this.paperSize === "80mm") {

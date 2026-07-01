@@ -1033,6 +1033,8 @@ export default function SalesReport() {
           acc.TotalItems += (s.ReceiptCount || 0);
           acc.TotalVoids += s.VoidQty || 0;
           acc.TotalVoidAmount += s.VoidAmount || 0;
+          acc.ServiceCharge += Number(s.ServiceCharge) || 0;
+          acc.TotalTax += Number(s.TotalTax) || 0;
         }
 
         const mode = s.PayMode?.trim().toUpperCase() || "";
@@ -1071,6 +1073,8 @@ export default function SalesReport() {
         CreditPaymentsCollected: 0,
         MemberOutstanding: 0,
         CreditOutstanding: 0,
+        ServiceCharge: 0,
+        TotalTax: 0,
       },
     );
   }, [dateScopedSales]);
@@ -2132,6 +2136,18 @@ export default function SalesReport() {
           ),
           "wallet-outline",
           "#22c55e",
+        )}
+        {renderMetricTile(
+          "Service Charge",
+          formatCurrency(filteredMetrics.ServiceCharge),
+          "calculator-outline",
+          Theme.primary,
+        )}
+        {renderMetricTile(
+          "GST",
+          formatCurrency(filteredMetrics.TotalTax),
+          "receipt-outline",
+          Theme.warning,
         )}
         {renderMetricTile(
           "Total Orders",
