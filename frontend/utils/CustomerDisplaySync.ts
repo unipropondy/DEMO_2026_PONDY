@@ -97,11 +97,15 @@ export const CustomerDisplaySync = {
       if (!isDisplayOn) return;
 
       const { orderContext, cart, discountInfo, gstPercentage, roundOff, active, orderId, paymentMethod } = params;
-      
+      const companySettings = useCompanySettingsStore.getState().settings;
+      const paymentSettings = usePaymentSettingsStore.getState().settings;
+
+      const scPercentage = companySettings.serviceChargePercentage || 0;
+      const scRate = scPercentage / 100;
       const gstRate = (gstPercentage || 0) / 100;
 
       // 1. Calculate totals matching cashier formulas
-      const { grossTotal, totalItemDiscount } = cart.reduce(
+      const { grossTotal, totalItemDiscount, scEligibleSubtotal } = cart.reduce(
         (acc, item) => {
           const isVoided = item.status === "VOIDED" || item.StatusCode === 0 || item.statusCode === 0;
           if (isVoided) return acc;
@@ -119,12 +123,16 @@ export const CustomerDisplaySync = {
             }
           }
 
+          const itemSubtotal = baseTotal - itemDiscount;
+          const isSC = Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+
           return {
             grossTotal: acc.grossTotal + baseTotal,
             totalItemDiscount: acc.totalItemDiscount + itemDiscount,
+            scEligibleSubtotal: acc.scEligibleSubtotal + (isSC ? itemSubtotal : 0),
           };
         },
-        { grossTotal: 0, totalItemDiscount: 0 }
+        { grossTotal: 0, totalItemDiscount: 0, scEligibleSubtotal: 0 }
       );
 
       const subTotal = grossTotal - totalItemDiscount;
@@ -137,9 +145,22 @@ export const CustomerDisplaySync = {
         return discountInfo.value;
       })();
 
-      const gstAmount = (subTotal - orderDiscountAmount) * gstRate;
-      const baseTotal = subTotal - orderDiscountAmount + gstAmount;
-      const netTotal = Math.max(0, baseTotal + roundOff);
+      const netAfterDiscount = subTotal - orderDiscountAmount;
+
+      // Pro-rate discount to sc-eligible items
+      const scEligibleNet = (() => {
+        if (subTotal <= 0) return 0;
+        const proportion = scEligibleSubtotal / subTotal;
+        return Math.max(0, scEligibleSubtotal - proportion * orderDiscountAmount);
+      })();
+
+      const serviceChargeAmount = scEligibleNet * scRate;
+      const taxableAmount = netAfterDiscount + serviceChargeAmount;
+
+      const gstAmountRaw = taxableAmount * gstRate;
+      const gstAmount = Math.round(gstAmountRaw * 100) / 100;
+      const baseTotalVal = taxableAmount + gstAmountRaw;
+      const netTotal = Math.round(Math.max(0, baseTotalVal + roundOff) * 100) / 100;
 
       // 2. Prepare clean items list for display
       const displayItems = cart.map(item => {
@@ -172,9 +193,6 @@ export const CustomerDisplaySync = {
         };
       });
 
-      const companySettings = useCompanySettingsStore.getState().settings;
-      const paymentSettings = usePaymentSettingsStore.getState().settings;
-
       // 3. Emit via Socket.io and update native presentation display
       const payload = {
         active,
@@ -188,6 +206,8 @@ export const CustomerDisplaySync = {
         itemDiscounts: totalItemDiscount,
         subTotal,
         orderDiscountAmount,
+        serviceChargeAmount,
+        serviceChargePercentage: scPercentage,
         gstAmount,
         roundOff,
         netTotal,

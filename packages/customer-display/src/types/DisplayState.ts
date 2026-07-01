@@ -34,6 +34,8 @@ export interface DisplayState {
   subTotal: number;
   orderDiscountAmount: number;
   gstAmount: number;
+  serviceChargeAmount?: number;
+  serviceChargePercentage?: number;
   roundOff: number;
   netTotal: number;
   waiterName?: string;

@@ -710,6 +710,18 @@ export default function CustomerDisplayContent() {
                   </View>
                 ) : null}
 
+                {displayState.serviceChargeAmount && displayState.serviceChargeAmount > 0 ? (
+                  <View style={styles.breakdownItem}>
+                    <Text style={styles.breakdownLabel}>
+                      Service Charge ({displayState.serviceChargePercentage || 0}%)
+                    </Text>
+                    <Text style={styles.breakdownValue}>
+                      {companySettings.currencySymbol || "$"}
+                      {displayState.serviceChargeAmount.toFixed(2)}
+                    </Text>
+                  </View>
+                ) : null}
+
                 {displayState.roundOff !== 0 ? (
                   <View style={styles.breakdownItem}>
                     <Text style={styles.breakdownLabel}>RoundOff</Text>
