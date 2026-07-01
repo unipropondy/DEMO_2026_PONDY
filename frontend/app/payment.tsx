@@ -1934,7 +1934,7 @@ const confirmPayment = async () => {
     const finalPrice = baseTotal - itemDiscount;
 
     const isSC =
-      Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+      (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true) && useGeneralSettingsStore.getState().settings.SVCIdentification !== false;
 
     return (
       <View

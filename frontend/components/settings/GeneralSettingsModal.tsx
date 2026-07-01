@@ -97,6 +97,7 @@ export default function GeneralSettingsModal({
   const [customerSideDisplay, setCustomerSideDisplay] = useState(settings.customerSideDisplay);
   const [enableGuestDetailsPopup, setEnableGuestDetailsPopup] = useState(settings.enableGuestDetailsPopup);
   const [enableCashDrawer, setEnableCashDrawer] = useState(settings.enableCashDrawer !== undefined ? settings.enableCashDrawer : true);
+  const [SVCIdentification, setSVCIdentification] = useState(settings.SVCIdentification !== undefined ? settings.SVCIdentification : true);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordValue, setPasswordValue] = useState("");
@@ -179,6 +180,7 @@ export default function GeneralSettingsModal({
       setCustomerSideDisplay(settings.customerSideDisplay);
       setEnableGuestDetailsPopup(settings.enableGuestDetailsPopup !== undefined ? settings.enableGuestDetailsPopup : true);
       setEnableCashDrawer(settings.enableCashDrawer !== undefined ? settings.enableCashDrawer : true);
+      setSVCIdentification(settings.SVCIdentification !== undefined ? settings.SVCIdentification : true);
       
       let initialCheckoutFlow = settings.enableCheckoutFlow;
       let initialDirectProcess = settings.enableDirectProcessToPay;
@@ -249,6 +251,7 @@ export default function GeneralSettingsModal({
       customerSideDisplay,
       enableGuestDetailsPopup,
       enableCashDrawer,
+      SVCIdentification,
     });
     
     setIsSaving(false);
@@ -413,6 +416,20 @@ export default function GeneralSettingsModal({
                 <Text style={styles.settingDesc}>Enable checkout cashbox opening triggers and manual overrides wizard.</Text>
               </View>
               <CustomSwitch value={enableCashDrawer} onValueChange={handleToggleCashDrawer} />
+            </View>
+
+            {/* CARD 9: SVC Identification */}
+            <View style={[styles.settingCard, SVCIdentification && styles.settingCardActive]}>
+              <View style={styles.cardLeft}>
+                <View style={styles.cardHeaderRow}>
+                  <View style={[styles.iconWrapper, SVCIdentification ? styles.iconWrapperActive : styles.iconWrapperInactive]}>
+                    <Ionicons name="pricetag-outline" size={16} color={SVCIdentification ? Theme.primary : Theme.textSecondary} />
+                  </View>
+                  <Text style={styles.settingTitle}>SVC Identification</Text>
+                </View>
+                <Text style={styles.settingDesc}>Highlight Service (SVC) items with red identification.</Text>
+              </View>
+              <CustomSwitch value={SVCIdentification} onValueChange={setSVCIdentification} />
             </View>
           </ScrollView>
 

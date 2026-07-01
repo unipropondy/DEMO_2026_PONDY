@@ -44,6 +44,7 @@ router.post("/:id", async (req, res) => {
       .input("WaiterRequired", sql.Bit, s.WaiterRequired !== undefined && s.WaiterRequired !== null ? s.WaiterRequired : 0)
       .input("HoldOvertimeMinutes", sql.Int, s.HoldOvertimeMinutes !== undefined && s.HoldOvertimeMinutes !== null ? s.HoldOvertimeMinutes : 30)
       .input("ServiceChargePercentage", sql.Decimal(18, 2), s.ServiceChargePercentage !== undefined && s.ServiceChargePercentage !== null ? s.ServiceChargePercentage : 0)
+      .input("SVCIdentification", sql.Bit, s.SVCIdentification !== undefined && s.SVCIdentification !== null ? (s.SVCIdentification ? 1 : 0) : 1)
       .query(`
         IF EXISTS (SELECT 1 FROM CompanySettings WHERE Id = '1')
         BEGIN
@@ -66,13 +67,14 @@ router.post("/:id", async (req, res) => {
             WaiterRequired = @WaiterRequired,
             HoldOvertimeMinutes = @HoldOvertimeMinutes,
             ServiceChargePercentage = @ServiceChargePercentage,
+            SVCIdentification = @SVCIdentification,
             UpdatedOn = GETDATE()
           WHERE Id = '1'
         END
         ELSE
         BEGIN
-          INSERT INTO CompanySettings (Id, CompanyName, Address, GSTNo, GSTPercentage, Phone, Email, CashierName, Currency, CurrencySymbol, CompanyLogoUrl, HalalLogoUrl, PrinterIP, ShowCompanyLogo, ShowHalalLogo, TaxMode, WaiterRequired, HoldOvertimeMinutes, ServiceChargePercentage, UpdatedOn)
-          VALUES ('1', @CompanyName, @Address, @GSTNo, @GSTPercentage, @Phone, @Email, @CashierName, @Currency, @CurrencySymbol, @CompanyLogoUrl, @HalalLogoUrl, @PrinterIP, @ShowCompanyLogo, @ShowHalalLogo, @TaxMode, @WaiterRequired, @HoldOvertimeMinutes, @ServiceChargePercentage, GETDATE())
+          INSERT INTO CompanySettings (Id, CompanyName, Address, GSTNo, GSTPercentage, Phone, Email, CashierName, Currency, CurrencySymbol, CompanyLogoUrl, HalalLogoUrl, PrinterIP, ShowCompanyLogo, ShowHalalLogo, TaxMode, WaiterRequired, HoldOvertimeMinutes, ServiceChargePercentage, SVCIdentification, UpdatedOn)
+          VALUES ('1', @CompanyName, @Address, @GSTNo, @GSTPercentage, @Phone, @Email, @CashierName, @Currency, @CurrencySymbol, @CompanyLogoUrl, @HalalLogoUrl, @PrinterIP, @ShowCompanyLogo, @ShowHalalLogo, @TaxMode, @WaiterRequired, @HoldOvertimeMinutes, @ServiceChargePercentage, @SVCIdentification, GETDATE())
         END
       `);
 

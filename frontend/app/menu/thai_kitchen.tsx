@@ -99,7 +99,7 @@ const NavRail = () => {
 
 const DishCard = React.memo(
   ({ dish, width, cartQty, onPress, isPhone, isTablet, isLandscape }: any) => {
-    const isSC = Number(dish.isServiceCharge) === 1 || dish.isServiceCharge === true;
+    const isSC = (Number(dish.isServiceCharge) === 1 || dish.isServiceCharge === true) && useGeneralSettingsStore.getState().settings.SVCIdentification !== false;
     return (
       <Pressable
         style={({ pressed }: { pressed: boolean }) => [

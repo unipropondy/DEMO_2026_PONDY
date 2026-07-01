@@ -494,7 +494,7 @@ const CartItemRow = React.memo(
       item.StatusCode === 0 ||
       item.statusCode === 0;
 
-    const isSC = Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+    const isSC = (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true) && useGeneralSettingsStore.getState().settings.SVCIdentification !== false;
 
     return (
       <View style={[

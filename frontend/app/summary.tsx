@@ -40,13 +40,13 @@ import {
 import { useCartStore } from "../stores/cartStore";
 import { CustomerDisplaySync } from "../utils/CustomerDisplaySync";
 import { useCompanySettingsStore } from "../stores/companySettingsStore";
+import { useGeneralSettingsStore } from "../stores/generalSettingsStore";
 import {
   getOrderContext,
   setOrderContext,
   useOrderContextStore,
 } from "../stores/orderContextStore";
 import { useTableStatusStore } from "../stores/tableStatusStore";
-import { useGeneralSettingsStore } from "../stores/generalSettingsStore";
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -1220,7 +1220,7 @@ export default function SummaryScreen() {
               windowSize={5}
               removeClippedSubviews={true}
               renderItem={({ item }: { item: any }) => {
-                const isSC = Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+                const isSC = (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true) && useGeneralSettingsStore.getState().settings.SVCIdentification !== false;
                 return (
                   <View style={[
                     styles.row,

@@ -2,14 +2,18 @@ const express = require("express");
 const router = express.Router();
 const sql = require("mssql");
 const { poolPromise } = require("../config/db");
-const { getAppSettings, invalidateCache } = require("../utils/settingsCache");
+const { getAppSettings, getCompanySettings, invalidateCache } = require("../utils/settingsCache");
 const { syncKitchensToPrintMaster } = require("../config/init");
 
 // 🔹 GET Settings
 router.get("/", async (req, res) => {
   try {
     const settings = await getAppSettings();
-    res.json(settings || {});
+    const companySettings = await getCompanySettings();
+    res.json({
+      ...(settings || {}),
+      SVCIdentification: companySettings?.SVCIdentification !== undefined ? (companySettings.SVCIdentification ? 1 : 0) : 1
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -18,7 +22,7 @@ router.get("/", async (req, res) => {
 // 🔹 UPDATE Settings
 router.post("/update", async (req, res) => {
   try {
-    const { upiId, shopName, qrCodeUrl, enableKOT, enableKDS, enableCheckoutBill, enableCheckoutFlow, enableDirectProcessToPay, customerSideDisplay, enableGuestDetailsPopup, enableCashDrawer } = req.body;
+    const { upiId, shopName, qrCodeUrl, enableKOT, enableKDS, enableCheckoutBill, enableCheckoutFlow, enableDirectProcessToPay, customerSideDisplay, enableGuestDetailsPopup, enableCashDrawer, SVCIdentification } = req.body;
     const pool = await poolPromise;
 
     // Use an UPSERT logic (Update if exists, Insert if not)
@@ -58,6 +62,12 @@ router.post("/update", async (req, res) => {
           VALUES (@UPI, @Shop, @QR, @EnableKOT, @EnableKDS, @EnableCheckoutBill, @EnableCheckoutFlow, @EnableDirectProcessToPay, @CustomerSideDisplay, @EnableGuestDetailsPopup, @EnableCashDrawer, GETDATE())
         END
       `);
+
+    if (SVCIdentification !== undefined) {
+      await pool.request()
+        .input("SVCIdentification", sql.Bit, SVCIdentification ? 1 : 0)
+        .query("UPDATE CompanySettings SET SVCIdentification = @SVCIdentification WHERE Id = '1'");
+    }
 
     invalidateCache();
     res.json({ success: true, message: "Settings updated successfully" });
