@@ -1463,11 +1463,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(239, 68, 68, 0.3)",
   },
-  // â”€â”€â”€ Terminal pairing pill (corner indicator) â”€â”€â”€
   terminalPill: {
     position: "absolute",
-    top: 16,
-    right: 16,
+    bottom: 16,
+    left: 16,
     zIndex: 9999,
     flexDirection: "row",
     alignItems: "center",
