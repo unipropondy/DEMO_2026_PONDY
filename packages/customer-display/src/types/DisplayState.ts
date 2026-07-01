@@ -44,6 +44,12 @@ export interface DisplayState {
   change?: number;
   paymentMethod?: string;
   memberName?: string;
+  isSplit?: boolean;
+  splitPayments?: Array<{
+    payMode: string;
+    amount: number;
+    status: string;
+  }>;
 }
 
 export const DEFAULT_STATE: DisplayState = {
@@ -57,4 +63,6 @@ export const DEFAULT_STATE: DisplayState = {
   gstAmount: 0,
   roundOff: 0,
   netTotal: 0,
+  isSplit: false,
+  splitPayments: [],
 };

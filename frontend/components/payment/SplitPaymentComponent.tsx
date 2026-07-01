@@ -18,6 +18,10 @@ import UPIPaymentModal from "./UPIPaymentModal";
 import PayNowPaymentModal from "./PayNowPaymentModal";
 import { API_URL } from "@/constants/Config";  // ✅ ADD
 import { useToast } from "../Toast";  
+import { CustomerDisplaySync } from "../../utils/CustomerDisplaySync";
+import { useCartStore } from "../../stores/cartStore";
+import { useOrderContextStore } from "../../stores/orderContextStore";
+import { usePaymentSettingsStore } from "../../stores/paymentSettingsStore";
 const formatMoney = (symbol: string, amount: number) => {
   try {
     return `${symbol}${(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -126,14 +130,51 @@ const [isGeneratingQR, setIsGeneratingQR] = useState(false);
     return Math.max(0, targetTotal - totalPaid);
   }, [targetTotal, totalPaid]);
 
+  // Sync to customer display
+  useEffect(() => {
+    if (rows.length === 0) return;
+    try {
+      const context = useOrderContextStore.getState().currentOrder;
+      const currentContextId = useCartStore.getState().currentContextId;
+      const cart = (currentContextId ? useCartStore.getState().carts[currentContextId] : []) || [];
+      const gstPercentage = usePaymentSettingsStore.getState().settings.gstPercentage || 0;
+
+      CustomerDisplaySync.syncCart({
+        orderContext: {
+          tableId: context?.tableId?.toString(),
+          tableNo: context?.tableNo,
+          takeawayNo: context?.takeawayNo,
+          orderType: context?.orderType || "MANUAL",
+          section: context?.section,
+          serverId: context?.serverId,
+          serverName: context?.serverName,
+        },
+        cart: cart,
+        discountInfo: null,
+        gstPercentage: gstPercentage,
+        roundOff: 0,
+        active: true,
+        isSplit: true,
+        splitPayments: rows.map((r) => ({
+          payMode: r.payMode,
+          amount: parseFloat(r.amount) || 0,
+          status: r.status,
+        })),
+        memberName: selectedMember?.Name || "",
+      });
+    } catch (e) {
+      console.error("Failed to sync split payments to customer display:", e);
+    }
+  }, [rows, selectedMember, targetTotal]);
+
   // Initial rows: default to 2 payment rows
   useEffect(() => {
     if (availableMethods.length > 0 && rows.length === 0) {
       const firstMode = availableMethods[0];
       const secondMode = availableMethods.length > 1 ? availableMethods[1] : availableMethods[0];
       
-      const firstStatus = isQRMode(firstMode.payMode) ? "Pending" : "Paid";
-      const secondStatus = isQRMode(secondMode.payMode) ? "Pending" : "Paid";
+      const firstStatus = "Pending";
+      const secondStatus = "Pending";
       
       setRows([
         {
@@ -158,7 +199,7 @@ const [isGeneratingQR, setIsGeneratingQR] = useState(false);
 
   // Check if a row is locked (a verified paid digital row)
   const isRowLocked = (row: SplitPaymentRow) => {
-    return isQRMode(row.payMode) && row.status === "Paid";
+    return row.status === "Paid";
   };
 
   // Adjust payment rows when targetTotal changes (due to rounding changes)
@@ -242,7 +283,7 @@ const [isGeneratingQR, setIsGeneratingQR] = useState(false);
     const nextMode = unusedMethods.length > 0 ? unusedMethods[0] : availableMethods[0];
     if (!nextMode) return;
 
-    const initialStatus = isQRMode(nextMode.payMode) ? "Pending" : "Paid";
+    const initialStatus = "Pending";
 
     setRows([
       ...rows,
@@ -267,31 +308,51 @@ const [isGeneratingQR, setIsGeneratingQR] = useState(false);
   };
 
   const handleUpdateRow = (id: string, updates: Partial<SplitPaymentRow>) => {
-    setRows(
-      rows.map((r) => {
-        if (r.id === id) {
-          if (isRowLocked(r)) return r; // Prevent editing locked rows
+    setRows(prevRows => {
+      const rowIndex = prevRows.findIndex(r => r.id === id);
+      if (rowIndex === -1) return prevRows;
+      const targetRow = prevRows[rowIndex];
+      if (isRowLocked(targetRow)) return prevRows;
 
-          const updated = { ...r, ...updates };
+      const updatedRow = { ...targetRow, ...updates };
 
-          if (updates.payModeId !== undefined) {
-            const method = availableMethods.find((m) => m.position === updates.payModeId);
-            if (method) {
-              updated.payMode = method.payMode;
-              updated.status = isQRMode(method.payMode) ? "Pending" : "Paid";
+      if (updates.payModeId !== undefined) {
+        const method = availableMethods.find((m) => m.position === updates.payModeId);
+        if (method) {
+          updatedRow.payMode = method.payMode;
+          updatedRow.status = "Pending";
 
-              // If they selected Member and no member is set, trigger lookup
-              const isMember = method.payMode.toUpperCase().trim() === "MEMBER" || method.payMode.toUpperCase().trim() === "CREDIT";
-              if (isMember && !selectedMember && onSelectMember) {
-                onSelectMember(method.payMode);
-              }
-            }
+          // If they selected Member and no member is set, trigger lookup
+          const isMember = method.payMode.toUpperCase().trim() === "MEMBER" || method.payMode.toUpperCase().trim() === "CREDIT";
+          if (isMember && !selectedMember && onSelectMember) {
+            onSelectMember(method.payMode);
           }
-          return updated;
         }
-        return r;
-      })
-    );
+      }
+
+      let nextRows = prevRows.map(r => r.id === id ? updatedRow : r);
+
+      if (updates.amount !== undefined) {
+        const parsedVal = parseFloat(updates.amount) || 0;
+        const otherEditableRows = nextRows.filter(r => r.id !== id && !isRowLocked(r));
+
+        if (otherEditableRows.length === 1) {
+          const otherRow = otherEditableRows[0];
+          const otherVal = Math.max(0, targetTotal - parsedVal);
+          nextRows = nextRows.map(r => r.id === otherRow.id ? { ...r, amount: otherVal.toFixed(2) } : r);
+        } else if (otherEditableRows.length > 1) {
+          const lastOtherRow = otherEditableRows[otherEditableRows.length - 1];
+          const sumOfOthersExceptLast = nextRows
+            .filter(r => r.id !== id && r.id !== lastOtherRow.id)
+            .reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+          
+          const lastVal = Math.max(0, targetTotal - parsedVal - sumOfOthersExceptLast);
+          nextRows = nextRows.map(r => r.id === lastOtherRow.id ? { ...r, amount: lastVal.toFixed(2) } : r);
+        }
+      }
+
+      return nextRows;
+    });
   };
 
   const handleOpenDropdown = (row: SplitPaymentRow) => {
@@ -574,20 +635,31 @@ const response = await fetch(`${API_URL}${endpoint}`, {
     </View>
   </View>
 
-  {/* ✅ Button shows when NOT Paid AND NOT Cancelled */}
- {needsTerminalCall(row.payMode) && row.status === "Pending" && (
+ {row.status === "Pending" && (
   <TouchableOpacity
     activeOpacity={0.8}
-    onPress={() => handleGenerateQR(row)}
+    onPress={() => {
+      if (needsTerminalCall(row.payMode)) {
+        handleGenerateQR(row);
+      } else {
+        handleUpdateRow(row.id, { status: "Paid" });
+      }
+    }}
     style={styles.generateQrBtn}
   >
     <Ionicons 
-      name={isPayNowMode(row.payMode) ? "qr-code" : "call-outline"} 
+      name={
+        needsTerminalCall(row.payMode) 
+          ? (isPayNowMode(row.payMode) ? "qr-code" : "call-outline") 
+          : "checkmark-circle-outline"
+      } 
       size={14} 
       color="#fff" 
     />
     <Text style={styles.generateQrText}>
-      {isPayNowMode(row.payMode) ? "Generate QR" : "Call Terminal"}
+      {needsTerminalCall(row.payMode) 
+        ? (isPayNowMode(row.payMode) ? "Generate QR" : "Call Terminal") 
+        : "Confirm Payment"}
     </Text>
   </TouchableOpacity>
 )}

@@ -526,7 +526,50 @@ export default function CustomerDisplayContent() {
           {/* Left Pane: Payment QR / Restaurant Logo & Branding Footer */}
           <View style={styles.leftPane}>
             <View style={styles.leftMainContent}>
-              {displayState.paymentMethod && isUPI && paymentSettings.upiId ? (
+              {displayState.isSplit ? (
+                <View style={styles.splitCard}>
+                  <View style={styles.splitHeader}>
+                    <Ionicons name="git-compare-outline" size={24} color={Theme.primary} />
+                    <Text style={styles.splitTitle}>Split Payments</Text>
+                  </View>
+                  <ScrollView style={styles.splitScroll} showsVerticalScrollIndicator={false}>
+                    {displayState.splitPayments && displayState.splitPayments.map((p, idx) => {
+                      const isPaid = p.status === "Paid";
+                      const isCancelled = p.status === "Cancelled";
+                      return (
+                        <View key={idx} style={styles.splitRow}>
+                          <View style={styles.splitRowLeft}>
+                            <View style={[styles.splitIndicator, { backgroundColor: isPaid ? Theme.success : isCancelled ? Theme.danger : Theme.warning }]} />
+                            <Text style={styles.splitPaymodeText}>{p.payMode.toUpperCase()}</Text>
+                          </View>
+                          <Text style={styles.splitAmountText}>
+                            {companySettings.currencySymbol || "$"}
+                            {p.amount.toFixed(2)}
+                          </Text>
+                          <View style={[
+                            styles.splitStatusBadge,
+                            { backgroundColor: isPaid ? Theme.success + "15" : isCancelled ? Theme.danger + "15" : Theme.warning + "15" }
+                          ]}>
+                            <Text style={[
+                              styles.splitStatusText,
+                              { color: isPaid ? Theme.success : isCancelled ? Theme.danger : Theme.warning }
+                            ]}>
+                              {p.status.toUpperCase()}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+                  <View style={styles.splitFooter}>
+                    <Text style={styles.splitFooterLabel}>Total Due</Text>
+                    <Text style={styles.splitFooterValue}>
+                      {companySettings.currencySymbol || "$"}
+                      {(displayState.netTotal || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+              ) : displayState.paymentMethod && isUPI && paymentSettings.upiId ? (
                 <View style={styles.qrCard}>
                   <Text style={styles.qrTitle}>Scan to Pay via UPI</Text>
                   <View style={styles.qrImageContainer}>
@@ -1714,6 +1757,97 @@ const styles = StyleSheet.create({
   memberNameText: {
     fontSize: 14,
     fontFamily: Fonts.black,
+  },
+  splitCard: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 24,
+    width: "95%",
+    maxWidth: 440,
+    maxHeight: 460,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+  },
+  splitHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    paddingBottom: 12,
+  },
+  splitTitle: {
+    fontSize: 16,
+    fontFamily: Fonts.black,
+    color: Theme.textPrimary,
+  },
+  splitScroll: {
+    flexGrow: 0,
+    maxHeight: 250,
+  },
+  splitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F9FAFB",
+  },
+  splitRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  splitIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  splitPaymodeText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: Theme.textPrimary,
+  },
+  splitAmountText: {
+    fontSize: 15,
+    fontFamily: Fonts.black,
+    color: Theme.textPrimary,
+    marginRight: 12,
+  },
+  splitStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  splitStatusText: {
+    fontSize: 11,
+    fontFamily: Fonts.black,
+  },
+  splitFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    paddingTop: 16,
+  },
+  splitFooterLabel: {
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+    color: Theme.textMuted,
+  },
+  splitFooterValue: {
+    fontSize: 22,
+    fontFamily: Fonts.black,
+    color: Theme.primary,
   },
 });
 
