@@ -379,7 +379,7 @@ class SunmiPrinterService {
       const allItemsHaveSC = activeItems.length > 0 && activeItems.every((item: any) => Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
 
       for (const item of printItems) {
-        const itemName = (item.name || item.DishName || item.ProductName || "").substring(0, nameLimit);
+        const fullItemName = item.name || item.DishName || item.ProductName || "";
         const qtyNum = parseInt(String(item.qty || item.quantity || item.Quantity || 1)) || 1;
         const qty = qtyNum.toString();
         const priceNum = parseFloat(String(item.price || item.Price || item.Cost || 0)) || 0;
@@ -387,10 +387,11 @@ class SunmiPrinterService {
         const totalNum = priceNum * qtyNum;
         const total = `${symbol}${totalNum.toFixed(2)}`;
 
-        await SunmiModule.printText(formatter.itemRow(itemName, qty, price, total));
-
-        if ((item.name || "").length > nameLimit) {
-          await SunmiModule.printText(formatter.left(`   ${item.name}`));
+        if (fullItemName.length > nameLimit) {
+          await SunmiModule.printText(formatter.left(fullItemName));
+          await SunmiModule.printText(formatter.itemRow("", qty, price, total));
+        } else {
+          await SunmiModule.printText(formatter.itemRow(fullItemName, qty, price, total));
         }
 
         const songName = item.songName || item.SongName || "";

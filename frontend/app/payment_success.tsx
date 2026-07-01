@@ -91,6 +91,8 @@ export default function PaymentSuccess() {
       } else {
         router.replace("/receivables");
       }
+    } else if (params.isSplit === "true") {
+      router.replace("/summary");
     } else {
       router.replace({
         pathname: "/(tabs)/category",
