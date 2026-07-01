@@ -61,7 +61,24 @@ export default function CustomerDisplayContent() {
   // Electron. We lazy-require it so the package does not crash on web.
   // On web the button returns null (not needed on the secondary monitor display).
   const renderBackButton = () => {
-    if (Platform.OS === 'web') return null;
+    if (Platform.OS === 'web') {
+      return (
+        <TouchableOpacity
+          style={styles.floatingBackBtn}
+          onPress={() => {
+            if (typeof window !== 'undefined' && window.history) {
+              window.history.back();
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={18} color="#ef4444" />
+          <Text style={{ color: '#ef4444', fontFamily: Fonts.bold, fontSize: 13 }}>
+            Back
+          </Text>
+        </TouchableOpacity>
+      );
+    }
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { useRouter } = require('expo-router');
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -1035,7 +1052,7 @@ const styles = StyleSheet.create({
 
   // Left column
   leftPane: {
-    flex: 1,
+    flex: 0.85,
     backgroundColor: "#fff",
     borderRadius: 24,
     padding: 24,
@@ -1173,7 +1190,7 @@ const styles = StyleSheet.create({
 
   // Right column
   rightPane: {
-    flex: 1.2,
+    flex: 1.4,
     backgroundColor: "#fff",
     borderRadius: 24,
     borderWidth: 1.5,
@@ -1449,7 +1466,7 @@ const styles = StyleSheet.create({
   // â”€â”€â”€ Terminal pairing pill (corner indicator) â”€â”€â”€
   terminalPill: {
     position: "absolute",
-    bottom: 16,
+    top: 16,
     right: 16,
     zIndex: 9999,
     flexDirection: "row",
