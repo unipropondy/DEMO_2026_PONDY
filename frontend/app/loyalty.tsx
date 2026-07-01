@@ -1,30 +1,32 @@
-import React, { useState, useEffect } from "react";
+import { API_URL } from "@/constants/Config";
+import { useAuthStore } from "@/stores/authStore";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
   ActivityIndicator,
-  Alert,
-  Modal,
+  FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   RefreshControl,
-  StatusBar,
   ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
   TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { Theme } from "../constants/theme";
-import { Fonts } from "../constants/Fonts";
-import { API_URL } from "@/constants/Config";
-import { formatToSingaporeDate, formatToSingaporeTime } from "../utils/timezoneHelper";
-import { useAuthStore } from "@/stores/authStore";
 import { useToast } from "../components/Toast";
+import { Fonts } from "../constants/Fonts";
+import { Theme } from "../constants/theme";
+import {
+  formatToSingaporeDate,
+  formatToSingaporeTime,
+} from "../utils/timezoneHelper";
 
 const COUNTRIES = [
   { code: "+65", name: "Singapore" },
@@ -64,13 +66,18 @@ export default function LoyaltyScreen() {
 
   // Delete Confirmation States
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [visitorToDelete, setVisitorToDelete] = useState<{ phone: string; name: string } | null>(null);
+  const [visitorToDelete, setVisitorToDelete] = useState<{
+    phone: string;
+    name: string;
+  } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchMembers = async (query = "") => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/loyalty/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch(
+        `${API_URL}/api/loyalty/search?q=${encodeURIComponent(query)}`,
+      );
       const data = await res.json();
       if (res.ok && Array.isArray(data)) {
         setMembers(data);
@@ -116,7 +123,10 @@ export default function LoyaltyScreen() {
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to enroll member");
       }
-      showToast({ type: "success", message: data.message || "Customer enrolled successfully!" });
+      showToast({
+        type: "success",
+        message: data.message || "Customer enrolled successfully!",
+      });
       setShowEnrollModal(false);
       setEnrollPhone("");
       setEnrollName("");
@@ -138,19 +148,22 @@ export default function LoyaltyScreen() {
     setIsDeleting(true);
     try {
       const token = useAuthStore.getState().token;
-      const res = await fetch(`${API_URL}/api/loyalty/customer/${encodeURIComponent(visitorToDelete.phone)}`, {
-        method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
-      });
+      const res = await fetch(
+        `${API_URL}/api/loyalty/customer/${encodeURIComponent(visitorToDelete.phone)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to delete visitor");
       }
-      
+
       showToast({ type: "success", message: "Visitor deleted successfully" });
-      
+
       setShowDeleteConfirm(false);
       setVisitorToDelete(null);
       fetchMembers(searchText);
@@ -164,7 +177,9 @@ export default function LoyaltyScreen() {
   const fetchDishProgress = async (phone: string) => {
     setDishProgressLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/loyalty/customer/${encodeURIComponent(phone)}/dish-progress`);
+      const res = await fetch(
+        `${API_URL}/api/loyalty/customer/${encodeURIComponent(phone)}/dish-progress`,
+      );
       const data = await res.json();
       if (res.ok && Array.isArray(data)) {
         setDishProgress(data);
@@ -185,7 +200,9 @@ export default function LoyaltyScreen() {
     setOrdersLoading(true);
     fetchDishProgress(visitor.Phone);
     try {
-      const res = await fetch(`${API_URL}/api/loyalty/customer/${encodeURIComponent(visitor.Phone)}/orders`);
+      const res = await fetch(
+        `${API_URL}/api/loyalty/customer/${encodeURIComponent(visitor.Phone)}/orders`,
+      );
       const data = await res.json();
       if (res.ok && Array.isArray(data)) {
         setOrders(data);
@@ -223,8 +240,8 @@ export default function LoyaltyScreen() {
   const renderMemberItem = ({ item }: { item: any }) => {
     const hasReward = item.RewardPending === 1 || item.RewardPending === true;
     return (
-      <TouchableOpacity 
-        style={styles.memberCard} 
+      <TouchableOpacity
+        style={styles.memberCard}
         onPress={() => handleOpenHistory(item)}
         activeOpacity={0.7}
       >
@@ -235,18 +252,25 @@ export default function LoyaltyScreen() {
             </Text>
           </View>
           <View style={styles.cardInfo}>
-            <Text style={styles.memberName}>{item.Name || "Unnamed Customer"}</Text>
+            <Text style={styles.memberName}>
+              {item.Name || "Unnamed Customer"}
+            </Text>
             <Text style={styles.memberPhone}>{item.Phone}</Text>
           </View>
           <View style={styles.headerRightActions}>
             {hasReward && (
               <View style={styles.rewardBadge}>
-                <MaterialCommunityIcons name="gift" size={12} color="#FFF" style={{ marginRight: 3 }} />
+                <MaterialCommunityIcons
+                  name="gift"
+                  size={12}
+                  color="#FFF"
+                  style={{ marginRight: 3 }}
+                />
                 <Text style={styles.rewardBadgeText}>Reward</Text>
               </View>
             )}
-            <TouchableOpacity 
-              style={styles.deleteBtn} 
+            <TouchableOpacity
+              style={styles.deleteBtn}
               onPress={(e) => {
                 e.stopPropagation();
                 handleDeleteMember(item.Phone, item.Name);
@@ -256,9 +280,9 @@ export default function LoyaltyScreen() {
             </TouchableOpacity>
           </View>
         </View>
-        
+
         <View style={styles.divider} />
-        
+
         <View style={styles.cardStats}>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Current Cycle</Text>
@@ -280,35 +304,56 @@ export default function LoyaltyScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      
+
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => {
             if (router.canGoBack()) {
               router.back();
             } else {
               router.replace("/(tabs)/category" as any);
             }
-          }} 
+          }}
           style={styles.backBtn}
         >
           <Ionicons name="arrow-back" size={20} color={Theme.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Loyalty Visitors</Text>
         <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-          <TouchableOpacity 
-            style={[styles.enrollBtnHeader, { backgroundColor: Theme.bgInput, borderWidth: 1, borderColor: Theme.border }]}
+          <TouchableOpacity
+            style={[
+              styles.enrollBtnHeader,
+              {
+                backgroundColor: Theme.bgInput,
+                borderWidth: 1,
+                borderColor: Theme.border,
+              },
+            ]}
             onPress={() => router.push("/loyaltyConfig" as any)}
           >
-            <Ionicons name="settings-outline" size={16} color={Theme.textPrimary} style={{ marginRight: 4 }} />
-            <Text style={[styles.enrollBtnHeaderText, { color: Theme.textPrimary }]}>Config</Text>
+            <Ionicons
+              name="settings-outline"
+              size={16}
+              color={Theme.textPrimary}
+              style={{ marginRight: 4 }}
+            />
+            <Text
+              style={[styles.enrollBtnHeaderText, { color: Theme.textPrimary }]}
+            >
+              Config
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.enrollBtnHeader}
             onPress={() => setShowEnrollModal(true)}
           >
-            <Ionicons name="add-circle-outline" size={18} color="#FFF" style={{ marginRight: 4 }} />
+            <Ionicons
+              name="add-circle-outline"
+              size={18}
+              color="#FFF"
+              style={{ marginRight: 4 }}
+            />
             <Text style={styles.enrollBtnHeaderText}>Enroll</Text>
           </TouchableOpacity>
         </View>
@@ -317,7 +362,12 @@ export default function LoyaltyScreen() {
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={18} color={Theme.textSecondary} style={styles.searchIcon} />
+          <Ionicons
+            name="search-outline"
+            size={18}
+            color={Theme.textSecondary}
+            style={styles.searchIcon}
+          />
           <TextInput
             style={styles.searchInput}
             placeholder="Search by name or mobile number..."
@@ -328,7 +378,11 @@ export default function LoyaltyScreen() {
           />
           {searchText ? (
             <TouchableOpacity onPress={() => handleSearch("")}>
-              <Ionicons name="close-circle" size={18} color={Theme.textSecondary} />
+              <Ionicons
+                name="close-circle"
+                size={18}
+                color={Theme.textSecondary}
+              />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -346,11 +400,19 @@ export default function LoyaltyScreen() {
           renderItem={renderMemberItem}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Theme.primary} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={Theme.primary}
+            />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons name="account-search-outline" size={48} color={Theme.textMuted} />
+              <MaterialCommunityIcons
+                name="account-search-outline"
+                size={48}
+                color={Theme.textMuted}
+              />
               <Text style={styles.emptyText}>No loyalty members found</Text>
             </View>
           }
@@ -365,8 +427,8 @@ export default function LoyaltyScreen() {
         onRequestClose={() => setShowEnrollModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === "ios" ? "padding" : "height"} 
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.modalContent}
           >
             <View style={styles.modalHeader}>
@@ -375,7 +437,7 @@ export default function LoyaltyScreen() {
                 <Ionicons name="close" size={24} color={Theme.textSecondary} />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.modalBody}>
               <Text style={styles.inputLabel}>Mobile Number *</Text>
               <View style={styles.inputWrapper}>
@@ -383,8 +445,14 @@ export default function LoyaltyScreen() {
                   style={styles.countrySelectorBtn}
                   onPress={() => setShowCountryPicker(true)}
                 >
-                  <Text style={styles.countryCodeText}>{selectedCountry.code}</Text>
-                  <Ionicons name="chevron-down" size={12} color={Theme.textSecondary} />
+                  <Text style={styles.countryCodeText}>
+                    {selectedCountry.code}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={12}
+                    color={Theme.textSecondary}
+                  />
                 </TouchableOpacity>
                 <View style={styles.verticalDivider} />
                 <TextInput
@@ -399,18 +467,23 @@ export default function LoyaltyScreen() {
 
               <Text style={styles.inputLabel}>Customer Name (Optional)</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="person-outline" size={18} color={Theme.textSecondary} style={{ marginRight: 8 }} />
+                <Ionicons
+                  name="person-outline"
+                  size={18}
+                  color={Theme.textSecondary}
+                  style={{ marginRight: 8 }}
+                />
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. John Doe"
+                  placeholder="e.g. Javith Doe"
                   value={enrollName}
                   onChangeText={setEnrollName}
                   placeholderTextColor={Theme.textMuted}
                 />
               </View>
 
-              <TouchableOpacity 
-                style={styles.submitBtn} 
+              <TouchableOpacity
+                style={styles.submitBtn}
                 onPress={handleEnroll}
                 disabled={isEnrolling}
               >
@@ -438,7 +511,8 @@ export default function LoyaltyScreen() {
               <View>
                 <Text style={styles.modalTitle}>📜 Order History</Text>
                 <Text style={styles.modalSubtitle}>
-                  {selectedVisitor?.Name || "Unnamed"} ({selectedVisitor?.Phone})
+                  {selectedVisitor?.Name || "Unnamed"} ({selectedVisitor?.Phone}
+                  )
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setShowHistoryModal(false)}>
@@ -458,26 +532,51 @@ export default function LoyaltyScreen() {
                 ListHeaderComponent={
                   dishProgress.length > 0 ? (
                     <View style={styles.dishProgressSection}>
-                      <Text style={styles.sectionLabel}>🍽️ DISH LOYALTY PROGRESS</Text>
+                      <Text style={styles.sectionLabel}>
+                        🍽️ DISH LOYALTY PROGRESS
+                      </Text>
                       {dishProgress.map((prog) => {
-                        const progressPercent = Math.min(100, Math.round((prog.CurrentCount / prog.RequiredBills) * 100));
+                        const progressPercent = Math.min(
+                          100,
+                          Math.round(
+                            (prog.CurrentCount / prog.RequiredBills) * 100,
+                          ),
+                        );
                         return (
-                          <View key={prog.RuleId} style={styles.dishProgressCard}>
+                          <View
+                            key={prog.RuleId}
+                            style={styles.dishProgressCard}
+                          >
                             <View style={styles.dishProgressHeader}>
-                              <Text style={styles.dishProgressName}>{prog.CampaignName} ({prog.PurchaseDishName})</Text>
+                              <Text style={styles.dishProgressName}>
+                                {prog.CampaignName} ({prog.PurchaseDishName})
+                              </Text>
                               {prog.RewardsAvailable > 0 && (
                                 <View style={styles.dishRewardBadge}>
-                                  <MaterialCommunityIcons name="gift" size={12} color="#FFF" style={{ marginRight: 3 }} />
-                                  <Text style={styles.dishRewardBadgeText}>{prog.RewardsAvailable} Free</Text>
+                                  <MaterialCommunityIcons
+                                    name="gift"
+                                    size={12}
+                                    color="#FFF"
+                                    style={{ marginRight: 3 }}
+                                  />
+                                  <Text style={styles.dishRewardBadgeText}>
+                                    {prog.RewardsAvailable} Free
+                                  </Text>
                                 </View>
                               )}
                             </View>
                             <View style={styles.progressBarBg}>
-                              <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+                              <View
+                                style={[
+                                  styles.progressBarFill,
+                                  { width: `${progressPercent}%` },
+                                ]}
+                              />
                             </View>
                             <View style={styles.dishProgressFooter}>
                               <Text style={styles.dishProgressText}>
-                                {prog.CurrentCount} / {prog.RequiredBills} quantities purchased
+                                {prog.CurrentCount} / {prog.RequiredBills}{" "}
+                                quantities purchased
                               </Text>
                               <Text style={styles.dishRewardTarget}>
                                 Reward: Free {prog.RewardDishName}
@@ -486,13 +585,16 @@ export default function LoyaltyScreen() {
                           </View>
                         );
                       })}
-                      <View style={[styles.detailsDivider, { marginVertical: 16 }]} />
+                      <View
+                        style={[styles.detailsDivider, { marginVertical: 16 }]}
+                      />
                       <Text style={styles.sectionLabel}>📜 ORDER HISTORY</Text>
                     </View>
                   ) : null
                 }
                 renderItem={({ item }) => {
-                  const isCancelled = item.IsCancelled === 1 || item.IsCancelled === true;
+                  const isCancelled =
+                    item.IsCancelled === 1 || item.IsCancelled === true;
                   return (
                     <TouchableOpacity
                       style={styles.orderRowCard}
@@ -502,15 +604,33 @@ export default function LoyaltyScreen() {
                       <View style={styles.orderRowHeader}>
                         {/* Left: Order Info */}
                         <View style={{ flex: 1.5 }}>
-                          <Text style={styles.orderNumberText}>Order: {item.BillNo}</Text>
+                          <Text style={styles.orderNumberText}>
+                            Order: {item.BillNo}
+                          </Text>
                           <Text style={styles.orderTimeText}>
-                            {formatToSingaporeDate(item.OrderDateTime)} • {formatToSingaporeTime(item.OrderDateTime)}
+                            {formatToSingaporeDate(item.OrderDateTime)} •{" "}
+                            {formatToSingaporeTime(item.OrderDateTime)}
                           </Text>
                         </View>
 
                         {/* Center: Status Badge */}
-                        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                          <View style={[styles.statusBadge, { backgroundColor: isCancelled ? Theme.danger : Theme.success }]}>
+                        <View
+                          style={{
+                            flex: 1,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              {
+                                backgroundColor: isCancelled
+                                  ? Theme.danger
+                                  : Theme.success,
+                              },
+                            ]}
+                          >
                             <Text style={styles.statusBadgeText}>
                               {isCancelled ? "Cancelled" : "Completed"}
                             </Text>
@@ -523,8 +643,18 @@ export default function LoyaltyScreen() {
                             ${parseFloat(item.TotalAmount || 0).toFixed(2)}
                           </Text>
                           {item.PayMode && (
-                            <View style={[styles.payModeBadge, { backgroundColor: Theme.primaryLight, marginTop: 6 }]}>
-                              <Text style={styles.payModeBadgeText}>{item.PayMode}</Text>
+                            <View
+                              style={[
+                                styles.payModeBadge,
+                                {
+                                  backgroundColor: Theme.primaryLight,
+                                  marginTop: 6,
+                                },
+                              ]}
+                            >
+                              <Text style={styles.payModeBadgeText}>
+                                {item.PayMode}
+                              </Text>
                             </View>
                           )}
                         </View>
@@ -534,8 +664,14 @@ export default function LoyaltyScreen() {
                 }}
                 ListEmptyComponent={
                   <View style={styles.emptyContainer}>
-                    <MaterialCommunityIcons name="receipt" size={40} color={Theme.textMuted} />
-                    <Text style={styles.emptyText}>No orders recorded for this customer</Text>
+                    <MaterialCommunityIcons
+                      name="receipt"
+                      size={40}
+                      color={Theme.textMuted}
+                    />
+                    <Text style={styles.emptyText}>
+                      No orders recorded for this customer
+                    </Text>
                   </View>
                 }
               />
@@ -579,9 +715,12 @@ export default function LoyaltyScreen() {
                     return (
                       <View key={idx} style={styles.detailItemRow}>
                         <View style={{ flex: 2 }}>
-                          <Text style={styles.dishNameText}>{item.DishName}</Text>
+                          <Text style={styles.dishNameText}>
+                            {item.DishName}
+                          </Text>
                           <Text style={styles.dishPriceText}>
-                            {item.Qty} x ${parseFloat(item.Price || 0).toFixed(2)}
+                            {item.Qty} x $
+                            {parseFloat(item.Price || 0).toFixed(2)}
                           </Text>
                         </View>
                         <Text style={styles.dishTotalText}>
@@ -597,15 +736,28 @@ export default function LoyaltyScreen() {
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Subtotal</Text>
                     <Text style={styles.summaryValue}>
-                      ${parseFloat(orderDetailData.order.SubTotal || 0).toFixed(2)}
+                      $
+                      {parseFloat(orderDetailData.order.SubTotal || 0).toFixed(
+                        2,
+                      )}
                     </Text>
                   </View>
 
-                  {parseFloat(orderDetailData.order.DiscountAmount || 0) > 0 && (
+                  {parseFloat(orderDetailData.order.DiscountAmount || 0) >
+                    0 && (
                     <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: Theme.danger }]}>Discount</Text>
-                      <Text style={[styles.summaryValue, { color: Theme.danger }]}>
-                        -${parseFloat(orderDetailData.order.DiscountAmount || 0).toFixed(2)}
+                      <Text
+                        style={[styles.summaryLabel, { color: Theme.danger }]}
+                      >
+                        Discount
+                      </Text>
+                      <Text
+                        style={[styles.summaryValue, { color: Theme.danger }]}
+                      >
+                        -$
+                        {parseFloat(
+                          orderDetailData.order.DiscountAmount || 0,
+                        ).toFixed(2)}
                       </Text>
                     </View>
                   )}
@@ -614,7 +766,10 @@ export default function LoyaltyScreen() {
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Service Charge</Text>
                       <Text style={styles.summaryValue}>
-                        ${parseFloat(orderDetailData.order.ServiceCharge || 0).toFixed(2)}
+                        $
+                        {parseFloat(
+                          orderDetailData.order.ServiceCharge || 0,
+                        ).toFixed(2)}
                       </Text>
                     </View>
                   )}
@@ -623,7 +778,10 @@ export default function LoyaltyScreen() {
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Taxes</Text>
                       <Text style={styles.summaryValue}>
-                        ${parseFloat(orderDetailData.order.TotalTax || 0).toFixed(2)}
+                        $
+                        {parseFloat(
+                          orderDetailData.order.TotalTax || 0,
+                        ).toFixed(2)}
                       </Text>
                     </View>
                   )}
@@ -633,14 +791,19 @@ export default function LoyaltyScreen() {
                   <View style={styles.totalRow}>
                     <Text style={styles.totalLabel}>Grand Total</Text>
                     <Text style={styles.totalValue}>
-                      ${parseFloat(orderDetailData.order.TotalAmount || 0).toFixed(2)}
+                      $
+                      {parseFloat(
+                        orderDetailData.order.TotalAmount || 0,
+                      ).toFixed(2)}
                     </Text>
                   </View>
                 </ScrollView>
               </View>
             ) : (
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Failed to load order details</Text>
+                <Text style={styles.emptyText}>
+                  Failed to load order details
+                </Text>
               </View>
             )}
           </View>
@@ -661,15 +824,16 @@ export default function LoyaltyScreen() {
             <View style={styles.deleteModalHeader}>
               <Text style={styles.deleteModalTitle}>Delete Visitor</Text>
             </View>
-            
+
             <View style={styles.deleteModalBody}>
               <Text style={styles.deleteModalText}>
-                Are you sure you want to delete this loyalty visitor? This action cannot be undone.
+                Are you sure you want to delete this loyalty visitor? This
+                action cannot be undone.
               </Text>
             </View>
 
             <View style={styles.deleteModalActions}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.deleteCancelBtn}
                 onPress={() => {
                   setShowDeleteConfirm(false);
@@ -679,8 +843,8 @@ export default function LoyaltyScreen() {
               >
                 <Text style={styles.deleteCancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.deleteConfirmBtn}
                 onPress={executeDeleteVisitor}
                 disabled={isDeleting}
@@ -701,7 +865,11 @@ export default function LoyaltyScreen() {
         <TouchableWithoutFeedback onPress={() => setShowCountryPicker(false)}>
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { maxWidth: 300, padding: 15 }]}>
-              <Text style={[styles.modalTitle, { fontSize: 16, marginBottom: 15 }]}>Select Country</Text>
+              <Text
+                style={[styles.modalTitle, { fontSize: 16, marginBottom: 15 }]}
+              >
+                Select Country
+              </Text>
               {COUNTRIES.map((country) => (
                 <TouchableOpacity
                   key={country.code}
@@ -711,16 +879,36 @@ export default function LoyaltyScreen() {
                     paddingVertical: 12,
                     paddingHorizontal: 8,
                     borderRadius: 8,
-                    backgroundColor: selectedCountry.code === country.code ? Theme.bgNav : "transparent",
-                    gap: 12
+                    backgroundColor:
+                      selectedCountry.code === country.code
+                        ? Theme.bgNav
+                        : "transparent",
+                    gap: 12,
                   }}
                   onPress={() => {
                     setSelectedCountry(country);
                     setShowCountryPicker(false);
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontFamily: Fonts.bold, color: Theme.textPrimary }}>{country.code}</Text>
-                  <Text style={{ fontSize: 13, fontFamily: Fonts.regular, color: Theme.textSecondary, flex: 1 }}>{country.name}</Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontFamily: Fonts.bold,
+                      color: Theme.textPrimary,
+                    }}
+                  >
+                    {country.code}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontFamily: Fonts.regular,
+                      color: Theme.textSecondary,
+                      flex: 1,
+                    }}
+                  >
+                    {country.name}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>

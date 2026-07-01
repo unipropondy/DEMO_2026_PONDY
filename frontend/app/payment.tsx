@@ -2138,6 +2138,12 @@ const confirmPayment = async () => {
                   backgroundColor: Theme.primary,
                   borderColor: Theme.primary,
                 },
+                !isMobile && {
+                  width: 160,
+                  paddingHorizontal: 12,
+                  flexDirection: "row",
+                  gap: 6,
+                },
               ]}
               onPress={() => setIsSplitActive(!isSplitActive)}
               activeOpacity={0.7}
@@ -2147,6 +2153,18 @@ const confirmPayment = async () => {
                 size={20}
                 color={isSplitActive ? "#fff" : Theme.primary}
               />
+              {!isMobile && (
+                <Text
+                  style={{
+                    color: isSplitActive ? "#fff" : Theme.primary,
+                    fontFamily: Fonts.bold,
+                    fontSize: 14,
+                  }}
+                  numberOfLines={1}
+                >
+                  Split Paymode
+                </Text>
+              )}
             </TouchableOpacity>
 
           </View>
