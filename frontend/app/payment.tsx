@@ -628,14 +628,12 @@ const [paymentMessage, setPaymentMessage] = useState("");
           }
         }
         const itemSubtotal = baseTotal - itemDiscount;
-        const isSC =
-          Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+        const isSC = true;
         return {
           grossTotal: acc.grossTotal + baseTotal,
           totalItemDiscount: acc.totalItemDiscount + itemDiscount,
           subtotal: acc.subtotal + itemSubtotal,
-          scEligibleSubtotal:
-            acc.scEligibleSubtotal + (isSC ? itemSubtotal : 0),
+          scEligibleSubtotal: acc.scEligibleSubtotal + itemSubtotal,
         };
       },
       {
@@ -647,18 +645,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
     );
   }, [finalItems, isLedgerCollection, collectAmount]);
 
-  const allItemsHaveSC = useMemo(() => {
-    const activeItems = finalItems.filter(
-      (i: any) => i.status !== "VOIDED" && i.statusCode !== 0,
-    );
-    return (
-      activeItems.length > 0 &&
-      activeItems.every(
-        (item: any) =>
-          Number(item.isServiceCharge) === 1 || item.isServiceCharge === true,
-      )
-    );
-  }, [finalItems]);
+  const allItemsHaveSC = true;
 
   const discountAmount = useMemo(() => {
     if (isLedgerCollection) return 0;

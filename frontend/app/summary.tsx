@@ -916,21 +916,18 @@ export default function SummaryScreen() {
       }
 
       const itemSubtotal = baseTotal - itemDiscount;
-      const isSC = Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+      const isSC = true;
 
       return {
         grossTotal: acc.grossTotal + baseTotal,
         totalItemDiscount: acc.totalItemDiscount + itemDiscount,
-        scEligibleSubtotal: acc.scEligibleSubtotal + (isSC ? itemSubtotal : 0),
+        scEligibleSubtotal: acc.scEligibleSubtotal + itemSubtotal,
       };
     }, { grossTotal: 0, totalItemDiscount: 0, scEligibleSubtotal: 0 });
   }, [finalItems]);
 
   const subtotal = useMemo(() => grossTotal - totalItemDiscount, [grossTotal, totalItemDiscount]);
-  const allItemsHaveSC = useMemo(() => {
-    const activeItems = finalItems.filter((i: any) => i.status !== "VOIDED" && i.statusCode !== 0);
-    return activeItems.length > 0 && activeItems.every((item: any) => Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
-  }, [finalItems]);
+  const allItemsHaveSC = true;
 
   const discountAmount = useMemo(() => {
     if (!discountInfo?.applied) return 0;

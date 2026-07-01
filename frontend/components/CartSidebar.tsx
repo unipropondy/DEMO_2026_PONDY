@@ -1114,12 +1114,12 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
         }
 
         const itemSubtotal = baseTotal - itemDiscount;
-        const isSC = Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+        const isSC = true;
 
         return {
           grossTotal: acc.grossTotal + baseTotal,
           totalDiscount: acc.totalDiscount + itemDiscount,
-          scEligibleSubtotal: acc.scEligibleSubtotal + (isSC ? itemSubtotal : 0),
+          scEligibleSubtotal: acc.scEligibleSubtotal + itemSubtotal,
         };
       },
       { grossTotal: 0, totalDiscount: 0, scEligibleSubtotal: 0 },
@@ -1128,10 +1128,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
 
   const subtotal = grossTotal - totalDiscount;
   const serviceChargeAmt = scEligibleSubtotal * scRate;
-  const allItemsHaveSC = useMemo(() => {
-    const activeItems = displayItems.filter((i: any) => i.status !== "VOIDED" && i.statusCode !== 0);
-    return activeItems.length > 0 && activeItems.every((item: any) => Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
-  }, [displayItems]);
+  const allItemsHaveSC = true;
   const taxableAmt = subtotal + serviceChargeAmt;
   const taxAmountRaw = taxableAmt * gstRate;
   // ✅ FIX: Round GST for display so it matches the payable total
