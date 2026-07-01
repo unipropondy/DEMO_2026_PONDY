@@ -547,6 +547,39 @@ export default function CustomerDisplayContent() {
                     Scan QR code with your mobile banking app
                   </Text>
                 </View>
+              ) : displayState.paymentMethod ? (
+                (() => {
+                  const m = (displayState.paymentMethod || "").toUpperCase().trim();
+                  let info = { label: m, icon: "wallet-outline", color: Theme.primary };
+                  if (/^(CAS|CASH)$/i.test(m)) {
+                    info = { label: "CASH", icon: "cash-outline", color: "#10B981" };
+                  } else if (/^(CAR|CARD|CREDIT|DEBIT|CREDIT CARD|DEBIT CARD)$/i.test(m)) {
+                    info = { label: "CREDIT/DEBIT CARD", icon: "card-outline", color: "#3B82F6" };
+                  } else if (/^(UPI|GPAY|PHONEPE|PAYTM|BHIM)$/i.test(m)) {
+                    info = { label: "UPI", icon: "qr-code-outline", color: "#8B5CF6" };
+                  } else if (/^(PAYNOW|PAY-NOW)$/i.test(m)) {
+                    info = { label: "PAYNOW", icon: "qr-code-outline", color: "#EC4899" };
+                  } else if (/^(NET|NETS)$/i.test(m)) {
+                    info = { label: "NETS", icon: "wallet-outline", color: "#F59E0B" };
+                  }
+                  return (
+                    <View style={styles.paymodeSelectedCard}>
+                      <View style={[styles.paymodeIconContainer, { backgroundColor: info.color + "12" }]}>
+                        <Ionicons name={info.icon as any} size={70} color={info.color} />
+                      </View>
+                      <Text style={styles.paymodeTitle}>Selected Payment Mode</Text>
+                      <Text style={[styles.paymodeLabel, { color: info.color }]}>{info.label}</Text>
+                      
+                      <View style={styles.paymodeAmountBox}>
+                        <Text style={styles.paymodeAmountLabel}>Amount Due</Text>
+                        <Text style={styles.paymodeAmountValue}>
+                          {companySettings.currencySymbol || "$"}
+                          {(displayState.netTotal || 0).toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()
               ) : (
                 <View style={styles.logoCard}>
                   {companySettings.companyLogo ? (
@@ -1545,6 +1578,64 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Fonts.black,
     color: "#fff",
+  },
+  paymodeSelectedCard: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 32,
+    width: "90%",
+    maxWidth: 440,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+  },
+  paymodeIconContainer: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  paymodeTitle: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: Theme.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  paymodeLabel: {
+    fontSize: 28,
+    fontFamily: Fonts.black,
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  paymodeAmountBox: {
+    width: "100%",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+  },
+  paymodeAmountLabel: {
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+    color: Theme.textMuted,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  paymodeAmountValue: {
+    fontSize: 32,
+    fontFamily: Fonts.black,
+    color: "#111827",
   },
 });
 
