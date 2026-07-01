@@ -30,9 +30,12 @@ export function usePOSReadyGate(fontsLoaded: boolean): boolean {
   const [socketReady, setSocketReady] = useState(socket.connected);
   const absoluteTimeoutFired = useRef(false);
 
-  const companyName = useCompanySettingsStore((s) => s.settings.name);
-  const companyLoading = useCompanySettingsStore((s) => s.loading);
-  const paymentLoading = usePaymentSettingsStore((s) => s.loading);
+  type CompanyState = ReturnType<typeof useCompanySettingsStore.getState>;
+  type PaymentState = ReturnType<typeof usePaymentSettingsStore.getState>;
+
+  const companyName = useCompanySettingsStore((s: CompanyState) => s.settings?.name ?? "");
+  const companyLoading = useCompanySettingsStore((s: CompanyState) => s.loading);
+  const paymentLoading = usePaymentSettingsStore((s: PaymentState) => s.loading);
 
   // ── Socket readiness: connected or 5 s timeout ──
   useEffect(() => {
