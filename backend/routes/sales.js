@@ -673,13 +673,32 @@ router.get("/category", async (req, res) => {
         ),
         LegacyReport AS (
           SELECT
-            CAST(ISNULL(MAX(CAST(categoryname AS NVARCHAR(255))), 'Unmapped') AS NVARCHAR(255)) AS categoryName,
-            SUM(CAST(ISNULL(Sold, 0) AS decimal(18, 3))) AS totalQty,
+            ISNULL(cm.CategoryName, 'Unmapped') AS categoryName,
+            SUM(CAST(ISNULL(rod.Quantity, 0) AS decimal(18, 3))) AS totalQty,
             CAST(0 AS decimal(18, 3)) AS voidQty,
-            SUM(CAST(ISNULL(Revenue, ItemSales) AS decimal(18, 2))) AS totalAmount
-          FROM vw_categorysalesreport
-          WHERE ${legacyDateWhereSql}
-          GROUP BY CategoryId
+            SUM(CAST(ISNULL(rod.TotalDetailLineAmount, 0) AS decimal(18, 2))) AS totalAmount
+          FROM RestaurantOrderDetail rod
+          INNER JOIN (
+            SELECT OrderId, RestaurantBillId, InvoiceDate 
+            FROM (
+              SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY CreatedOn DESC) as rn
+              FROM (
+                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoice WHERE StatusCode = 5
+                UNION ALL
+                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoicecur WHERE StatusCode = 5
+              ) CombinedInvoices
+            ) DeduplicatedInvoices
+            WHERE rn = 1
+          ) ri ON rod.OrderId = ri.OrderId
+          LEFT JOIN DishMaster d ON rod.DishId = d.DishId
+          LEFT JOIN DishGroupMaster dg ON d.DishGroupId = dg.DishGroupId
+          LEFT JOIN CategoryMaster cm ON dg.CategoryId = cm.CategoryId
+          WHERE ${legacyDateWhereSql.replace(/InvoiceDate/g, 'ri.InvoiceDate')}
+            AND NOT EXISTS (
+              SELECT 1 FROM SettlementHeader sh_dup 
+              WHERE sh_dup.SettlementID = ri.RestaurantBillId
+            )
+          GROUP BY ISNULL(cm.CategoryName, 'Unmapped')
         ),
         ProfessionalReport AS (
           SELECT
@@ -754,14 +773,36 @@ router.get("/dish", async (req, res) => {
         ),
         LegacyReport AS (
           SELECT
-            CAST(ISNULL(MAX(CAST(Dishname AS NVARCHAR(255))), 'Unmapped') AS NVARCHAR(255)) AS dishName,
-            CAST(ISNULL(MAX(CAST(CategoryName AS NVARCHAR(255))), 'Unmapped') AS NVARCHAR(255)) AS categoryName,
-            CAST(ISNULL(MAX(CAST(DishGroupname AS NVARCHAR(255))), 'Unmapped') AS NVARCHAR(255)) AS subCategoryName,
-            SUM(CAST(ISNULL(Sold, 0) AS decimal(18, 3))) AS totalQty,
-            SUM(CAST(ISNULL(Revenue, ItemSales) AS decimal(18, 2))) AS totalAmount
-          FROM vw_Dishsalesreport
-          WHERE ${legacyDateWhereSql}
-          GROUP BY DishId, CategoryId, DishGroupId
+            ISNULL(d.Name, 'Unknown') AS dishName,
+            ISNULL(cm.CategoryName, 'Unmapped') AS categoryName,
+            ISNULL(dg.DishGroupName, 'Unmapped') AS subCategoryName,
+            SUM(CAST(ISNULL(rod.Quantity, 0) AS decimal(18, 3))) AS totalQty,
+            SUM(CAST(ISNULL(rod.TotalDetailLineAmount, 0) AS decimal(18, 2))) AS totalAmount
+          FROM RestaurantOrderDetail rod
+          INNER JOIN (
+            SELECT OrderId, RestaurantBillId, InvoiceDate 
+            FROM (
+              SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY CreatedOn DESC) as rn
+              FROM (
+                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoice WHERE StatusCode = 5
+                UNION ALL
+                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoicecur WHERE StatusCode = 5
+              ) CombinedInvoices
+            ) DeduplicatedInvoices
+            WHERE rn = 1
+          ) ri ON rod.OrderId = ri.OrderId
+          LEFT JOIN DishMaster d ON rod.DishId = d.DishId
+          LEFT JOIN DishGroupMaster dg ON d.DishGroupId = dg.DishGroupId
+          LEFT JOIN CategoryMaster cm ON dg.CategoryId = cm.CategoryId
+          WHERE ${legacyDateWhereSql.replace(/InvoiceDate/g, 'ri.InvoiceDate')}
+            AND NOT EXISTS (
+              SELECT 1 FROM SettlementHeader sh_dup 
+              WHERE sh_dup.SettlementID = ri.RestaurantBillId
+            )
+          GROUP BY 
+            ISNULL(d.Name, 'Unknown'), 
+            ISNULL(cm.CategoryName, 'Unmapped'), 
+            ISNULL(dg.DishGroupName, 'Unmapped')
         ),
         ProfessionalReport AS (
           SELECT

@@ -238,6 +238,35 @@ async function fetchFullReportData(startDateStr, endDateStr, pool) {
       WHERE ${shWhere} AND ISNULL(sid.Qty, 0) > 0
       GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(sid.CategoryName)), ''), ISNULL(cm.CategoryName, 'Unmapped'))
     ),
+    LegacyReport AS (
+      SELECT
+        ISNULL(cm.CategoryName, 'Unmapped') AS categoryName,
+        SUM(CAST(ISNULL(rod.Quantity, 0) AS decimal(18, 3))) AS totalQty,
+        CAST(0 AS decimal(18, 3)) AS voidQty,
+        SUM(CAST(ISNULL(rod.TotalDetailLineAmount, 0) AS decimal(18, 2))) AS totalAmount
+      FROM RestaurantOrderDetail rod
+      INNER JOIN (
+        SELECT OrderId, RestaurantBillId, InvoiceDate 
+        FROM (
+          SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY CreatedOn DESC) as rn
+          FROM (
+            SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoice WHERE StatusCode = 5
+            UNION ALL
+            SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoicecur WHERE StatusCode = 5
+          ) CombinedInvoices
+        ) DeduplicatedInvoices
+        WHERE rn = 1
+      ) ri ON rod.OrderId = ri.OrderId
+      LEFT JOIN DishMaster d ON rod.DishId = d.DishId
+      LEFT JOIN DishGroupMaster dg ON d.DishGroupId = dg.DishGroupId
+      LEFT JOIN CategoryMaster cm ON dg.CategoryId = cm.CategoryId
+      WHERE ri.InvoiceDate >= ${sgtStart} AND ri.InvoiceDate < ${sgtEnd}
+        AND NOT EXISTS (
+          SELECT 1 FROM SettlementHeader sh_dup 
+          WHERE sh_dup.SettlementID = ri.RestaurantBillId
+        )
+      GROUP BY ISNULL(cm.CategoryName, 'Unmapped')
+    ),
     ProfessionalReport AS (
       SELECT
         ISNULL(cm.CategoryName, 'Unmapped') AS categoryName,
@@ -260,6 +289,8 @@ async function fetchFullReportData(startDateStr, endDateStr, pool) {
     SELECT categoryName AS Category, SUM(totalQty) AS Qty, SUM(totalAmount) AS Sales
     FROM (
       SELECT CAST(categoryName AS NVARCHAR(255)) AS categoryName, CAST(totalQty AS decimal(18,3)) AS totalQty, CAST(totalAmount AS decimal(18,2)) AS totalAmount FROM AppReport
+      UNION ALL
+      SELECT CAST(categoryName AS NVARCHAR(255)) AS categoryName, CAST(totalQty AS decimal(18,3)) AS totalQty, CAST(totalAmount AS decimal(18,2)) AS totalAmount FROM LegacyReport
       UNION ALL
       SELECT CAST(categoryName AS NVARCHAR(255)) AS categoryName, CAST(totalQty AS decimal(18,3)) AS totalQty, CAST(totalAmount AS decimal(18,2)) AS totalAmount FROM ProfessionalReport
     ) ReportRows
@@ -289,6 +320,39 @@ async function fetchFullReportData(startDateStr, endDateStr, pool) {
         ISNULL(NULLIF(LTRIM(RTRIM(sid.DishName)), ''), ISNULL(d.Name, 'Unknown')), 
         ISNULL(NULLIF(LTRIM(RTRIM(sid.CategoryName)), ''), ISNULL(cm.CategoryName, 'Unmapped'))
     ),
+    LegacyReport AS (
+      SELECT
+        ISNULL(d.Name, 'Unknown') AS dishName,
+        ISNULL(cm.CategoryName, 'Unmapped') AS categoryName,
+        ISNULL(dg.DishGroupName, 'Unmapped') AS subCategoryName,
+        SUM(CAST(ISNULL(rod.Quantity, 0) AS decimal(18, 3))) AS totalQty,
+        SUM(CAST(ISNULL(rod.TotalDetailLineAmount, 0) AS decimal(18, 2))) AS totalAmount
+      FROM RestaurantOrderDetail rod
+      INNER JOIN (
+        SELECT OrderId, RestaurantBillId, InvoiceDate 
+        FROM (
+          SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY CreatedOn DESC) as rn
+          FROM (
+            SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoice WHERE StatusCode = 5
+            UNION ALL
+            SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoicecur WHERE StatusCode = 5
+          ) CombinedInvoices
+        ) DeduplicatedInvoices
+        WHERE rn = 1
+      ) ri ON rod.OrderId = ri.OrderId
+      LEFT JOIN DishMaster d ON rod.DishId = d.DishId
+      LEFT JOIN DishGroupMaster dg ON d.DishGroupId = dg.DishGroupId
+      LEFT JOIN CategoryMaster cm ON dg.CategoryId = cm.CategoryId
+      WHERE ri.InvoiceDate >= ${sgtStart} AND ri.InvoiceDate < ${sgtEnd}
+        AND NOT EXISTS (
+          SELECT 1 FROM SettlementHeader sh_dup 
+          WHERE sh_dup.SettlementID = ri.RestaurantBillId
+        )
+      GROUP BY 
+        ISNULL(d.Name, 'Unknown'), 
+        ISNULL(cm.CategoryName, 'Unmapped'), 
+        ISNULL(dg.DishGroupName, 'Unmapped')
+    ),
     ProfessionalReport AS (
       SELECT
         ISNULL(d.Name, 'Unknown') AS dishName,
@@ -311,6 +375,8 @@ async function fetchFullReportData(startDateStr, endDateStr, pool) {
     SELECT dishName AS Item, categoryName AS Category, SUM(totalQty) AS Qty, SUM(totalAmount) AS Sales
     FROM (
       SELECT CAST(dishName AS NVARCHAR(255)) AS dishName, CAST(categoryName AS NVARCHAR(255)) AS categoryName, CAST(totalQty AS decimal(18,3)) AS totalQty, CAST(totalAmount AS decimal(18,2)) AS totalAmount FROM AppReport
+      UNION ALL
+      SELECT CAST(dishName AS NVARCHAR(255)) AS dishName, CAST(categoryName AS NVARCHAR(255)) AS categoryName, CAST(totalQty AS decimal(18,3)) AS totalQty, CAST(totalAmount AS decimal(18,2)) AS totalAmount FROM LegacyReport
       UNION ALL
       SELECT CAST(dishName AS NVARCHAR(255)) AS dishName, CAST(categoryName AS NVARCHAR(255)) AS categoryName, CAST(totalQty AS decimal(18,3)) AS totalQty, CAST(totalAmount AS decimal(18,2)) AS totalAmount FROM ProfessionalReport
     ) ReportRows
