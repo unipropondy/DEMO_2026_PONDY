@@ -28,7 +28,7 @@ export default function PaymentSuccess() {
   const router = useRouter();
   const isDrawerOpening = React.useRef(false);
   const params = useLocalSearchParams();
-  const settings = useCompanySettingsStore((state) => state.settings);
+  const settings = useCompanySettingsStore((state: any) => state.settings);
   const currencySymbol = settings.currencySymbol || "$";
 
   const total = String(params.total ?? "0");
