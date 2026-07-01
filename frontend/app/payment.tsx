@@ -574,6 +574,19 @@ const [paymentMessage, setPaymentMessage] = useState("");
     CustomerDisplaySync.isPaymentActive = true;
 
     if (context && finalItems.length > 0) {
+      // Distinguish YeahPay PayNow from regular PayNow so customer display
+      // doesn't show the static PayNow QR for gateway-routed payments.
+      const selectedMethodObj = paymentMethods.find((m: any) => m.payMode === method);
+      const isYeahPayMode = selectedMethodObj?.yeahPayEnabled === true;
+      const isPayNowPayMode = /PAYNOW|PAY-NOW/i.test(method);
+      const displayPaymentMethod = isYeahPayMode && isPayNowPayMode
+        ? 'YEAHPAY_PAYNOW'
+        : method;
+
+      // Include member name when MEMBER or CREDIT mode is selected
+      const isMemberMode = /^(MEMBER|CREDIT)$/i.test((method || '').trim());
+      const displayMemberName = isMemberMode ? (selectedMember?.Name || '') : '';
+
       CustomerDisplaySync.syncCart({
         orderContext: context,
         cart: finalItems,
@@ -582,7 +595,8 @@ const [paymentMessage, setPaymentMessage] = useState("");
         roundOff: roundOff,
         active: true,
         orderId: displayOrderId,
-        paymentMethod: method,
+        paymentMethod: displayPaymentMethod,
+        memberName: displayMemberName,
       });
     } else {
       CustomerDisplaySync.syncIdle();
@@ -597,6 +611,8 @@ const [paymentMessage, setPaymentMessage] = useState("");
     roundOff,
     displayOrderId,
     method,
+    paymentMethods,
+    selectedMember,
   ]);
 
   const {

@@ -463,12 +463,16 @@ export default function CustomerDisplayContent() {
 
   // Active checkout view
   if (displayState.active) {
+    const pm = (displayState.paymentMethod || '').toUpperCase().trim();
+    const isYeahPayPayNow = pm === 'YEAHPAY_PAYNOW';
     const isUPI =
-      /UPI|GPAY|PHONE|PAYTM/i.test(displayState.paymentMethod || "") ||
+      /UPI|GPAY|PHONE|PAYTM/i.test(pm) ||
       (displayState.paymentMethod === undefined && paymentSettings.upiId);
-    const isPayNow =
-      /PAYNOW|QR|PAY-NOW/i.test(displayState.paymentMethod || "") ||
-      (displayState.paymentMethod === undefined && paymentSettings.payNowQrUrl);
+    // Regular PayNow (not YeahPay) with a static QR configured
+    const isRegularPayNow =
+      !isYeahPayPayNow &&
+      (/^(PAYNOW|PAY-NOW|QR)$/i.test(pm) ||
+        (displayState.paymentMethod === undefined && paymentSettings.payNowQrUrl));
 
     return (
       <View style={styles.checkoutContainer}>
@@ -545,7 +549,7 @@ export default function CustomerDisplayContent() {
                   </Text>
                 </View>
               ) : displayState.paymentMethod &&
-                isPayNow &&
+                isRegularPayNow &&
                 paymentSettings.payNowQrUrl ? (
                 <View style={styles.qrCard}>
                   <Text style={styles.qrTitle}>Scan to Pay via PayNow</Text>
@@ -566,19 +570,36 @@ export default function CustomerDisplayContent() {
                 </View>
               ) : displayState.paymentMethod ? (
                 (() => {
-                  const m = (displayState.paymentMethod || "").toUpperCase().trim();
-                  let info = { label: m, icon: "wallet-outline", color: Theme.primary };
+                  const m = pm;
+                  const isMemberPayMode = /^(MEMBER|CREDIT)$/i.test(m);
+                  const isYeahPayPayNowMode = m === 'YEAHPAY_PAYNOW';
+
+                  let info: { label: string; icon: string; color: string; subLabel?: string } = {
+                    label: m,
+                    icon: "wallet-outline",
+                    color: Theme.primary,
+                  };
                   if (/^(CAS|CASH)$/i.test(m)) {
                     info = { label: "CASH", icon: "cash-outline", color: "#10B981" };
-                  } else if (/^(CAR|CARD|CREDIT|DEBIT|CREDIT CARD|DEBIT CARD)$/i.test(m)) {
-                    info = { label: "CREDIT/DEBIT CARD", icon: "card-outline", color: "#3B82F6" };
+                  } else if (/CARD/i.test(m)) {
+                    info = { label: "CARD PAYMENT", icon: "card-outline", color: "#3B82F6" };
                   } else if (/^(UPI|GPAY|PHONEPE|PAYTM|BHIM)$/i.test(m)) {
                     info = { label: "UPI", icon: "qr-code-outline", color: "#8B5CF6" };
+                  } else if (isYeahPayPayNowMode) {
+                    info = { label: "YEAHPAY (PAYNOW)", icon: "phone-portrait-outline", color: "#06B6D4" };
                   } else if (/^(PAYNOW|PAY-NOW)$/i.test(m)) {
                     info = { label: "PAYNOW", icon: "qr-code-outline", color: "#EC4899" };
                   } else if (/^(NET|NETS)$/i.test(m)) {
                     info = { label: "NETS", icon: "wallet-outline", color: "#F59E0B" };
+                  } else if (isMemberPayMode) {
+                    info = {
+                      label: m === 'CREDIT' ? 'CREDIT PAYMENT' : 'MEMBER CREDIT',
+                      icon: "person-circle-outline",
+                      color: "#7C3AED",
+                      subLabel: displayState.memberName || '',
+                    };
                   }
+
                   return (
                     <View style={styles.paymodeSelectedCard}>
                       <View style={[styles.paymodeIconContainer, { backgroundColor: info.color + "12" }]}>
@@ -586,7 +607,17 @@ export default function CustomerDisplayContent() {
                       </View>
                       <Text style={styles.paymodeTitle}>Selected Payment Mode</Text>
                       <Text style={[styles.paymodeLabel, { color: info.color }]}>{info.label}</Text>
-                      
+
+                      {/* Member name displayed prominently below mode label */}
+                      {info.subLabel ? (
+                        <View style={styles.memberNameBadge}>
+                          <Ionicons name="person" size={14} color={info.color} />
+                          <Text style={[styles.memberNameText, { color: info.color }]}>
+                            {info.subLabel}
+                          </Text>
+                        </View>
+                      ) : null}
+
                       <View style={styles.paymodeAmountBox}>
                         <Text style={styles.paymodeAmountLabel}>Amount Due</Text>
                         <Text style={styles.paymodeAmountValue}>
@@ -618,6 +649,7 @@ export default function CustomerDisplayContent() {
                     {companySettings.name || paymentSettings.shopName || ""}
                   </Text>
                 </View>
+
               )}
             </View>
 
@@ -1652,6 +1684,22 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontFamily: Fonts.black,
     color: "#111827",
+  },
+  memberNameBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  memberNameText: {
+    fontSize: 14,
+    fontFamily: Fonts.black,
   },
 });
 

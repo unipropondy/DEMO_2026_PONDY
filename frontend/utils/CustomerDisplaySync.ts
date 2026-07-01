@@ -43,6 +43,7 @@ export interface SyncCartParams {
   active: boolean;
   orderId?: string;
   paymentMethod?: string;
+  memberName?: string;
 }
 
 export interface PaymentSuccessParams {
@@ -96,7 +97,7 @@ export const CustomerDisplaySync = {
       const isDisplayOn = useGeneralSettingsStore.getState().settings.customerSideDisplay;
       if (!isDisplayOn) return;
 
-      const { orderContext, cart, discountInfo, gstPercentage, roundOff, active, orderId, paymentMethod } = params;
+      const { orderContext, cart, discountInfo, gstPercentage, roundOff, active, orderId, paymentMethod, memberName } = params;
       const companySettings = useCompanySettingsStore.getState().settings;
       const paymentSettings = usePaymentSettingsStore.getState().settings;
 
@@ -213,6 +214,7 @@ export const CustomerDisplaySync = {
         netTotal,
         waiterName: orderContext.serverName || "",
         paymentMethod,
+        memberName: memberName || "",
         terminalCode: getTerminalCode(), // 🖥️ Room routing key
         companyName: companySettings?.name || paymentSettings?.shopName || "Restaurant",
         companyLogo: companySettings?.companyLogo ? (companySettings.companyLogo.startsWith("data:") || companySettings.companyLogo.startsWith("http") ? companySettings.companyLogo : `${API_URL}${companySettings.companyLogo.startsWith("/") ? "" : "/"}${companySettings.companyLogo}`) : "",

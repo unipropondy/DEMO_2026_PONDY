@@ -42,6 +42,7 @@ export interface DisplayState {
   paid?: number;
   change?: number;
   paymentMethod?: string;
+  memberName?: string;
 }
 
 export const DEFAULT_STATE: DisplayState = {
