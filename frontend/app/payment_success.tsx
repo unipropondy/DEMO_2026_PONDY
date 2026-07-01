@@ -83,6 +83,7 @@ export default function PaymentSuccess() {
   }, []);
 
   const handleDone = () => {
+    CustomerDisplaySync.isSuccessActive = false;
     CustomerDisplaySync.syncIdle();
     if (params.isLedgerCollection === "true") {
       if (params.isMember === "true") {

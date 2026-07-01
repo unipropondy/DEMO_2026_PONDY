@@ -603,7 +603,7 @@ export default function CustomerDisplayContent() {
                   return (
                     <View style={styles.paymodeSelectedCard}>
                       <View style={[styles.paymodeIconContainer, { backgroundColor: info.color + "12" }]}>
-                        <Ionicons name={info.icon as any} size={70} color={info.color} />
+                        <Ionicons name={info.icon as any} size={50} color={info.color} />
                       </View>
                       <Text style={styles.paymodeTitle}>Selected Payment Mode</Text>
                       <Text style={[styles.paymodeLabel, { color: info.color }]}>{info.label}</Text>
@@ -784,7 +784,7 @@ export default function CustomerDisplayContent() {
 
                 {displayState.gstAmount > 0 ? (
                   <View style={styles.breakdownItem}>
-                    <Text style={styles.breakdownLabel}>Tax</Text>
+                    <Text style={styles.breakdownLabel}>GST</Text>
                     <Text style={styles.breakdownValue}>
                       {companySettings.currencySymbol || "$"}
                       {(displayState.gstAmount || 0).toFixed(2)}
@@ -1632,8 +1632,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#fff",
     borderRadius: 24,
-    padding: 32,
-    width: "90%",
+    padding: 20,
+    width: "95%",
     maxWidth: 440,
     elevation: 4,
     shadowColor: "#000",
@@ -1642,26 +1642,26 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
   },
   paymodeIconContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 12,
   },
   paymodeTitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: Fonts.bold,
     color: Theme.textMuted,
     textTransform: "uppercase",
     letterSpacing: 1.5,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   paymodeLabel: {
-    fontSize: 28,
+    fontSize: 24,
     fontFamily: Fonts.black,
     textAlign: "center",
-    marginBottom: 24,
+    marginBottom: 16,
   },
   paymodeAmountBox: {
     width: "100%",
@@ -1693,7 +1693,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    marginBottom: 20,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },

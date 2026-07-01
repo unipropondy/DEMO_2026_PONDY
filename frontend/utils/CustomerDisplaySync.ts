@@ -76,6 +76,7 @@ const getTerminalCode = (): string | null => {
 
 export const CustomerDisplaySync = {
   isPaymentActive: false,
+  isSuccessActive: false,
   idleTimeout: null as any,
 
   cancelPendingIdle: () => {
@@ -86,6 +87,7 @@ export const CustomerDisplaySync = {
   },
 
   syncCart: (params: SyncCartParams) => {
+    CustomerDisplaySync.isSuccessActive = false;
     CustomerDisplaySync.cancelPendingIdle();
     try {
       // 🛡️ ROLE GUARD: Only ADMIN users trigger Customer Display updates
@@ -255,6 +257,11 @@ export const CustomerDisplaySync = {
           return;
         }
 
+        if (CustomerDisplaySync.isSuccessActive) {
+          console.log("🖥️ [CustomerDisplaySync] syncIdle blocked because success screen is active");
+          return;
+        }
+
         const companySettings = useCompanySettingsStore.getState().settings;
         const paymentSettings = usePaymentSettingsStore.getState().settings;
 
@@ -280,6 +287,7 @@ export const CustomerDisplaySync = {
   },
 
   syncPaymentSuccess: (params: PaymentSuccessParams) => {
+    CustomerDisplaySync.isSuccessActive = true;
     CustomerDisplaySync.cancelPendingIdle();
     try {
       // 🛡️ ROLE GUARD: Only ADMIN users trigger Customer Display updates
