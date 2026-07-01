@@ -9,6 +9,7 @@ import {
   StatusBar,
   Platform,
   Alert,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Theme } from "../constants/theme";
@@ -57,6 +58,7 @@ export default function PaymentSuccess() {
   }, [paymentsRaw]);
 
   const [promptVisible, setPromptVisible] = React.useState(true);
+  const [showSplitConfirmModal, setShowSplitConfirmModal] = React.useState(false);
 
   React.useEffect(() => {
     CustomerDisplaySync.syncPaymentSuccess({
@@ -98,38 +100,7 @@ export default function PaymentSuccess() {
         router.replace("/receivables");
       }
     } else if (params.isSplit === "true") {
-      if (Platform.OS === "web") {
-        const payRemaining = window.confirm("Split payment successful! Would you like to pay the remaining balance now?");
-        if (payRemaining) {
-          router.replace({
-            pathname: "/summary",
-            params: { autoPay: "true" }
-          });
-        } else {
-          router.replace("/summary");
-        }
-      } else {
-        Alert.alert(
-          "Balance Remaining",
-          "Would you like to pay the remaining balance now?",
-          [
-            {
-              text: "No, Go to Summary",
-              onPress: () => router.replace("/summary"),
-              style: "cancel",
-            },
-            {
-              text: "Yes, Pay Balance",
-              onPress: () => {
-                router.replace({
-                  pathname: "/summary",
-                  params: { autoPay: "true" },
-                });
-              },
-            },
-          ]
-        );
-      }
+      setShowSplitConfirmModal(true);
     } else {
       router.replace({
         pathname: "/(tabs)/category",
@@ -309,6 +280,44 @@ export default function PaymentSuccess() {
         }}
         total={total}
       />
+      <Modal
+        visible={showSplitConfirmModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowSplitConfirmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Balance Remaining</Text>
+            <Text style={styles.modalMessage}>
+              Split payment successful! Would you like to pay the remaining balance now?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowSplitConfirmModal(false);
+                  router.replace("/summary");
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Go to Summary</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={() => {
+                  setShowSplitConfirmModal(false);
+                  router.replace({
+                    pathname: "/summary",
+                    params: { autoPay: "true" },
+                  });
+                }}
+              >
+                <Text style={styles.confirmButtonText}>Pay Remaining</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -406,5 +415,67 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontFamily: Fonts.black,
     fontSize: 18,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: Theme.bgCard,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+    ...Theme.shadowLg,
+    borderWidth: 1,
+    borderColor: Theme.border,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: Fonts.black,
+    color: Theme.textPrimary,
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 16,
+    fontFamily: Fonts.medium,
+    color: Theme.textSecondary,
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: Theme.border,
+  },
+  confirmButton: {
+    backgroundColor: Theme.primary,
+  },
+  cancelButtonText: {
+    color: Theme.textSecondary,
+    fontFamily: Fonts.bold,
+    fontSize: 15,
+  },
+  confirmButtonText: {
+    color: "#fff",
+    fontFamily: Fonts.bold,
+    fontSize: 15,
   },
 });

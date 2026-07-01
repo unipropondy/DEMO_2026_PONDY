@@ -1293,7 +1293,6 @@ router.post("/save", async (req, res) => {
           WHERE sh.BillNo = @OrderId 
              OR (TRY_CAST(@OrderId AS UNIQUEIDENTIFIER) IS NOT NULL AND ri.OrderId = TRY_CAST(@OrderId AS UNIQUEIDENTIFIER))
              OR ri.OrderId = (SELECT TOP 1 OrderId FROM RestaurantOrder WHERE OrderNumber = @OrderId)
-             OR ri.OrderId = (SELECT TOP 1 OrderId FROM RestaurantOrderCur WHERE OrderNumber = @OrderId)
         `);
       if (existingCheck.recordset.length > 0) {
         const existing = existingCheck.recordset[0];
