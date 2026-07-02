@@ -394,7 +394,7 @@ class UniversalPrinter {
   private static async logPrintJob(
     orderId: string,
     orderNo: string,
-    type: "NEW" | "ADDITIONAL" | "REPRINT"
+    type: "NEW" | "ADDITIONAL" | "REPRINT" | "KDS_PRINT"
   ): Promise<void> {
     try {
       const baseUrl = API_URL;
