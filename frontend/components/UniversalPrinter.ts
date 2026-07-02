@@ -992,7 +992,7 @@ class UniversalPrinter {
             Order By : ${waiter} #OR-${orderNo}
           </div>
 
-          <div class="kitchen-name">${kitchenName}</div>
+          ${kitchenName && kitchenName !== "KDS" ? `<div class="kitchen-name">${kitchenName}</div>` : ""}
         </div>
       </body>
       </html>
@@ -1114,7 +1114,7 @@ class UniversalPrinter {
     text += `[L]Order By: ${waiter}\n`;
     text += `[L]Order #: ${orderNo}\n`;
 
-    if (kitchenName) {
+    if (kitchenName && kitchenName !== "KDS") {
       text += "[L]--------------------------------\n";
       text += `[C]<font size='big'><B>${kitchenName.toUpperCase()}</B></font>\n`;
     }
