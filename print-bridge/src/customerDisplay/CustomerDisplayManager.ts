@@ -35,7 +35,8 @@ export function launchCustomerDisplay() {
     height,
     frame: false,
     fullscreen: true,
-    alwaysOnTop: false,
+    alwaysOnTop: true,
+    acceptFirstMouse: true,
     skipTaskbar: false,
     webPreferences: {
       nodeIntegration: false,
