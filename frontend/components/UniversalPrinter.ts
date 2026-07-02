@@ -426,7 +426,7 @@ class UniversalPrinter {
         const isOnline = await this.isBridgeOnline();
         if (!isOnline) {
           console.log("📡 [Web Print Bridge] Bridge is OFFLINE. Direct fallback to preview.");
-          const html = this.generateKOTHTML(orderData, "REPRINT");
+          const html = this.generateKOTHTML(orderData, "KDS_PRINT");
           let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
           if (!frame) {
             frame = document.createElement("iframe");
@@ -453,7 +453,7 @@ class UniversalPrinter {
           return true;
         }
 
-        const text = this.formatKOTThermalText(orderData, "REPRINT");
+        const text = this.formatKOTThermalText(orderData, "KDS_PRINT");
         console.log(`📡 [Web Print Bridge] Queueing KDS print`);
         const success = await this.queuePrintJob(4, undefined, text);
         if (success) {
@@ -463,7 +463,7 @@ class UniversalPrinter {
 
         // Web Fallback: If Print Bridge failed, trigger iframe preview
         console.log("⚠️ [Web KDS Print] Print Bridge queue failed. Falling back to iframe print preview.");
-        const html = this.generateKOTHTML(orderData, "REPRINT");
+        const html = this.generateKOTHTML(orderData, "KDS_PRINT");
         let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
         if (!frame) {
           frame = document.createElement("iframe");
@@ -491,7 +491,7 @@ class UniversalPrinter {
       } catch (err) {
         console.warn("[Web Print Bridge] KDS Print failed, falling back to iframe print preview:", err);
         try {
-          const html = this.generateKOTHTML(orderData, "REPRINT");
+          const html = this.generateKOTHTML(orderData, "KDS_PRINT");
           let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
           if (!frame) {
             frame = document.createElement("iframe");
@@ -524,13 +524,13 @@ class UniversalPrinter {
     }
 
     // Mobile/Native
-    return this.printKOT(orderData, userId, "REPRINT", kdsPrinterIp);
+    return this.printKOT(orderData, userId, "KDS_PRINT", kdsPrinterIp);
   }
 
   static async printKOT(
     orderData: any,
     userId?: string | number,
-    type: "NEW" | "ADDITIONAL" | "REPRINT" = "NEW",
+    type: "NEW" | "ADDITIONAL" | "REPRINT" | "KDS_PRINT" = "NEW",
     printerIpOverride?: string,
   ): Promise<boolean> {
     if (Platform.OS === "web") {
@@ -729,11 +729,13 @@ class UniversalPrinter {
 
   private static generateKOTHTML(data: any, type: string): string {
     let title =
-      type === "REPRINT"
-        ? "REPRINT"
-        : type === "ADDITIONAL"
-          ? "ADDITIONAL"
-          : "NEW ORDER";
+      type === "KDS_PRINT"
+        ? "KDS PRINT"
+        : type === "REPRINT"
+          ? "REPRINT"
+          : type === "ADDITIONAL"
+            ? "ADDITIONAL"
+            : "NEW ORDER";
     title = title.replace(/\s*KOT\s*/gi, "").trim();
 
     const items = data.items || [];
@@ -958,11 +960,13 @@ class UniversalPrinter {
 
   private static formatKOTThermalText(data: any, type: string): string {
     const title =
-      type === "REPRINT"
-        ? "REPRINT"
-        : type === "ADDITIONAL"
-          ? "ADDITIONAL"
-          : "NEW ORDER";
+      type === "KDS_PRINT"
+        ? "KDS PRINT"
+        : type === "REPRINT"
+          ? "REPRINT"
+          : type === "ADDITIONAL"
+            ? "ADDITIONAL"
+            : "NEW ORDER";
     const items = data.items || [];
     const tableNo = data.tableNo || "N/A";
     const waiter = data.waiterName || "Staff";
