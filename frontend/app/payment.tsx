@@ -43,6 +43,7 @@ import { useOrderContextStore } from "../stores/orderContextStore";
 import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
 import type { CachedPaymentMethod } from "../stores/paymentSettingsStore";
 import { useTableStatusStore } from "../stores/tableStatusStore";
+import { useServiceChargeOverrideStore } from "../stores/serviceChargeOverrideStore";
 import { CustomerDisplaySync } from "../utils/CustomerDisplaySync";
 
 const EMPTY_ARRAY: any[] = [];
@@ -415,6 +416,9 @@ const [paymentMessage, setPaymentMessage] = useState("");
   const [customValue, setCustomValue] = useState("");
   const [isTestModalVisible, setIsTestModalVisible] = useState(false);
   const [scReduced, setScReduced] = useState(false);
+  const scReducedLocal = useServiceChargeOverrideStore((s) =>
+    displayOrderId ? s.overrides[displayOrderId.toLowerCase()] : false
+  );
 
   useEffect(() => {
     console.log("🔍 [Payment] SC override useEffect triggered. displayOrderId:", displayOrderId, "isFocused:", isFocused);
@@ -430,8 +434,10 @@ const [paymentMessage, setPaymentMessage] = useState("");
           console.log("✅ [Payment] SC override response:", d);
           if (d?.serviceChargeReduced) {
             setScReduced(true);
+            useServiceChargeOverrideStore.getState().setOverride(displayOrderId, true);
           } else {
             setScReduced(false);
+            useServiceChargeOverrideStore.getState().setOverride(displayOrderId, false);
           }
         })
         .catch((e) => {
@@ -728,7 +734,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
     return Math.max(0, scEligibleSubtotal - proportion * discountAmount);
   }, [scEligibleSubtotal, subtotal, discountAmount, isLedgerCollection]);
 
-  const serviceChargeAmt = isLedgerCollection ? 0 : (scReduced ? 0 : scEligibleNet * scRate);
+  const serviceChargeAmt = isLedgerCollection ? 0 : (scReduced || scReducedLocal ? 0 : scEligibleNet * scRate);
   const taxableAmount = netAfterDiscount + serviceChargeAmt;
   const tax = isLedgerCollection ? 0 : taxableAmount * gstRate;
   const baseTotal = taxableAmount + tax;

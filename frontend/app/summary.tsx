@@ -48,6 +48,7 @@ import {
   useOrderContextStore,
 } from "../stores/orderContextStore";
 import { useTableStatusStore } from "../stores/tableStatusStore";
+import { useServiceChargeOverrideStore } from "../stores/serviceChargeOverrideStore";
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -412,8 +413,10 @@ export default function SummaryScreen() {
         .then((d) => {
           if (d?.serviceChargeReduced) {
             setScReduced(true);
+            useServiceChargeOverrideStore.getState().setOverride(displayOrderId, true);
           } else {
             setScReduced(false);
+            useServiceChargeOverrideStore.getState().setOverride(displayOrderId, false);
           }
         })
         .catch(() => {});
@@ -868,6 +871,7 @@ export default function SummaryScreen() {
       const data = await res.json();
       if (data.success) {
         setScReduced(true);
+        useServiceChargeOverrideStore.getState().setOverride(displayOrderId, true);
         setShowBillOptions(false);
         showToast({
           type: "success",
