@@ -101,8 +101,8 @@ app.post('/direct-test-print', async (req: Request, res: Response) => {
   }
 });
 
-// Serve the static customer display files
-app.use(express.static(path.join(electronApp.getAppPath(), 'customer-display-web')));
+// Serve the static customer display files with extension-less HTML fallback
+app.use(express.static(path.join(electronApp.getAppPath(), 'customer-display-web'), { extensions: ['html'] }));
 
 // Mount new customer display endpoints
 app.use('/customer-display', displayRouter);

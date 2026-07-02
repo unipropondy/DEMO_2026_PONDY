@@ -74,7 +74,8 @@ export function launchCustomerDisplay() {
   });
 
   // Load the standalone Expo route via local Express server to resolve absolute path assets correctly
-  const url = `http://localhost:${config.port}/customer-display-standalone.html`;
+  // (Omit the .html extension so Expo Router matches the route pathname exactly)
+  const url = `http://localhost:${config.port}/customer-display-standalone`;
   logger.info(`[CustomerDisplay] Loading UI from URL: ${url}`);
 
   displayWindow.loadURL(url)
