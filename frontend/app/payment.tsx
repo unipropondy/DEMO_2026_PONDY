@@ -417,13 +417,17 @@ const [paymentMessage, setPaymentMessage] = useState("");
   const [scReduced, setScReduced] = useState(false);
 
   useEffect(() => {
+    console.log("🔍 [Payment] SC override useEffect triggered. displayOrderId:", displayOrderId, "isFocused:", isFocused);
     if (displayOrderId && isFocused) {
       const token = useAuthStore.getState().token;
-      fetch(`${API_URL}/api/orders/${displayOrderId}/sc-override`, {
+      const url = `${API_URL}/api/orders/${displayOrderId}/sc-override`;
+      console.log("📡 [Payment] Fetching SC override from:", url);
+      fetch(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
         .then((r) => r.json())
         .then((d) => {
+          console.log("✅ [Payment] SC override response:", d);
           if (d?.serviceChargeReduced) {
             setScReduced(true);
           } else {
@@ -431,7 +435,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
           }
         })
         .catch((e) => {
-          console.warn("Failed to fetch KDS/SC override status:", e);
+          console.warn("❌ [Payment] Failed to fetch KDS/SC override status:", e);
         });
     }
   }, [displayOrderId, isFocused]);
