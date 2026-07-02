@@ -362,10 +362,10 @@ class UniversalPrinter {
         return false;
       }
 
-      // Poll for bridge completion (up to 1.5 seconds)
+      // Poll for bridge completion (up to 8.0 seconds)
       const jobId = data.jobId;
       const start = Date.now();
-      while (Date.now() - start < 1500) {
+      while (Date.now() - start < 8000) {
         await new Promise((resolve) => setTimeout(resolve, 250));
         try {
           const statusRes = await fetch(`${API_URL}/api/print-jobs/status/${jobId}`);

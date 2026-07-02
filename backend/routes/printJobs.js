@@ -37,15 +37,10 @@ const normalizeIp = (ip) => {
   return ip.trim();
 };
 
-// GET /api/print-jobs/bridge-status - Check if print bridge is active/online and on the same network
+// GET /api/print-jobs/bridge-status - Check if print bridge is active/online
 router.get('/bridge-status', (req, res) => {
-  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  const isOnline = (Date.now() - lastBridgeActivity) < 6000; // 6 seconds threshold
-  
-  // Verify that the client is on the same local network (public IP matches)
-  const sameNetwork = lastBridgeIp && (normalizeIp(clientIp) === normalizeIp(lastBridgeIp));
-  
-  res.json({ success: true, online: isOnline && sameNetwork });
+  const isOnline = (Date.now() - lastBridgeActivity) < 8000; // 8 seconds threshold
+  res.json({ success: true, online: isOnline });
 });
 
 // 2. GET /api/print-jobs/pending - Fetch pending jobs for the store
@@ -194,9 +189,7 @@ router.post('/', authenticateBridge, async (req, res) => {
         printerIp = cashierRes.recordset[0].PrinterIP;
         printerName = cashierRes.recordset[0].PrinterName;
       } else {
-        // Hardcoded default fallback
-        printerIp = '192.168.0.20';
-        printerName = 'Receipt Printer';
+        return res.status(400).json({ success: false, error: 'No active printer configured in database' });
       }
     }
 
