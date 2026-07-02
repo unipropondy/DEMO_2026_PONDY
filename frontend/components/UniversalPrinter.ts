@@ -416,6 +416,117 @@ class UniversalPrinter {
     }
   }
 
+  static async printKDSOrder(
+    orderData: any,
+    userId?: string | number,
+    kdsPrinterIp?: string,
+  ): Promise<boolean> {
+    if (Platform.OS === "web") {
+      try {
+        const isOnline = await this.isBridgeOnline();
+        if (!isOnline) {
+          console.log("📡 [Web Print Bridge] Bridge is OFFLINE. Direct fallback to preview.");
+          const html = this.generateKOTHTML(orderData, "REPRINT");
+          let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
+          if (!frame) {
+            frame = document.createElement("iframe");
+            frame.id = "kot-print-iframe";
+            frame.style.display = "none";
+            document.body.appendChild(frame);
+          }
+
+          const doc = frame.contentWindow?.document || frame.contentDocument;
+          if (doc) {
+            doc.open();
+            doc.write(html);
+            doc.close();
+
+            const triggerPrint = () => {
+              frame.contentWindow?.focus();
+              frame.contentWindow?.print();
+            };
+
+            frame.contentWindow?.addEventListener("load", triggerPrint);
+            setTimeout(triggerPrint, 50);
+          }
+          await this.logPrintJob(orderData.orderId, orderData.orderNo, "REPRINT");
+          return true;
+        }
+
+        const text = this.formatKOTThermalText(orderData, "REPRINT");
+        console.log(`📡 [Web Print Bridge] Queueing KDS print`);
+        const success = await this.queuePrintJob(4, undefined, text);
+        if (success) {
+          await this.logPrintJob(orderData.orderId, orderData.orderNo, "REPRINT");
+          return true;
+        }
+
+        // Web Fallback: If Print Bridge failed, trigger iframe preview
+        console.log("⚠️ [Web KDS Print] Print Bridge queue failed. Falling back to iframe print preview.");
+        const html = this.generateKOTHTML(orderData, "REPRINT");
+        let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
+        if (!frame) {
+          frame = document.createElement("iframe");
+          frame.id = "kot-print-iframe";
+          frame.style.display = "none";
+          document.body.appendChild(frame);
+        }
+
+        const doc = frame.contentWindow?.document || frame.contentDocument;
+        if (doc) {
+          doc.open();
+          doc.write(html);
+          doc.close();
+
+          const triggerPrint = () => {
+            frame.contentWindow?.focus();
+            frame.contentWindow?.print();
+          };
+
+          frame.contentWindow?.addEventListener("load", triggerPrint);
+          setTimeout(triggerPrint, 800);
+        }
+        await this.logPrintJob(orderData.orderId, orderData.orderNo, "REPRINT");
+        return true;
+      } catch (err) {
+        console.warn("[Web Print Bridge] KDS Print failed, falling back to iframe print preview:", err);
+        try {
+          const html = this.generateKOTHTML(orderData, "REPRINT");
+          let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
+          if (!frame) {
+            frame = document.createElement("iframe");
+            frame.id = "kot-print-iframe";
+            frame.style.display = "none";
+            document.body.appendChild(frame);
+          }
+
+          const doc = frame.contentWindow?.document || frame.contentDocument;
+          if (doc) {
+            doc.open();
+            doc.write(html);
+            doc.close();
+
+            const triggerPrint = () => {
+              frame.contentWindow?.focus();
+              frame.contentWindow?.print();
+            };
+
+            frame.contentWindow?.addEventListener("load", triggerPrint);
+            setTimeout(triggerPrint, 800);
+          }
+          await this.logPrintJob(orderData.orderId, orderData.orderNo, "REPRINT");
+          return true;
+        } catch (fallbackErr) {
+          console.error("Web KDS print fallback failed:", fallbackErr);
+          return false;
+        }
+      }
+    }
+
+    // Mobile/Native
+    return this.printKOT(orderData, userId, "REPRINT", kdsPrinterIp);
+  }
+
   static async printKOT(
     orderData: any,
     userId?: string | number,
