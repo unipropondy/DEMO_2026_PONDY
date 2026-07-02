@@ -2108,7 +2108,7 @@ router.get("/:orderId/sc-override", async (req, res) => {
 
     // Check column exists first
     const colCheck = await pool.request().query(`
-      SELECT 1 AS exists FROM INFORMATION_SCHEMA.COLUMNS
+      SELECT 1 AS HasCol FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_NAME = 'RestaurantOrderCur' AND COLUMN_NAME = 'ServiceChargeOverride'
     `);
     if (!colCheck.recordset.length) {
