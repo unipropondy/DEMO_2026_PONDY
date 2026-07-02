@@ -893,9 +893,11 @@ export default function SummaryScreen() {
     }
   }, [context, finalItems, discountInfo, settings]);
 
-  // 🖥️ CUSTOMER DISPLAY UNMOUNT CLEANUP
+  // 🖥️ CUSTOMER DISPLAY LIFE CYCLE MANAGER
   useEffect(() => {
+    CustomerDisplaySync.isPaymentActive = true;
     return () => {
+      CustomerDisplaySync.isPaymentActive = false;
       console.log("🖥️ [Summary] Unmounting screen, resetting Customer Display to idle");
       CustomerDisplaySync.syncIdle();
     };
