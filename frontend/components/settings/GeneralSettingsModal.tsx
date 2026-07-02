@@ -98,6 +98,7 @@ export default function GeneralSettingsModal({
   const [enableGuestDetailsPopup, setEnableGuestDetailsPopup] = useState(settings.enableGuestDetailsPopup);
   const [enableCashDrawer, setEnableCashDrawer] = useState(settings.enableCashDrawer !== undefined ? settings.enableCashDrawer : true);
   const [SVCIdentification, setSVCIdentification] = useState(settings.SVCIdentification !== undefined ? settings.SVCIdentification : true);
+  const [enableKDSPrint, setEnableKDSPrint] = useState(settings.enableKDSPrint !== undefined ? settings.enableKDSPrint : true);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordValue, setPasswordValue] = useState("");
@@ -181,6 +182,7 @@ export default function GeneralSettingsModal({
       setEnableGuestDetailsPopup(settings.enableGuestDetailsPopup !== undefined ? settings.enableGuestDetailsPopup : true);
       setEnableCashDrawer(settings.enableCashDrawer !== undefined ? settings.enableCashDrawer : true);
       setSVCIdentification(settings.SVCIdentification !== undefined ? settings.SVCIdentification : true);
+      setEnableKDSPrint(settings.enableKDSPrint !== undefined ? settings.enableKDSPrint : true);
       
       let initialCheckoutFlow = settings.enableCheckoutFlow;
       let initialDirectProcess = settings.enableDirectProcessToPay;
@@ -252,6 +254,7 @@ export default function GeneralSettingsModal({
       enableGuestDetailsPopup,
       enableCashDrawer,
       SVCIdentification,
+      enableKDSPrint,
     });
     
     setIsSaving(false);
@@ -430,6 +433,20 @@ export default function GeneralSettingsModal({
                 <Text style={styles.settingDesc}>Highlight Service (SVC) items with red identification.</Text>
               </View>
               <CustomSwitch value={SVCIdentification} onValueChange={setSVCIdentification} />
+            </View>
+
+            {/* CARD 10: KDS Print Button Control */}
+            <View style={[styles.settingCard, enableKDSPrint && styles.settingCardActive]}>
+              <View style={styles.cardLeft}>
+                <View style={styles.cardHeaderRow}>
+                  <View style={[styles.iconWrapper, enableKDSPrint ? styles.iconWrapperActive : styles.iconWrapperInactive]}>
+                    <Ionicons name="print-outline" size={16} color={enableKDSPrint ? Theme.primary : Theme.textSecondary} />
+                  </View>
+                  <Text style={styles.settingTitle}>KDS Printer Button</Text>
+                </View>
+                <Text style={styles.settingDesc}>Show the PRINT button on every order card in KDS screen.</Text>
+              </View>
+              <CustomSwitch value={enableKDSPrint} onValueChange={setEnableKDSPrint} />
             </View>
           </ScrollView>
 

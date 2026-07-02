@@ -13,6 +13,7 @@ export interface GeneralSettings {
   enableGuestDetailsPopup: boolean;
   enableCashDrawer: boolean;
   SVCIdentification: boolean;
+  enableKDSPrint: boolean;
 }
 
 interface GeneralSettingsState {
@@ -35,6 +36,7 @@ export const useGeneralSettingsStore = create<GeneralSettingsState>()(
         enableGuestDetailsPopup: true,
         enableCashDrawer: true,
         SVCIdentification: true,
+        enableKDSPrint: true,
       },
       loading: false,
 
@@ -57,6 +59,7 @@ export const useGeneralSettingsStore = create<GeneralSettingsState>()(
                 enableGuestDetailsPopup: data.EnableGuestDetailsPopup !== undefined ? Boolean(data.EnableGuestDetailsPopup) : true,
                 enableCashDrawer: data.EnableCashDrawer !== undefined ? Boolean(data.EnableCashDrawer) : true,
                 SVCIdentification: data.SVCIdentification !== undefined ? Boolean(data.SVCIdentification) : true,
+                enableKDSPrint: data.EnableKDSPrint !== undefined ? Boolean(data.EnableKDSPrint) : true,
               },
             }));
           }
@@ -94,7 +97,8 @@ export const useGeneralSettingsStore = create<GeneralSettingsState>()(
             customerSideDisplay: updatedSettings.customerSideDisplay,
             enableGuestDetailsPopup: updatedSettings.enableGuestDetailsPopup,
             enableCashDrawer: updatedSettings.enableCashDrawer,
-            SVCIdentification: updatedSettings.SVCIdentification
+            SVCIdentification: updatedSettings.SVCIdentification,
+            enableKDSPrint: updatedSettings.enableKDSPrint
           };
 
           const res = await fetch(`${API_URL}/api/settings/update`, {

@@ -22,6 +22,7 @@ import { Theme } from "../../constants/theme";
 import { OrderItem, useActiveOrdersStore } from "../../stores/activeOrdersStore";
 import { useAuthStore } from "../../stores/authStore";
 import { API_URL } from "../../constants/Config";
+import { useGeneralSettingsStore } from "../../stores/generalSettingsStore";
 
 const URGENCY_FRESH = 15;
 const URGENCY_WARN = 30;
@@ -60,6 +61,7 @@ const OrderCard = React.memo(function OrderCard({ item, cardHeight, pulseAnim, g
   const [hasMore, setHasMore] = useState(false);
   const contentH = useRef(0);
   const viewH = useRef(0);
+  const enableKDSPrint = useGeneralSettingsStore((s: any) => s.settings.enableKDSPrint !== false);
 
   const getTs = (val: any) => {
     if (!val) return 0;
@@ -146,20 +148,22 @@ const OrderCard = React.memo(function OrderCard({ item, cardHeight, pulseAnim, g
 
           {/* Right Side: PRINT & READY ALL */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.cardHeaderPrintBtn,
-                pressed && { opacity: 0.7 },
-                { marginRight: 0 }
-              ]}
-              onPress={(e) => {
-                e.stopPropagation();
-                item.onPrint?.(item);
-              }}
-            >
-              <Ionicons name="print-outline" size={12} color="#FFF" />
-              <Text style={styles.cardHeaderPrintBtnText}>PRINT</Text>
-            </Pressable>
+            {enableKDSPrint && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cardHeaderPrintBtn,
+                  pressed && { opacity: 0.7 },
+                  { marginRight: 0 }
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  item.onPrint?.(item);
+                }}
+              >
+                <Ionicons name="print-outline" size={12} color="#FFF" />
+                <Text style={styles.cardHeaderPrintBtnText}>PRINT</Text>
+              </Pressable>
+            )}
             {item.items?.some((i: any) => i.status === "SENT" || i.status === "NEW") && (
               <Pressable
                 style={({ pressed }) => [
