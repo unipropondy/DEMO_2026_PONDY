@@ -892,59 +892,100 @@ class UniversalPrinter {
           </div>
 
           <div class="item-list">
-            ${items
-              .map((item: any) => {
-                const noteText =
-                  item.note || item.notes || item.Remarks || item.remarks;
+            ${(() => {
+              if (type === "KDS_PRINT") {
+                const kitchenGroups: Record<string, any[]> = {};
+                items.forEach((item: any) => {
+                  const kName = (item.KitchenTypeName || item.kitchenTypeName || item.dishGroupName || item.categoryName || "KITCHEN").toUpperCase().trim();
+                  if (!kitchenGroups[kName]) kitchenGroups[kName] = [];
+                  kitchenGroups[kName].push(item);
+                });
+
+                return Object.entries(kitchenGroups).map(([kName, groupItems]) => {
+                  return `
+                    <div style="font-size: 18px; font-weight: bold; margin-top: 15px; border-bottom: 2px solid #000; padding-bottom: 3px; text-transform: uppercase;">
+                      ${kName}
+                    </div>
+                    ${groupItems.map((item: any) => {
+                      const noteText = item.note || item.notes || item.Remarks || item.remarks;
+                      return `
+                        <div class="item-row">
+                          <div class="item-main">
+                            <div class="item-qty">${item.quantity || item.qty || 1}</div>
+                            <div class="item-name">
+                              ${item.name}
+                              ${item.songName || item.SongName ? `<div style="font-size: 20px; font-weight: normal; color: #555; margin-top: 4px;">🎵 ${item.songName || item.SongName}</div>` : ''}
+                            </div>
+                          </div>
+                          ${
+                            item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway
+                              ? `<div class="modifier-list"><span class="modifier-item" style="font-weight: bold;">- Takeaway</span></div>`
+                              : ""
+                          }
+                          ${
+                            item.modifiers && item.modifiers.length > 0
+                              ? `<div class="modifier-list">${item.modifiers.map((m: any) => `<span class="modifier-item">- ${m.name || m.ModifierName}</span>`).join("")}</div>`
+                              : ""
+                          }
+                          ${noteText ? `<div class="remarks">* NOTE: ${noteText}</div>` : ""}
+                        </div>
+                      `;
+                    }).join("")}
+                  `;
+                }).join("");
+              }
+
+              return items.map((item: any) => {
+                const noteText = item.note || item.notes || item.Remarks || item.remarks;
                 return `
-                <div class="item-row">
-                  <div class="item-main">
-                    <div class="item-qty">${item.quantity || item.qty || 1}</div>
-                    <div class="item-name">
-                      ${item.name}
-                      ${item.songName || item.SongName ? `<div style="font-size: 20px; font-weight: normal; color: #555; margin-top: 4px;">🎵 ${item.songName || item.SongName}</div>` : ''}
+                  <div class="item-row">
+                    <div class="item-main">
+                      <div class="item-qty">${item.quantity || item.qty || 1}</div>
+                      <div class="item-name">
+                        ${item.name}
+                        ${item.songName || item.SongName ? `<div style="font-size: 20px; font-weight: normal; color: #555; margin-top: 4px;">🎵 ${item.songName || item.SongName}</div>` : ''}
+                      </div>
                     </div>
+                    ${
+                      item.isTakeaway ||
+                      item.IsTakeaway ||
+                      item.isTakeAway ||
+                      item.IsTakeAway
+                        ? `
+                      <div class="modifier-list">
+                        <span class="modifier-item" style="font-weight: bold;">- Takeaway</span>
+                      </div>
+                    `
+                        : ""
+                    }
+                    ${
+                      item.modifiers && item.modifiers.length > 0
+                        ? `
+                      <div class="modifier-list">
+                        ${item.modifiers
+                          .map(
+                            (m: any) => `
+                          <span class="modifier-item">- ${m.name || m.ModifierName}</span>
+                        `,
+                          )
+                          .join("")}
+                      </div>
+                    `
+                        : ""
+                    }
+                    ${
+                      noteText
+                        ? `
+                      <div class="remarks">
+                        * NOTE: ${noteText}
+                      </div>
+                    `
+                        : ""
+                    }
                   </div>
-                  ${
-                    item.isTakeaway ||
-                    item.IsTakeaway ||
-                    item.isTakeAway ||
-                    item.IsTakeAway
-                      ? `
-                    <div class="modifier-list">
-                      <span class="modifier-item" style="font-weight: bold;">- Takeaway</span>
-                    </div>
-                  `
-                      : ""
-                  }
-                  ${
-                    item.modifiers && item.modifiers.length > 0
-                      ? `
-                    <div class="modifier-list">
-                      ${item.modifiers
-                        .map(
-                          (m: any) => `
-                        <span class="modifier-item">- ${m.name || m.ModifierName}</span>
-                      `,
-                        )
-                        .join("")}
-                    </div>
-                  `
-                      : ""
-                  }
-                  ${
-                    noteText
-                      ? `
-                    <div class="remarks">
-                      * NOTE: ${noteText}
-                    </div>
-                  `
-                      : ""
-                  }
-                </div>
-              `;
-              })
-              .join("")}
+                `;
+              }).join("");
+            })()}
           </div>
 
           <div class="footer">
@@ -986,41 +1027,89 @@ class UniversalPrinter {
     text += "[L]QTY  ITEM\n";
     text += "[L]--------------------------------\n";
 
-    items.forEach((item: any) => {
-      const qtyNum = item.quantity || item.qty || 1;
-      const itemName = item.name || item.DishName || "";
+    if (type === "KDS_PRINT") {
+      const kitchenGroups: Record<string, any[]> = {};
+      items.forEach((item: any) => {
+        const kName = (item.KitchenTypeName || item.kitchenTypeName || item.dishGroupName || item.categoryName || "KITCHEN").toUpperCase().trim();
+        if (!kitchenGroups[kName]) kitchenGroups[kName] = [];
+        kitchenGroups[kName].push(item);
+      });
 
-      // 🚀 Square brackets [1] make quantity very clear and avoid alignment drift
-      text += `[L]<font size='big'>[${qtyNum}] ${itemName}</font>\n`;
+      for (const [kName, groupItems] of Object.entries(kitchenGroups)) {
+        text += `\n[L]<B>${kName}</B>\n`;
+        text += "[L]--------------------------------\n";
+        
+        groupItems.forEach((item: any) => {
+          const qtyNum = item.quantity || item.qty || 1;
+          const itemName = item.name || item.DishName || "";
+          text += `[L]<font size='big'>[${qtyNum}] ${itemName}</font>\n`;
 
-      const songName = item.songName || item.SongName || "";
-      if (songName) {
-        text += `[L]    🎵 ${songName}\n`;
-      }
+          const songName = item.songName || item.SongName || "";
+          if (songName) {
+            text += `[L]    🎵 ${songName}\n`;
+          }
 
-      const isTw = !!(
-        item.isTakeaway ||
-        item.IsTakeaway ||
-        item.isTakeAway ||
-        item.IsTakeAway
-      );
-      if (isTw) {
-        text += `[L]    - Takeaway\n`;
-      }
+          const isTw = !!(
+            item.isTakeaway ||
+            item.IsTakeaway ||
+            item.isTakeAway ||
+            item.IsTakeAway
+          );
+          if (isTw) {
+            text += `[L]    - Takeaway\n`;
+          }
 
-      if (item.modifiers && item.modifiers.length > 0) {
-        item.modifiers.forEach((m: any) => {
-          text += `[L]    + ${m.ModifierName || m.name}\n`;
+          if (item.modifiers && item.modifiers.length > 0) {
+            item.modifiers.forEach((m: any) => {
+              text += `[L]    + ${m.ModifierName || m.name}\n`;
+            });
+          }
+
+          const noteText = item.note || item.notes || item.Remarks || item.remarks;
+          if (noteText) {
+            text += `[L]    * NOTE: ${noteText}\n`;
+          }
         });
+        
+        text += "[L]--------------------------------\n";
       }
+    } else {
+      items.forEach((item: any) => {
+        const qtyNum = item.quantity || item.qty || 1;
+        const itemName = item.name || item.DishName || "";
 
-      const noteText = item.note || item.notes || item.Remarks || item.remarks;
-      if (noteText) {
-        text += `[L]    * NOTE: ${noteText}\n`;
-      }
+        // 🚀 Square brackets [1] make quantity very clear and avoid alignment drift
+        text += `[L]<font size='big'>[${qtyNum}] ${itemName}</font>\n`;
 
-      text += "[L]--------------------------------\n";
-    });
+        const songName = item.songName || item.SongName || "";
+        if (songName) {
+          text += `[L]    🎵 ${songName}\n`;
+        }
+
+        const isTw = !!(
+          item.isTakeaway ||
+          item.IsTakeaway ||
+          item.isTakeAway ||
+          item.IsTakeAway
+        );
+        if (isTw) {
+          text += `[L]    - Takeaway\n`;
+        }
+
+        if (item.modifiers && item.modifiers.length > 0) {
+          item.modifiers.forEach((m: any) => {
+            text += `[L]    + ${m.ModifierName || m.name}\n`;
+          });
+        }
+
+        const noteText = item.note || item.notes || item.Remarks || item.remarks;
+        if (noteText) {
+          text += `[L]    * NOTE: ${noteText}\n`;
+        }
+
+        text += "[L]--------------------------------\n";
+      });
+    }
 
     text += `[L]Order By: ${waiter}\n`;
     text += `[L]Order #: ${orderNo}\n`;
