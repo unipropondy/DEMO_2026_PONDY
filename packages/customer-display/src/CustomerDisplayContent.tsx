@@ -783,11 +783,16 @@ export default function CustomerDisplayContent() {
                         <Text style={styles.receiptItemNote}>ðŸ“  {item.note}</Text>
                       ) : null}
                       {item.modifiers &&
-                        item.modifiers.map((m: any, mIdx: number) => (
-                          <Text key={mIdx} style={styles.receiptItemModifier}>
-                            + {m.ModifierName}
-                          </Text>
-                        ))}
+                        item.modifiers.map((m: any, mIdx: number) => {
+                          const price = Number(m.Price || m.price || m.Amount || m.amount || 0);
+                          const symbol = companySettings.currencySymbol || "$";
+                          return (
+                            <Text key={mIdx} style={styles.receiptItemModifier}>
+                              + {m.ModifierName}
+                              {price > 0 ? ` (+${symbol}${price.toFixed(2)})` : ""}
+                            </Text>
+                          );
+                        })}
                     </View>
                     <Text
                       style={[
