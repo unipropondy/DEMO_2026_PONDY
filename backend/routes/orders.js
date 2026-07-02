@@ -1533,7 +1533,7 @@ router.post("/update-item-status", async (req, res) => {
           SELECT tm.TableId, tm.TableNumber, tm.entry_status, tm.PAYMENT_STATUS, h.OrderId
           FROM RestaurantOrderDetailCur d
           JOIN RestaurantOrderCur h ON d.OrderId = h.OrderId
-          JOIN TableMaster tm ON h.Tableno = tm.TableNumber
+          JOIN TableMaster tm ON RTRIM(LTRIM(h.Tableno)) = RTRIM(LTRIM(tm.TableNumber))
           WHERE d.OrderDetailId = @id
         `);
 
