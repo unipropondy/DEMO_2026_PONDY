@@ -8,11 +8,30 @@ const { syncKitchensToPrintMaster } = require("../config/init");
 // 🔹 GET Settings
 router.get("/", async (req, res) => {
   try {
+    const pool = await poolPromise;
+    // Self-heal AppSettings to add EnableKDSPrint and SVCIdentification if missing
+    await pool.query(`
+      IF NOT EXISTS (
+        SELECT * FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME = 'AppSettings' AND COLUMN_NAME = 'EnableKDSPrint'
+      )
+      BEGIN
+        ALTER TABLE AppSettings ADD EnableKDSPrint BIT DEFAULT 1 WITH VALUES;
+      END
+
+      IF NOT EXISTS (
+        SELECT * FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME = 'AppSettings' AND COLUMN_NAME = 'SVCIdentification'
+      )
+      BEGIN
+        ALTER TABLE AppSettings ADD SVCIdentification BIT DEFAULT 1 WITH VALUES;
+      END
+    `).catch(err => console.warn("Failed self-healing AppSettings column:", err.message));
+
     const settings = await getAppSettings();
-    const companySettings = await getCompanySettings();
     res.json({
       ...(settings || {}),
-      SVCIdentification: companySettings?.SVCIdentification !== undefined ? (companySettings.SVCIdentification ? 1 : 0) : 1
+      SVCIdentification: settings?.SVCIdentification !== undefined ? (settings.SVCIdentification ? 1 : 0) : 1
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -22,7 +41,7 @@ router.get("/", async (req, res) => {
 // 🔹 UPDATE Settings
 router.post("/update", async (req, res) => {
   try {
-    const { upiId, shopName, qrCodeUrl, enableKOT, enableKDS, enableCheckoutBill, enableCheckoutFlow, enableDirectProcessToPay, customerSideDisplay, enableGuestDetailsPopup, enableCashDrawer, SVCIdentification } = req.body;
+    const { upiId, shopName, qrCodeUrl, enableKOT, enableKDS, enableCheckoutBill, enableCheckoutFlow, enableDirectProcessToPay, customerSideDisplay, enableGuestDetailsPopup, enableCashDrawer, SVCIdentification, enableKDSPrint } = req.body;
     const pool = await poolPromise;
 
     // Use an UPSERT logic (Update if exists, Insert if not)
@@ -38,6 +57,8 @@ router.post("/update", async (req, res) => {
       .input("CustomerSideDisplay", sql.Bit, customerSideDisplay !== undefined ? customerSideDisplay : 1)
       .input("EnableGuestDetailsPopup", sql.Bit, enableGuestDetailsPopup !== undefined ? enableGuestDetailsPopup : 1)
       .input("EnableCashDrawer", sql.Bit, enableCashDrawer !== undefined ? enableCashDrawer : 1)
+      .input("EnableKDSPrint", sql.Bit, enableKDSPrint !== undefined ? enableKDSPrint : 1)
+      .input("SVCIdentification", sql.Bit, SVCIdentification !== undefined ? SVCIdentification : 1)
       .query(`
         IF EXISTS (SELECT 1 FROM AppSettings)
         BEGIN
@@ -54,19 +75,21 @@ router.post("/update", async (req, res) => {
             CustomerSideDisplay = @CustomerSideDisplay,
             EnableGuestDetailsPopup = @EnableGuestDetailsPopup,
             EnableCashDrawer = @EnableCashDrawer,
+            EnableKDSPrint = @EnableKDSPrint,
+            SVCIdentification = @SVCIdentification,
             UpdatedOn = GETDATE()
         END
         ELSE
         BEGIN
-          INSERT INTO AppSettings (UPI_ID, ShopName, PayNow_QR_Url, EnableKOT, EnableKDS, EnableCheckoutBill, EnableCheckoutFlow, EnableDirectProcessToPay, CustomerSideDisplay, EnableGuestDetailsPopup, EnableCashDrawer, UpdatedOn)
-          VALUES (@UPI, @Shop, @QR, @EnableKOT, @EnableKDS, @EnableCheckoutBill, @EnableCheckoutFlow, @EnableDirectProcessToPay, @CustomerSideDisplay, @EnableGuestDetailsPopup, @EnableCashDrawer, GETDATE())
+          INSERT INTO AppSettings (UPI_ID, ShopName, PayNow_QR_Url, EnableKOT, EnableKDS, EnableCheckoutBill, EnableCheckoutFlow, EnableDirectProcessToPay, CustomerSideDisplay, EnableGuestDetailsPopup, EnableCashDrawer, EnableKDSPrint, SVCIdentification, UpdatedOn)
+          VALUES (@UPI, @Shop, @QR, @EnableKOT, @EnableKDS, @EnableCheckoutBill, @EnableCheckoutFlow, @EnableDirectProcessToPay, @CustomerSideDisplay, @EnableGuestDetailsPopup, @EnableCashDrawer, @EnableKDSPrint, @SVCIdentification, GETDATE())
         END
       `);
 
     if (SVCIdentification !== undefined) {
       await pool.request()
         .input("SVCIdentification", sql.Bit, SVCIdentification ? 1 : 0)
-        .query("UPDATE CompanySettings SET SVCIdentification = @SVCIdentification WHERE Id = '1'");
+        .query("UPDATE CompanySettings SET SVCIdentification = @SVCIdentification WHERE Id = '1'").catch(() => {});
     }
 
     invalidateCache();
@@ -75,6 +98,8 @@ router.post("/update", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
 
 // 🔹 GET Kitchen Printers
 router.get("/kitchen-printers", async (req, res) => {
