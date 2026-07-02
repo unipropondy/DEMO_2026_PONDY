@@ -553,7 +553,10 @@ class UniversalPrinter {
             doc.write(html);
             doc.close();
 
+            let printed = false;
             const triggerPrint = () => {
+              if (printed) return;
+              printed = true;
               frame.contentWindow?.focus();
               frame.contentWindow?.print();
             };
@@ -592,7 +595,10 @@ class UniversalPrinter {
           doc.write(html);
           doc.close();
 
+          let printed = false;
           const triggerPrint = () => {
+            if (printed) return;
+            printed = true;
             frame.contentWindow?.focus();
             frame.contentWindow?.print();
           };
@@ -620,7 +626,10 @@ class UniversalPrinter {
             doc.write(html);
             doc.close();
 
+            let printed = false;
             const triggerPrint = () => {
+              if (printed) return;
+              printed = true;
               frame.contentWindow?.focus();
               frame.contentWindow?.print();
             };
@@ -1743,24 +1752,22 @@ class UniversalPrinter {
           doc.write(html);
           doc.close();
 
-          // Wait for images to load in the iframe
-          frame.contentWindow?.addEventListener("load", () => {
+          let printed = false;
+          const triggerPrint = () => {
+            if (printed) return;
+            printed = true;
             frame.contentWindow?.focus();
             frame.contentWindow?.print();
-            // Restore title after print dialog closes
             setTimeout(() => {
               document.title = originalTitle;
             }, 1000);
-          });
+          };
+
+          // Wait for images to load in the iframe
+          frame.contentWindow?.addEventListener("load", triggerPrint);
 
           // Fallback if load event doesn't fire
-          setTimeout(() => {
-            frame.contentWindow?.focus();
-            frame.contentWindow?.print();
-            setTimeout(() => {
-              document.title = originalTitle;
-            }, 1000);
-          }, 1000);
+          setTimeout(triggerPrint, 1000);
         }
         return true;
       } catch (err) {
