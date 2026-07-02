@@ -43,6 +43,7 @@ import { useOrderContextStore } from "../stores/orderContextStore";
 import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
 import type { CachedPaymentMethod } from "../stores/paymentSettingsStore";
 import { useTableStatusStore } from "../stores/tableStatusStore";
+import { useServiceChargeOverrideStore } from "../stores/serviceChargeOverrideStore";
 import { CustomerDisplaySync } from "../utils/CustomerDisplaySync";
 
 const EMPTY_ARRAY: any[] = [];
@@ -414,6 +415,36 @@ const [paymentMessage, setPaymentMessage] = useState("");
     useState(false);
   const [customValue, setCustomValue] = useState("");
   const [isTestModalVisible, setIsTestModalVisible] = useState(false);
+  const [scReduced, setScReduced] = useState(false);
+  const scReducedLocal = useServiceChargeOverrideStore((s) =>
+    displayOrderId ? s.overrides[displayOrderId.toLowerCase()] : false
+  );
+
+  useEffect(() => {
+    console.log("🔍 [Payment] SC override useEffect triggered. displayOrderId:", displayOrderId, "isFocused:", isFocused);
+    if (displayOrderId && isFocused) {
+      const token = useAuthStore.getState().token;
+      const url = `${API_URL}/api/orders/${displayOrderId}/sc-override`;
+      console.log("📡 [Payment] Fetching SC override from:", url);
+      fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          console.log("✅ [Payment] SC override response:", d);
+          if (d?.serviceChargeReduced) {
+            setScReduced(true);
+            useServiceChargeOverrideStore.getState().setOverride(displayOrderId, true);
+          } else {
+            setScReduced(false);
+            useServiceChargeOverrideStore.getState().setOverride(displayOrderId, false);
+          }
+        })
+        .catch((e) => {
+          console.warn("❌ [Payment] Failed to fetch KDS/SC override status:", e);
+        });
+    }
+  }, [displayOrderId, isFocused]);
 
   const [pendingPayments, setPendingPayments] = useState<any[] | null>(null);
   const [payNowQrAmount, setPayNowQrAmount] = useState(0);
@@ -703,7 +734,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
     return Math.max(0, scEligibleSubtotal - proportion * discountAmount);
   }, [scEligibleSubtotal, subtotal, discountAmount, isLedgerCollection]);
 
-  const serviceChargeAmt = isLedgerCollection ? 0 : scEligibleNet * scRate;
+  const serviceChargeAmt = isLedgerCollection ? 0 : (scReduced || scReducedLocal ? 0 : scEligibleNet * scRate);
   const taxableAmount = netAfterDiscount + serviceChargeAmt;
   const tax = isLedgerCollection ? 0 : taxableAmount * gstRate;
   const baseTotal = taxableAmount + tax;
@@ -2008,7 +2039,7 @@ const confirmPayment = async () => {
                   .join("  ·  ")}
               </Text>
             )}
-          {isSC && settingsStore.serviceChargePercentage > 0 && !isVoided && (
+          {isSC && settingsStore.serviceChargePercentage > 0 && !isVoided && !scReduced && (
             <Text
               style={[
                 styles.itemSubText,
