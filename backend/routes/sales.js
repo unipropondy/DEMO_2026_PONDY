@@ -17,25 +17,34 @@ const generateRandomBillId = () => {
     return Math.random().toString(16).slice(2, 10).toUpperCase();
 };
 
-const normalizeReportPayModeSql = (columnName = "sts.PayMode") => `
-  UPPER(ISNULL(
-    (SELECT TOP 1 LTRIM(RTRIM(Description)) 
-     FROM Paymode pm 
-     WHERE LTRIM(RTRIM(pm.PayMode)) = LTRIM(RTRIM(ISNULL(${columnName}, '')))
-        OR LTRIM(RTRIM(pm.Description)) = LTRIM(RTRIM(ISNULL(${columnName}, '')))
-        OR CAST(pm.Position AS NVARCHAR(10)) = LTRIM(RTRIM(ISNULL(${columnName}, '')))
-    ),
-    CASE
-      WHEN UPPER(LTRIM(RTRIM(ISNULL(${columnName}, '')))) IN ('CAS', 'CASH', '', '1') THEN 'CASH'
-      WHEN UPPER(LTRIM(RTRIM(ISNULL(${columnName}, '')))) IN ('CARD', 'VISA', 'MASTER', 'MASTERCARD', 'AMEX', 'DINERS') THEN 'CARD'
-      WHEN UPPER(LTRIM(RTRIM(ISNULL(${columnName}, '')))) IN ('PAYNOW', 'GRAB', 'FOODPANDA', '3') OR UPPER(${columnName}) LIKE '%PAYNOW%' THEN 'PAYNOW'
-      WHEN UPPER(LTRIM(RTRIM(ISNULL(${columnName}, '')))) IN ('NETS', '2') OR UPPER(${columnName}) LIKE '%NETS%' THEN 'NETS'
-      WHEN UPPER(LTRIM(RTRIM(ISNULL(${columnName}, '')))) IN ('UPI', '4') OR UPPER(${columnName}) LIKE '%UPI%' OR UPPER(${columnName}) LIKE '%GPAY%' THEN 'UPI'
-      WHEN UPPER(LTRIM(RTRIM(ISNULL(${columnName}, '')))) IN ('MEMBER', '5') OR UPPER(${columnName}) LIKE '%MEMBER%' THEN 'MEMBER'
-      ELSE UPPER(LTRIM(RTRIM(ISNULL(${columnName}, 'CASH'))))
-    END
-  ))
-`;
+const normalizeReportPayModeSql = (columnName = "sts.PayMode", settlementIdColumn = "sh.SettlementID") => {
+  const resolvedPayMode = `COALESCE(${columnName}, (
+    SELECT TOP 1 pm2.PayMode 
+    FROM PaymentDetailCur pd2 
+    JOIN Paymode pm2 ON pd2.Paymode = pm2.Position 
+    WHERE pd2.RestaurantBillId = ${settlementIdColumn}
+  ))`;
+
+  return `
+    UPPER(ISNULL(
+      (SELECT TOP 1 LTRIM(RTRIM(Description)) 
+       FROM Paymode pm 
+       WHERE LTRIM(RTRIM(pm.PayMode)) = LTRIM(RTRIM(ISNULL(${resolvedPayMode}, '')))
+          OR LTRIM(RTRIM(pm.Description)) = LTRIM(RTRIM(ISNULL(${resolvedPayMode}, '')))
+          OR CAST(pm.Position AS NVARCHAR(10)) = LTRIM(RTRIM(ISNULL(${resolvedPayMode}, '')))
+      ),
+      CASE
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(${resolvedPayMode}, '')))) IN ('CAS', 'CASH', '', '1') THEN 'CASH'
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(${resolvedPayMode}, '')))) IN ('CARD', 'VISA', 'MASTER', 'MASTERCARD', 'AMEX', 'DINERS') THEN 'CARD'
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(${resolvedPayMode}, '')))) IN ('PAYNOW', 'GRAB', 'FOODPANDA', '3') OR UPPER(${resolvedPayMode}) LIKE '%PAYNOW%' THEN 'PAYNOW'
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(${resolvedPayMode}, '')))) IN ('NETS', '2') OR UPPER(${resolvedPayMode}) LIKE '%NETS%' THEN 'NETS'
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(${resolvedPayMode}, '')))) IN ('UPI', '4') OR UPPER(${resolvedPayMode}) LIKE '%UPI%' OR UPPER(${resolvedPayMode}) LIKE '%GPAY%' THEN 'UPI'
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(${resolvedPayMode}, '')))) IN ('MEMBER', '5') OR UPPER(${resolvedPayMode}) LIKE '%MEMBER%' THEN 'MEMBER'
+        ELSE UPPER(LTRIM(RTRIM(ISNULL(${resolvedPayMode}, 'CASH'))))
+      END
+    ))
+  `;
+};
 
 const getReportDateRange = (req) => {
   const filter = (req.query.filter || "daily").toLowerCase();
@@ -569,38 +578,63 @@ router.get("/detail/:id/payments", async (req, res) => {
     
     let payments = result.recordset || [];
     if (payments.length === 0) {
-      // Fallback: Query SettlementTotalSales or SettlementHeader to get the single payment mode and total amount
-      const fallbackResult = await pool.request()
+      // Fallback 1: Query PaymentDetailCur / PaymentDetail to see if there is a single payment mode recorded
+      const pdResult = await pool.request()
         .input("Id", sql.UniqueIdentifier, cleanId)
         .query(`
           SELECT 
-            sh.SettlementID AS ReferenceId,
-            sh.SysAmount AS Amount,
-            sts.PayMode
-          FROM SettlementHeader sh
-          LEFT JOIN SettlementTotalSales sts ON sh.SettlementID = sts.SettlementID
-          WHERE sh.SettlementID = @Id
+            pd.RestaurantBillId AS ReferenceId,
+            pd.Amount,
+            COALESCE(pm.Description, pm.PayMode) AS PayModeName
+          FROM PaymentDetailCur pd
+          LEFT JOIN Paymode pm ON pd.Paymode = pm.Position
+          WHERE pd.RestaurantBillId = @Id
         `);
-      if (fallbackResult.recordset.length > 0) {
-        const row = fallbackResult.recordset[0];
-        // Resolve paymode name from Paymode table using legacy field
-        const paymodeNameResult = await pool.request()
-          .input("PayMode", sql.VarChar(50), row.PayMode || '')
-          .query(`
-            SELECT TOP 1 COALESCE(Description, PayMode) AS PayModeName
-            FROM Paymode
-            WHERE PayMode = @PayMode OR Description = @PayMode OR CAST(Position AS VARCHAR(10)) = @PayMode
-          `);
-        const payModeName = paymodeNameResult.recordset[0]?.PayModeName || row.PayMode || 'CASH';
-        payments = [{
+      
+      if (pdResult.recordset.length > 0) {
+        payments = pdResult.recordset.map(row => ({
           PaymentTransactionId: null,
           ReferenceType: 'BILL',
           ReferenceId: row.ReferenceId,
           PayModeId: null,
           Amount: row.Amount,
           ReferenceNo: null,
-          PayModeName: payModeName
-        }];
+          PayModeName: row.PayModeName ? row.PayModeName.trim() : 'CASH'
+        }));
+      } else {
+        // Fallback 2: Query SettlementTotalSales or SettlementHeader to get the single payment mode and total amount
+        const fallbackResult = await pool.request()
+          .input("Id", sql.UniqueIdentifier, cleanId)
+          .query(`
+            SELECT 
+              sh.SettlementID AS ReferenceId,
+              sh.SysAmount AS Amount,
+              sts.PayMode
+            FROM SettlementHeader sh
+            LEFT JOIN SettlementTotalSales sts ON sh.SettlementID = sts.SettlementID
+            WHERE sh.SettlementID = @Id
+          `);
+        if (fallbackResult.recordset.length > 0) {
+          const row = fallbackResult.recordset[0];
+          // Resolve paymode name from Paymode table using legacy field
+          const paymodeNameResult = await pool.request()
+            .input("PayMode", sql.VarChar(50), row.PayMode || '')
+            .query(`
+              SELECT TOP 1 COALESCE(Description, PayMode) AS PayModeName
+              FROM Paymode
+              WHERE PayMode = @PayMode OR Description = @PayMode OR CAST(Position AS VARCHAR(10)) = @PayMode
+            `);
+          const payModeName = paymodeNameResult.recordset[0]?.PayModeName || row.PayMode || 'CASH';
+          payments = [{
+            PaymentTransactionId: null,
+            ReferenceType: 'BILL',
+            ReferenceId: row.ReferenceId,
+            PayModeId: null,
+            Amount: row.Amount,
+            ReferenceNo: null,
+            PayModeName: payModeName ? payModeName.trim() : 'CASH'
+          }];
+        }
       }
     }
     
@@ -1207,10 +1241,10 @@ router.get("/daily/:date", async (req, res) => {
       .input("StartOfDay", sql.DateTime, startOfDay)
       .input("EndOfDay", sql.DateTime, endOfDay).query(`
         WITH NormalizedSales AS (
-          SELECT sh.SettlementID, sts.SysAmount, ISNULL(sts.ReceiptCount, 0) AS ReceiptCount,
+          SELECT sh.SettlementID, ISNULL(sts.SysAmount, sh.SysAmount) AS SysAmount, ISNULL(sts.ReceiptCount, 0) AS ReceiptCount,
           ${normalizeReportPayModeSql("sts.PayMode")} AS PayMode
           FROM SettlementHeader sh
-          INNER JOIN SettlementTotalSales sts ON sh.SettlementID = sts.SettlementID
+          LEFT JOIN SettlementTotalSales sts ON sh.SettlementID = sts.SettlementID
           WHERE sh.LastSettlementDate BETWEEN @StartOfDay AND @EndOfDay
         )
         SELECT COUNT(DISTINCT SettlementID) as TotalTransactions, ISNULL(SUM(SysAmount), 0) as TotalSales,
