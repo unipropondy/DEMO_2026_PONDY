@@ -641,7 +641,7 @@ class UniversalPrinter {
       const company = await BillPDFGenerator.loadSettings(userId);
       const html = this.generateKOTHTML(orderData, type);
       
-      let targetIp = printerIpOverride;
+      let targetIp: string = printerIpOverride || "";
       if (!targetIp) {
         if (type === "KDS_PRINT") {
           try {
@@ -654,7 +654,7 @@ class UniversalPrinter {
           }
         }
         if (!targetIp) {
-          targetIp = company.printerIp;
+          targetIp = company.printerIp || "";
         }
       }
 
