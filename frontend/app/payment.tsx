@@ -414,6 +414,27 @@ const [paymentMessage, setPaymentMessage] = useState("");
     useState(false);
   const [customValue, setCustomValue] = useState("");
   const [isTestModalVisible, setIsTestModalVisible] = useState(false);
+  const [scReduced, setScReduced] = useState(false);
+
+  useEffect(() => {
+    if (displayOrderId && isFocused) {
+      const token = useAuthStore.getState().token;
+      fetch(`${API_URL}/api/orders/${displayOrderId}/sc-override`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d?.serviceChargeReduced) {
+            setScReduced(true);
+          } else {
+            setScReduced(false);
+          }
+        })
+        .catch((e) => {
+          console.warn("Failed to fetch KDS/SC override status:", e);
+        });
+    }
+  }, [displayOrderId, isFocused]);
 
   const [pendingPayments, setPendingPayments] = useState<any[] | null>(null);
   const [payNowQrAmount, setPayNowQrAmount] = useState(0);
@@ -703,7 +724,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
     return Math.max(0, scEligibleSubtotal - proportion * discountAmount);
   }, [scEligibleSubtotal, subtotal, discountAmount, isLedgerCollection]);
 
-  const serviceChargeAmt = isLedgerCollection ? 0 : scEligibleNet * scRate;
+  const serviceChargeAmt = isLedgerCollection ? 0 : (scReduced ? 0 : scEligibleNet * scRate);
   const taxableAmount = netAfterDiscount + serviceChargeAmt;
   const tax = isLedgerCollection ? 0 : taxableAmount * gstRate;
   const baseTotal = taxableAmount + tax;
@@ -2008,7 +2029,7 @@ const confirmPayment = async () => {
                   .join("  ·  ")}
               </Text>
             )}
-          {isSC && settingsStore.serviceChargePercentage > 0 && !isVoided && (
+          {isSC && settingsStore.serviceChargePercentage > 0 && !isVoided && !scReduced && (
             <Text
               style={[
                 styles.itemSubText,
