@@ -417,7 +417,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
   const [scReduced, setScReduced] = useState(false);
 
   useEffect(() => {
-    if (displayOrderId && isFocused) {
+    if (displayOrderId) {
       const token = useAuthStore.getState().token;
       fetch(`${API_URL}/api/orders/${displayOrderId}/sc-override`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -434,7 +434,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
           console.warn("Failed to fetch KDS/SC override status:", e);
         });
     }
-  }, [displayOrderId, isFocused]);
+  }, [displayOrderId]);
 
   const [pendingPayments, setPendingPayments] = useState<any[] | null>(null);
   const [payNowQrAmount, setPayNowQrAmount] = useState(0);
