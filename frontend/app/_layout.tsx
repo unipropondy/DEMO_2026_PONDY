@@ -296,6 +296,8 @@ export default function RootLayout() {
     if (!fontsLoaded || !authHydrated) return;
 
     const rootSegment = segments[0];
+    if (rootSegment && rootSegment.startsWith("customer-display")) return;
+
     const isInsideApp = !!rootSegment && rootSegment !== "login";
     
     if (!user && isInsideApp) {
