@@ -24,7 +24,9 @@ const TransactionCard = React.memo(
 
     const modeUpper = String(item.PayMode || "").toUpperCase();
     const isUpi = modeUpper.includes("UPI") || modeUpper.includes("GPAY");
-    const isPayNow = modeUpper.includes("PAYNOW");
+    const isYeahpayPaynow = modeUpper.includes("YEAHPAY PAYNOW");
+    const isYeahpayCard = modeUpper.includes("YEAHPAY CARD");
+    const isPayNow = modeUpper.includes("PAYNOW") && !isYeahpayPaynow;
     const isNets = modeUpper.includes("NETS");
 
     return (
@@ -55,6 +57,10 @@ const TransactionCard = React.memo(
                 ? "pricetag-outline"
                 : isUpi
                 ? "flash-outline"
+                : isYeahpayPaynow
+                ? "qr-code-outline"
+                : isYeahpayCard
+                ? "card-outline"
                 : isPayNow
                 ? "qr-code-outline"
                 : isNets
@@ -71,6 +77,10 @@ const TransactionCard = React.memo(
                 ? "#e11d48"
                 : isUpi
                 ? "#a855f7"
+                : isYeahpayPaynow
+                ? "#f97316"
+                : isYeahpayCard
+                ? "#818cf8"
                 : isPayNow
                 ? "#f97316"
                 : isNets
@@ -114,6 +124,10 @@ const TransactionCard = React.memo(
                     ? "🏷️"
                     : isUpi
                     ? "⚡"
+                    : isYeahpayPaynow
+                    ? "📱"
+                    : isYeahpayCard
+                    ? "💳"
                     : isPayNow
                     ? "📱"
                     : isNets
@@ -129,6 +143,10 @@ const TransactionCard = React.memo(
                     ? "Credit"
                     : isUpi
                     ? "UPI"
+                    : isYeahpayPaynow
+                    ? "Yeahpay Paynow"
+                    : isYeahpayCard
+                    ? "Yeahpay Card"
                     : isPayNow
                     ? "PayNow"
                     : isNets
