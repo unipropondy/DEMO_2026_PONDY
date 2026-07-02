@@ -459,18 +459,29 @@ export default function KDSScreen() {
 
   const handlePrintOrder = async (order: any) => {
     try {
-      const orderData = {
-        orderId: order.orderId,
-        orderNo: order.orderId,
-        tableNo: order.context.orderType === "DINE_IN" ? order.context.tableNo : `TW-${order.context.takeawayNo}`,
-        deviceNo: "1",
-        waiterName: user?.userName || "Staff",
-        items: order.items,
-        kitchenName: order.items[0]?.KitchenTypeName || "KITCHEN"
-      };
+      const kitchenGroups: Record<string, any[]> = {};
+      order.items.forEach((item: any) => {
+        const kName = item.KitchenTypeName || item.kitchenTypeName || item.dishGroupName || item.categoryName || "KITCHEN";
+        const key = String(kName).toUpperCase().trim();
+        if (!kitchenGroups[key]) kitchenGroups[key] = [];
+        kitchenGroups[key].push(item);
+      });
 
       const { default: UniversalPrinter } = await import("../../components/UniversalPrinter");
-      await UniversalPrinter.printKDSOrder(orderData, undefined, kdsPrinterIp);
+
+      for (const [kName, items] of Object.entries(kitchenGroups)) {
+        const orderData = {
+          orderId: order.orderId,
+          orderNo: order.orderId,
+          tableNo: order.context.orderType === "DINE_IN" ? order.context.tableNo : `TW-${order.context.takeawayNo}`,
+          deviceNo: "1",
+          waiterName: user?.userName || "Staff",
+          items: items,
+          kitchenName: kName
+        };
+
+        await UniversalPrinter.printKDSOrder(orderData, undefined, kdsPrinterIp);
+      }
     } catch (err) {
       console.error("Print order error from KDS card:", err);
     }
