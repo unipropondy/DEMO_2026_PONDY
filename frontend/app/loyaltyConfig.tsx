@@ -54,6 +54,13 @@ export default function LoyaltyConfigScreen() {
   const [purchaseSearch, setPurchaseSearch] = useState("");
   const [rewardSearch, setRewardSearch] = useState("");
 
+  // Dish Group Loyalty states
+  const [loyaltyType, setLoyaltyType] = useState<"Dish" | "DishGroup">("Dish");
+  const [purchaseDishGroupId, setPurchaseDishGroupId] = useState("");
+  const [dishGroups, setDishGroups] = useState<any[]>([]);
+  const [showDishGroupDropdown, setShowDishGroupDropdown] = useState(false);
+  const [dishGroupSearch, setDishGroupSearch] = useState("");
+
   const fetchConfigs = async () => {
     setIsLoading(true);
     try {
@@ -87,9 +94,22 @@ export default function LoyaltyConfigScreen() {
     }
   };
 
+  const fetchDishGroups = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/menu/dishgroups/all`);
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) {
+        setDishGroups(data);
+      }
+    } catch (err) {
+      console.error("Fetch dish groups error:", err);
+    }
+  };
+
   useEffect(() => {
     fetchConfigs();
     fetchDishes();
+    fetchDishGroups();
   }, []);
 
   const handleRefresh = async () => {
@@ -103,8 +123,12 @@ export default function LoyaltyConfigScreen() {
       showToast({ type: "error", message: "Please enter a campaign name." });
       return;
     }
-    if (!purchaseDishId) {
+    if (loyaltyType === "Dish" && !purchaseDishId) {
       showToast({ type: "error", message: "Please select a purchase dish." });
+      return;
+    }
+    if (loyaltyType === "DishGroup" && !purchaseDishGroupId) {
+      showToast({ type: "error", message: "Please select a purchase dish group." });
       return;
     }
     if (!rewardDishId) {
@@ -129,7 +153,9 @@ export default function LoyaltyConfigScreen() {
         body: JSON.stringify({
           ruleId,
           campaignName,
-          purchaseDishId,
+          loyaltyType,
+          purchaseDishId: loyaltyType === "Dish" ? purchaseDishId : null,
+          purchaseDishGroupId: loyaltyType === "DishGroup" ? purchaseDishGroupId : null,
           rewardDishId,
           requiredBills: bills,
           isActive,
@@ -208,16 +234,28 @@ export default function LoyaltyConfigScreen() {
   const openEditModal = (config: any) => {
     setRuleId(config.RuleId);
     setCampaignName(config.CampaignName);
-    setPurchaseDishId(config.PurchaseDishId);
+    const type = config.LoyaltyType || "Dish";
+    setLoyaltyType(type);
+    
+    setPurchaseDishId(config.PurchaseDishId || "");
+    setPurchaseDishGroupId(config.PurchaseDishGroupId || "");
     setRewardDishId(config.RewardDishId);
     setRequiredBills(String(config.RequiredBills));
     setIsActive(config.IsActive === 1 || config.IsActive === true);
     setStartDate(config.StartDate ? config.StartDate.split("T")[0] : "");
     setEndDate(config.EndDate ? config.EndDate.split("T")[0] : "");
     
-    const pDish = dishes.find(d => d.DishId === config.PurchaseDishId);
+    if (type === "Dish") {
+      const pDish = dishes.find(d => d.DishId === config.PurchaseDishId);
+      setPurchaseSearch(pDish ? pDish.Name : "");
+      setDishGroupSearch("");
+    } else {
+      const pGroup = dishGroups.find(dg => dg.DishGroupId === config.PurchaseDishGroupId);
+      setDishGroupSearch(pGroup ? pGroup.DishGroupName : "");
+      setPurchaseSearch("");
+    }
+
     const rDish = dishes.find(d => d.DishId === config.RewardDishId);
-    setPurchaseSearch(pDish ? pDish.Name : "");
     setRewardSearch(rDish ? rDish.Name : "");
 
     setShowSaveModal(true);
@@ -226,13 +264,16 @@ export default function LoyaltyConfigScreen() {
   const resetForm = () => {
     setRuleId(null);
     setCampaignName("");
+    setLoyaltyType("Dish");
     setPurchaseDishId("");
+    setPurchaseDishGroupId("");
     setRewardDishId("");
     setRequiredBills("9");
     setIsActive(true);
     setStartDate("");
     setEndDate("");
     setPurchaseSearch("");
+    setDishGroupSearch("");
     setRewardSearch("");
   };
 
@@ -241,6 +282,7 @@ export default function LoyaltyConfigScreen() {
       const matchesSearch =
         c.CampaignName?.toLowerCase().includes(searchText.toLowerCase()) ||
         c.PurchaseDishName?.toLowerCase().includes(searchText.toLowerCase()) ||
+        c.PurchaseDishGroupName?.toLowerCase().includes(searchText.toLowerCase()) ||
         c.RewardDishName?.toLowerCase().includes(searchText.toLowerCase());
 
       const isActiveBool = c.IsActive === 1 || c.IsActive === true;
@@ -258,9 +300,18 @@ export default function LoyaltyConfigScreen() {
     d.Name?.toLowerCase().includes(rewardSearch.toLowerCase())
   );
 
+  const dishGroupsFiltered = dishGroups.filter(dg =>
+    dg.DishGroupName?.toLowerCase().includes(dishGroupSearch.toLowerCase())
+  );
+
   const getPurchaseDishName = () => {
     const dish = dishes.find(d => d.DishId === purchaseDishId);
     return dish ? dish.Name : "Select Purchase Dish";
+  };
+
+  const getPurchaseGroupName = () => {
+    const group = dishGroups.find(dg => dg.DishGroupId === purchaseDishGroupId);
+    return group ? group.DishGroupName : "Select Purchase Dish Group";
   };
 
   const getRewardDishName = () => {
@@ -362,7 +413,11 @@ export default function LoyaltyConfigScreen() {
                 <View style={styles.cardDetails}>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Buy Item:</Text>
-                    <Text style={styles.detailValue}>{item.PurchaseDishName || "Unknown"}</Text>
+                    <Text style={styles.detailValue}>
+                      {item.LoyaltyType === "DishGroup" 
+                        ? `${item.PurchaseDishGroupName || "Unknown"} (Group)` 
+                        : item.PurchaseDishName || "Unknown"}
+                    </Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Free Reward:</Text>
@@ -443,50 +498,135 @@ export default function LoyaltyConfigScreen() {
                   placeholderTextColor={Theme.textMuted}
                 />
               </View>
-
-              {/* Purchase Dish Selection */}
-              <View style={{ zIndex: 100 }}>
-                <Text style={styles.inputLabel}>Purchase Dish *</Text>
-                <TouchableOpacity 
-                  style={styles.dropdownTrigger}
-                  onPress={() => {
-                    setShowPurchaseDropdown(!showPurchaseDropdown);
-                    setShowRewardDropdown(false);
-                  }}
-                >
-                  <Text style={[styles.dropdownTriggerText, purchaseDishId ? styles.dropdownSelected : null]}>
-                    {getPurchaseDishName()}
-                  </Text>
-                  <Ionicons name="chevron-down" size={14} color={Theme.textSecondary} />
-                </TouchableOpacity>
-
-                {showPurchaseDropdown && (
-                  <View style={styles.dropdownContainer}>
-                    <TextInput
-                      style={styles.dropdownSearch}
-                      placeholder="Search dish..."
-                      value={purchaseSearch}
-                      onChangeText={setPurchaseSearch}
-                      placeholderTextColor={Theme.textMuted}
-                    />
-                    <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled">
-                      {purchaseDishesFiltered.map((dish) => (
-                        <TouchableOpacity
-                          key={dish.DishId}
-                          style={styles.dropdownItem}
-                          onPress={() => {
-                            setPurchaseDishId(dish.DishId);
-                            setPurchaseSearch(dish.Name);
-                            setShowPurchaseDropdown(false);
-                          }}
-                        >
-                          <Text style={styles.dropdownItemText}>{dish.Name}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
+              {/* Loyalty Type Selection */}
+              <View>
+                <Text style={styles.inputLabel}>Loyalty Type *</Text>
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 4, marginBottom: 12 }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.typeBtn,
+                      loyaltyType === "Dish" ? styles.typeBtnActive : null
+                    ]}
+                    onPress={() => {
+                      setLoyaltyType("Dish");
+                      setShowPurchaseDropdown(false);
+                      setShowDishGroupDropdown(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.typeBtnText,
+                      loyaltyType === "Dish" ? styles.typeBtnTextActive : null
+                    ]}>Dish Based</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.typeBtn,
+                      loyaltyType === "DishGroup" ? styles.typeBtnActive : null
+                    ]}
+                    onPress={() => {
+                      setLoyaltyType("DishGroup");
+                      setShowPurchaseDropdown(false);
+                      setShowDishGroupDropdown(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.typeBtnText,
+                      loyaltyType === "DishGroup" ? styles.typeBtnTextActive : null
+                    ]}>Dish Group Based</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
+
+              {/* Purchase Selection */}
+              {loyaltyType === "Dish" ? (
+                <View style={{ zIndex: 100 }}>
+                  <Text style={styles.inputLabel}>Purchase Dish *</Text>
+                  <TouchableOpacity 
+                    style={styles.dropdownTrigger}
+                    onPress={() => {
+                      setShowPurchaseDropdown(!showPurchaseDropdown);
+                      setShowRewardDropdown(false);
+                      setShowDishGroupDropdown(false);
+                    }}
+                  >
+                    <Text style={[styles.dropdownTriggerText, purchaseDishId ? styles.dropdownSelected : null]}>
+                      {getPurchaseDishName()}
+                    </Text>
+                    <Ionicons name="chevron-down" size={14} color={Theme.textSecondary} />
+                  </TouchableOpacity>
+
+                  {showPurchaseDropdown && (
+                    <View style={styles.dropdownContainer}>
+                      <TextInput
+                        style={styles.dropdownSearch}
+                        placeholder="Search dish..."
+                        value={purchaseSearch}
+                        onChangeText={setPurchaseSearch}
+                        placeholderTextColor={Theme.textMuted}
+                      />
+                      <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled">
+                        {purchaseDishesFiltered.map((dish) => (
+                          <TouchableOpacity
+                            key={dish.DishId}
+                            style={styles.dropdownItem}
+                            onPress={() => {
+                              setPurchaseDishId(dish.DishId);
+                              setPurchaseSearch(dish.Name);
+                              setShowPurchaseDropdown(false);
+                            }}
+                          >
+                            <Text style={styles.dropdownItemText}>{dish.Name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <View style={{ zIndex: 100 }}>
+                  <Text style={styles.inputLabel}>Purchase Dish Group *</Text>
+                  <TouchableOpacity 
+                    style={styles.dropdownTrigger}
+                    onPress={() => {
+                      setShowDishGroupDropdown(!showDishGroupDropdown);
+                      setShowRewardDropdown(false);
+                      setShowPurchaseDropdown(false);
+                    }}
+                  >
+                    <Text style={[styles.dropdownTriggerText, purchaseDishGroupId ? styles.dropdownSelected : null]}>
+                      {getPurchaseGroupName()}
+                    </Text>
+                    <Ionicons name="chevron-down" size={14} color={Theme.textSecondary} />
+                  </TouchableOpacity>
+
+                  {showDishGroupDropdown && (
+                    <View style={styles.dropdownContainer}>
+                      <TextInput
+                        style={styles.dropdownSearch}
+                        placeholder="Search group..."
+                        value={dishGroupSearch}
+                        onChangeText={setDishGroupSearch}
+                        placeholderTextColor={Theme.textMuted}
+                      />
+                      <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled">
+                        {dishGroupsFiltered.map((group) => (
+                          <TouchableOpacity
+                            key={group.DishGroupId}
+                            style={styles.dropdownItem}
+                            onPress={() => {
+                              setPurchaseDishGroupId(group.DishGroupId);
+                              setDishGroupSearch(group.DishGroupName);
+                              setShowDishGroupDropdown(false);
+                            }}
+                          >
+                            <Text style={styles.dropdownItemText}>{group.DishGroupName}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              )}
 
               {/* Reward Dish Selection */}
               <View style={{ zIndex: 90 }}>
@@ -817,5 +957,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Fonts.bold,
     color: "#FFF",
+  },
+  typeBtn: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderColor: Theme.border,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: Theme.bgInput,
+  },
+  typeBtnActive: {
+    backgroundColor: Theme.primaryLight,
+    borderColor: Theme.primaryBorder,
+  },
+  typeBtnText: {
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+    color: Theme.textSecondary,
+  },
+  typeBtnTextActive: {
+    color: Theme.primary,
   },
 });

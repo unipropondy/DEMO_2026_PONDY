@@ -78,6 +78,28 @@ router.get("/dishgroups/:CategoryId", async (req, res) => {
   }
 });
 
+router.get("/dishgroups/all", async (req, res) => {
+  try {
+    const cacheKey = "dishgroups_all";
+    const cached = getCached(cacheKey);
+    if (cached) return res.json(cached);
+
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT 
+        DishGroupId,
+        DishGroupName
+      FROM DishGroupMaster
+      WHERE IsActive = 1
+      ORDER BY DishGroupName ASC
+    `);
+    setCache(cacheKey, result.recordset);
+    res.json(result.recordset || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ================= DISHES ================= */
 router.get("/dishes/all", async (req, res) => {
   try {

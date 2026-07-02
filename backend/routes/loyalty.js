@@ -136,7 +136,7 @@ router.get("/customer/:phone/dish-progress", async (req, res) => {
         SELECT 
           r.RuleId,
           r.RequiredBills,
-          pd.Name AS PurchaseDishName,
+          ISNULL(pd.Name, dg.DishGroupName) AS PurchaseDishName,
           rd.Name AS RewardDishName,
           ISNULL(s.CurrentCount, 0) AS CurrentCount,
           ISNULL(s.RewardsAvailable, 0) AS RewardsAvailable,
@@ -146,6 +146,7 @@ router.get("/customer/:phone/dish-progress", async (req, res) => {
         FROM LoyaltyRule r
         INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
         LEFT JOIN DishMaster pd ON r.PurchaseDishId = pd.DishId
+        LEFT JOIN DishGroupMaster dg ON r.PurchaseDishGroupId = dg.DishGroupId
         LEFT JOIN DishMaster rd ON r.RewardDishId = rd.DishId
         LEFT JOIN LoyaltyCustomer cust ON cust.Phone = @Phone
         LEFT JOIN CustomerDishLoyaltyState s ON s.RuleId = r.RuleId AND s.CustomerId = cust.LoyaltyCustomerId
@@ -185,7 +186,7 @@ router.post("/calculate-bill-rewards", async (req, res) => {
 
     // 2. Fetch active rules
     const rulesRes = await pool.request().query(`
-      SELECT r.RuleId, r.PurchaseDishId, r.RewardDishId, r.RequiredBills,
+      SELECT r.RuleId, r.LoyaltyType, r.PurchaseDishId, r.PurchaseDishGroupId, r.RewardDishId, r.RequiredBills,
              d.Name AS RewardDishName, d.currentcost AS RewardDishPrice
       FROM LoyaltyRule r
       INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
@@ -219,16 +220,67 @@ router.post("/calculate-bill-rewards", async (req, res) => {
     const appliedRewards = [];
     let totalDiscount = 0;
 
+    // A. Resolve DishGroupIds for all items in the cart
+    const itemGroupIdMap = {}; // dishId (lowercase string) -> DishGroupId (lowercase string or null)
+    const missingDishIds = [];
+    for (const item of updatedItems) {
+      const dishId = String(item.DishId || item.dishId || item.id || "");
+      if (!dishId) continue;
+      const key = dishId.toLowerCase();
+      
+      const providedGroupId = item.DishGroupId || item.dishGroupId || item.groupId;
+      if (providedGroupId) {
+        itemGroupIdMap[key] = String(providedGroupId).toLowerCase();
+      } else {
+        missingDishIds.push(dishId);
+      }
+    }
+
+    if (missingDishIds.length > 0) {
+      const uniqueMissingIds = [...new Set(missingDishIds)];
+      const dishDetailsQuery = pool.request();
+      const paramNames = uniqueMissingIds.map((id, index) => {
+        const paramName = `dishId_${index}`;
+        dishDetailsQuery.input(paramName, sql.UniqueIdentifier, id);
+        return `@${paramName}`;
+      });
+
+      if (paramNames.length > 0) {
+        const dishDetailsRes = await dishDetailsQuery.query(`
+          SELECT DishId, DishGroupId FROM DishMaster 
+          WHERE DishId IN (${paramNames.join(",")})
+        `);
+        
+        (dishDetailsRes.recordset || []).forEach(row => {
+          if (row.DishId && row.DishGroupId) {
+            itemGroupIdMap[String(row.DishId).toLowerCase()] = String(row.DishGroupId).toLowerCase();
+          }
+        });
+      }
+    }
+
     // Evaluate each active rule
     for (const rule of activeRules) {
-      const purchaseDishIdLower = String(rule.PurchaseDishId).toLowerCase();
+      const loyaltyType = rule.LoyaltyType || "Dish";
+      const purchaseDishIdLower = rule.PurchaseDishId ? String(rule.PurchaseDishId).toLowerCase() : null;
+      const purchaseGroupIdLower = rule.PurchaseDishGroupId ? String(rule.PurchaseDishGroupId).toLowerCase() : null;
       const rewardDishIdLower = String(rule.RewardDishId || "").toLowerCase();
       
-      // Calculate total quantity of this dish being purchased in this transaction
+      // Calculate total quantity of this dish/group being purchased in this transaction
       let purchaseQty = 0;
       for (const item of updatedItems) {
-        if (String(item.DishId || item.dishId || item.id).toLowerCase() === purchaseDishIdLower && !item.isDishReward) {
-          purchaseQty += (item.Qty || 1);
+        const itemDishIdLower = String(item.DishId || item.dishId || item.id || "").toLowerCase();
+        if (item.isDishReward) continue;
+
+        if (loyaltyType === "DishGroup" && purchaseGroupIdLower) {
+          const resolvedGroupId = itemGroupIdMap[itemDishIdLower];
+          if (resolvedGroupId === purchaseGroupIdLower) {
+            purchaseQty += (item.Qty || 1);
+          }
+        } else if (loyaltyType === "Dish" && purchaseDishIdLower) {
+          if (itemDishIdLower === purchaseDishIdLower) {
+            purchaseQty += (item.Qty || 1);
+          }
         }
       }
 
@@ -357,7 +409,7 @@ router.post("/log-visit", async (req, res) => {
     try {
       // 4. Fetch all active loyalty rules
       const activeRulesRes = await transaction.request().query(`
-        SELECT r.RuleId, r.PurchaseDishId, r.RewardDishId, r.RequiredBills
+        SELECT r.RuleId, r.LoyaltyType, r.PurchaseDishId, r.PurchaseDishGroupId, r.RewardDishId, r.RequiredBills
         FROM LoyaltyRule r
         INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
         WHERE r.IsActive = 1 AND c.IsActive = 1
@@ -366,11 +418,59 @@ router.post("/log-visit", async (req, res) => {
       const activeRules = activeRulesRes.recordset || [];
 
       const itemsList = items || [];
+
+      // Resolve DishGroupIds for all items in the cart (Performance Optimized)
+      const itemGroupIdMap = {}; // dishId (lowercase string) -> DishGroupId (lowercase string or null)
+      const missingDishIds = [];
+      for (const item of itemsList) {
+        const dishId = String(item.DishId || item.dishId || item.id || "");
+        if (!dishId) continue;
+        const key = dishId.toLowerCase();
+        
+        const providedGroupId = item.DishGroupId || item.dishGroupId || item.groupId;
+        if (providedGroupId) {
+          itemGroupIdMap[key] = String(providedGroupId).toLowerCase();
+        } else {
+          missingDishIds.push(dishId);
+        }
+      }
+
+      if (missingDishIds.length > 0) {
+        const uniqueMissingIds = [...new Set(missingDishIds)];
+        const dishDetailsQuery = transaction.request();
+        const paramNames = uniqueMissingIds.map((id, index) => {
+          const paramName = `dishId_${index}`;
+          dishDetailsQuery.input(paramName, sql.UniqueIdentifier, id);
+          return `@${paramName}`;
+        });
+
+        if (paramNames.length > 0) {
+          const dishDetailsRes = await dishDetailsQuery.query(`
+            SELECT DishId, DishGroupId FROM DishMaster 
+            WHERE DishId IN (${paramNames.join(",")})
+          `);
+          
+          (dishDetailsRes.recordset || []).forEach(row => {
+            if (row.DishId && row.DishGroupId) {
+              itemGroupIdMap[String(row.DishId).toLowerCase()] = String(row.DishGroupId).toLowerCase();
+            }
+          });
+        }
+      }
+
       const hasLoyaltyDishOrdered = Array.isArray(itemsList) && activeRules.length > 0 && itemsList.some(item => {
         const isReward = item.isDishReward === true || item.isDishReward === 1 || String(item.isDishReward).toLowerCase() === 'true';
         if (isReward) return false;
-        const dishId = String(item.DishId || item.dishId || item.id || "").toLowerCase();
-        return activeRules.some(rule => String(rule.PurchaseDishId).toLowerCase() === dishId);
+        const itemDishIdLower = String(item.DishId || item.dishId || item.id || "").toLowerCase();
+        return activeRules.some(rule => {
+          const loyaltyType = rule.LoyaltyType || "Dish";
+          if (loyaltyType === "DishGroup" && rule.PurchaseDishGroupId) {
+            return itemGroupIdMap[itemDishIdLower] === String(rule.PurchaseDishGroupId).toLowerCase();
+          } else if (loyaltyType === "Dish" && rule.PurchaseDishId) {
+            return String(rule.PurchaseDishId).toLowerCase() === itemDishIdLower;
+          }
+          return false;
+        });
       });
 
       const hasRewardClaimed = Array.isArray(itemsList) && itemsList.some(item => {
@@ -388,11 +488,23 @@ router.post("/log-visit", async (req, res) => {
         let initialVisitCount = 0;
         const primaryRule = activeRules[0];
         if (!isSplitDuplicate && primaryRule) {
-          const primaryPurchaseDishIdLower = String(primaryRule.PurchaseDishId).toLowerCase();
+          const primaryLoyaltyType = primaryRule.LoyaltyType || "Dish";
+          const primaryPurchaseDishIdLower = primaryRule.PurchaseDishId ? String(primaryRule.PurchaseDishId).toLowerCase() : null;
+          const primaryPurchaseGroupIdLower = primaryRule.PurchaseDishGroupId ? String(primaryRule.PurchaseDishGroupId).toLowerCase() : null;
+
           let transactionQty = 0;
           for (const item of itemsList) {
-            if (String(item.DishId || item.dishId || item.id).toLowerCase() === primaryPurchaseDishIdLower) {
-              transactionQty += (item.Qty || item.qty || 1);
+            const itemDishIdLower = String(item.DishId || item.dishId || item.id || "").toLowerCase();
+            if (item.isDishReward) continue;
+
+            if (primaryLoyaltyType === "DishGroup" && primaryPurchaseGroupIdLower) {
+              if (itemGroupIdMap[itemDishIdLower] === primaryPurchaseGroupIdLower) {
+                transactionQty += (item.Qty || item.qty || 1);
+              }
+            } else if (primaryLoyaltyType === "Dish" && primaryPurchaseDishIdLower) {
+              if (itemDishIdLower === primaryPurchaseDishIdLower) {
+                transactionQty += (item.Qty || item.qty || 1);
+              }
             }
           }
           const blockSize = (primaryRule.RequiredBills || 9) + 1;
@@ -436,11 +548,23 @@ router.post("/log-visit", async (req, res) => {
             currentBalance = stateRes.recordset[0].CurrentCount || 0;
           }
 
-          const primaryPurchaseDishIdLower = String(primaryRule.PurchaseDishId).toLowerCase();
+          const primaryLoyaltyType = primaryRule.LoyaltyType || "Dish";
+          const primaryPurchaseDishIdLower = primaryRule.PurchaseDishId ? String(primaryRule.PurchaseDishId).toLowerCase() : null;
+          const primaryPurchaseGroupIdLower = primaryRule.PurchaseDishGroupId ? String(primaryRule.PurchaseDishGroupId).toLowerCase() : null;
+
           let transactionQty = 0;
           for (const item of itemsList) {
-            if (String(item.DishId || item.dishId || item.id).toLowerCase() === primaryPurchaseDishIdLower) {
-              transactionQty += (item.Qty || item.qty || 1);
+            const itemDishIdLower = String(item.DishId || item.dishId || item.id || "").toLowerCase();
+            if (item.isDishReward) continue;
+
+            if (primaryLoyaltyType === "DishGroup" && primaryPurchaseGroupIdLower) {
+              if (itemGroupIdMap[itemDishIdLower] === primaryPurchaseGroupIdLower) {
+                transactionQty += (item.Qty || item.qty || 1);
+              }
+            } else if (primaryLoyaltyType === "Dish" && primaryPurchaseDishIdLower) {
+              if (itemDishIdLower === primaryPurchaseDishIdLower) {
+                transactionQty += (item.Qty || item.qty || 1);
+              }
             }
           }
 
@@ -480,12 +604,23 @@ router.post("/log-visit", async (req, res) => {
 
         // A. Process Paid Items (Increments)
         for (const rule of activeRules) {
-          const rulePurchaseIdLower = String(rule.PurchaseDishId).toLowerCase();
+          const loyaltyType = rule.LoyaltyType || "Dish";
+          const rulePurchaseIdLower = rule.PurchaseDishId ? String(rule.PurchaseDishId).toLowerCase() : null;
+          const ruleGroupIdLower = rule.PurchaseDishGroupId ? String(rule.PurchaseDishGroupId).toLowerCase() : null;
           
           let purchaseQty = 0;
           for (const item of itemsList) {
-            if (String(item.DishId || item.dishId || item.id).toLowerCase() === rulePurchaseIdLower) {
-              purchaseQty += (item.Qty || item.qty || 1);
+            const itemDishIdLower = String(item.DishId || item.dishId || item.id || "").toLowerCase();
+            if (item.isDishReward) continue;
+
+            if (loyaltyType === "DishGroup" && ruleGroupIdLower) {
+              if (itemGroupIdMap[itemDishIdLower] === ruleGroupIdLower) {
+                purchaseQty += (item.Qty || item.qty || 1);
+              }
+            } else if (loyaltyType === "Dish" && rulePurchaseIdLower) {
+              if (itemDishIdLower === rulePurchaseIdLower) {
+                purchaseQty += (item.Qty || item.qty || 1);
+              }
             }
           }
 

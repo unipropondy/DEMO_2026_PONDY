@@ -726,6 +726,25 @@ async function initDB(pool) {
       END
     `);
 
+    // 25.1. Loyalty tables schema/columns migrations (Phase 1)
+    await runQuery("Migration - LoyaltyRule Type & PurchaseDishGroupId", `
+      IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[LoyaltyRule]') AND type in (N'U'))
+      BEGIN
+          IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[LoyaltyRule]') AND name = 'LoyaltyType')
+          BEGIN
+              ALTER TABLE [dbo].[LoyaltyRule] ADD [LoyaltyType] NVARCHAR(50) NOT NULL DEFAULT 'Dish';
+          END
+
+          IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[LoyaltyRule]') AND name = 'PurchaseDishGroupId')
+          BEGIN
+              ALTER TABLE [dbo].[LoyaltyRule] ADD [PurchaseDishGroupId] UNIQUEIDENTIFIER NULL;
+          END
+
+          -- Ensure PurchaseDishId is nullable
+          ALTER TABLE [dbo].[LoyaltyRule] ALTER COLUMN [PurchaseDishId] UNIQUEIDENTIFIER NULL;
+      END
+    `);
+
     console.log("✅ Database schema and performance indexes are up to date.");
 
 

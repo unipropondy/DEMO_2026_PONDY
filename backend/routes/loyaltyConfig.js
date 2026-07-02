@@ -15,8 +15,11 @@ router.get("/", async (req, res) => {
       SELECT 
         r.RuleId,
         r.CampaignId,
+        r.LoyaltyType,
         r.PurchaseDishId,
         pd.Name AS PurchaseDishName,
+        r.PurchaseDishGroupId,
+        dg.DishGroupName AS PurchaseDishGroupName,
         r.RewardDishId,
         rd.Name AS RewardDishName,
         r.RequiredBills,
@@ -28,6 +31,7 @@ router.get("/", async (req, res) => {
       FROM LoyaltyRule r
       INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
       LEFT JOIN DishMaster pd ON r.PurchaseDishId = pd.DishId
+      LEFT JOIN DishGroupMaster dg ON r.PurchaseDishGroupId = dg.DishGroupId
       LEFT JOIN DishMaster rd ON r.RewardDishId = rd.DishId
       ORDER BY r.CreatedOn DESC
     `);
@@ -41,10 +45,20 @@ router.get("/", async (req, res) => {
 // ================= SAVE / CREATE CONFIGURATION =================
 router.post("/save", async (req, res) => {
   try {
-    const { ruleId, campaignName, purchaseDishId, rewardDishId, requiredBills, isActive, startDate, endDate } = req.body;
+    const { ruleId, campaignName, loyaltyType, purchaseDishId, purchaseDishGroupId, rewardDishId, requiredBills, isActive, startDate, endDate } = req.body;
 
-    if (!campaignName || !purchaseDishId || !rewardDishId || !requiredBills) {
-      return res.status(400).json({ error: "Missing required fields: campaignName, purchaseDishId, rewardDishId, requiredBills" });
+    const type = loyaltyType || "Dish";
+
+    if (!campaignName || !rewardDishId || !requiredBills) {
+      return res.status(400).json({ error: "Missing required fields: campaignName, rewardDishId, requiredBills" });
+    }
+
+    if (type === "Dish" && !purchaseDishId) {
+      return res.status(400).json({ error: "Purchase dish is required for Dish loyalty." });
+    }
+
+    if (type === "DishGroup" && !purchaseDishGroupId) {
+      return res.status(400).json({ error: "Purchase dish group is required for Dish Group loyalty." });
     }
 
     const billsCount = parseInt(requiredBills);
@@ -55,27 +69,59 @@ router.post("/save", async (req, res) => {
     const pool = await poolPromise;
     const ruleActiveState = isActive === undefined ? 1 : (isActive ? 1 : 0);
 
-    // 1. Validation: Verify dishes exist
-    const dishCheck = await pool.request()
-      .input("PurchaseId", sql.UniqueIdentifier, purchaseDishId)
-      .input("RewardId", sql.UniqueIdentifier, rewardDishId)
-      .query(`
-        SELECT DishId FROM DishMaster WHERE DishId IN (@PurchaseId, @RewardId)
-      `);
-    
-    if (dishCheck.recordset.length < (purchaseDishId === rewardDishId ? 1 : 2)) {
-      return res.status(400).json({ error: "One or both selected dishes do not exist in DishMaster." });
+    // 1. Validation: Verify dishes / groups exist
+    if (type === "Dish") {
+      const dishCheck = await pool.request()
+        .input("PurchaseId", sql.UniqueIdentifier, purchaseDishId)
+        .input("RewardId", sql.UniqueIdentifier, rewardDishId)
+        .query(`
+          SELECT DishId FROM DishMaster WHERE DishId IN (@PurchaseId, @RewardId)
+        `);
+      
+      if (dishCheck.recordset.length < (purchaseDishId === rewardDishId ? 1 : 2)) {
+        return res.status(400).json({ error: "One or both selected dishes do not exist in DishMaster." });
+      }
+    } else {
+      const groupCheck = await pool.request()
+        .input("GroupId", sql.UniqueIdentifier, purchaseDishGroupId)
+        .query(`
+          SELECT DishGroupId FROM DishGroupMaster WHERE DishGroupId = @GroupId
+        `);
+      
+      if (groupCheck.recordset.length === 0) {
+        return res.status(400).json({ error: "Selected dish group does not exist." });
+      }
+
+      const rewardCheck = await pool.request()
+        .input("RewardId", sql.UniqueIdentifier, rewardDishId)
+        .query(`
+          SELECT DishId FROM DishMaster WHERE DishId = @RewardId
+        `);
+      
+      if (rewardCheck.recordset.length === 0) {
+        return res.status(400).json({ error: "Selected reward dish does not exist." });
+      }
     }
 
-    // 2. Validation: Prevent duplicate active rules for same purchase dish
+    // 2. Validation: Prevent duplicate active rules for same target
     if (ruleActiveState === 1) {
-      const dupQuery = pool.request()
-        .input("PurchaseId", sql.UniqueIdentifier, purchaseDishId);
+      const dupQuery = pool.request();
+      let dupSql = "";
       
-      let dupSql = `
-        SELECT RuleId FROM LoyaltyRule 
-        WHERE PurchaseDishId = @PurchaseId AND IsActive = 1
-      `;
+      if (type === "Dish") {
+        dupQuery.input("PurchaseId", sql.UniqueIdentifier, purchaseDishId);
+        dupSql = `
+          SELECT RuleId FROM LoyaltyRule 
+          WHERE PurchaseDishId = @PurchaseId AND LoyaltyType = 'Dish' AND IsActive = 1
+        `;
+      } else {
+        dupQuery.input("GroupId", sql.UniqueIdentifier, purchaseDishGroupId);
+        dupSql = `
+          SELECT RuleId FROM LoyaltyRule 
+          WHERE PurchaseDishGroupId = @GroupId AND LoyaltyType = 'DishGroup' AND IsActive = 1
+        `;
+      }
+
       if (ruleId) {
         dupQuery.input("RuleId", sql.UniqueIdentifier, ruleId);
         dupSql += " AND RuleId <> @RuleId";
@@ -83,7 +129,7 @@ router.post("/save", async (req, res) => {
 
       const dupRes = await dupQuery.query(dupSql);
       if (dupRes.recordset.length > 0) {
-        return res.status(400).json({ error: "An active loyalty configuration already exists for this purchase dish." });
+        return res.status(400).json({ error: `An active loyalty configuration already exists for this purchase ${type === "Dish" ? "dish" : "group"}.` });
       }
     }
 
@@ -96,7 +142,6 @@ router.post("/save", async (req, res) => {
     try {
       if (ruleId) {
         // --- UPDATE ---
-        // Fetch existing CampaignId
         const existingRule = await transaction.request()
           .input("RuleId", sql.UniqueIdentifier, ruleId)
           .query("SELECT CampaignId FROM LoyaltyRule WHERE RuleId = @RuleId");
@@ -122,13 +167,17 @@ router.post("/save", async (req, res) => {
         // Update Rule
         await transaction.request()
           .input("RuleId", sql.UniqueIdentifier, ruleId)
-          .input("PurchaseDishId", sql.UniqueIdentifier, purchaseDishId)
+          .input("LoyaltyType", sql.NVarChar(50), type)
+          .input("PurchaseDishId", sql.UniqueIdentifier, type === "Dish" ? purchaseDishId : null)
+          .input("PurchaseDishGroupId", sql.UniqueIdentifier, type === "DishGroup" ? purchaseDishGroupId : null)
           .input("RewardDishId", sql.UniqueIdentifier, rewardDishId)
           .input("RequiredBills", sql.Int, billsCount)
           .input("IsActive", sql.Bit, ruleActiveState)
           .query(`
             UPDATE LoyaltyRule
-            SET PurchaseDishId = @PurchaseDishId,
+            SET LoyaltyType = @LoyaltyType,
+                PurchaseDishId = @PurchaseDishId,
+                PurchaseDishGroupId = @PurchaseDishGroupId,
                 RewardDishId = @RewardDishId,
                 RequiredBills = @RequiredBills,
                 IsActive = @IsActive
@@ -151,13 +200,15 @@ router.post("/save", async (req, res) => {
 
         await transaction.request()
           .input("CampaignId", sql.UniqueIdentifier, campaignId)
-          .input("PurchaseDishId", sql.UniqueIdentifier, purchaseDishId)
+          .input("LoyaltyType", sql.NVarChar(50), type)
+          .input("PurchaseDishId", sql.UniqueIdentifier, type === "Dish" ? purchaseDishId : null)
+          .input("PurchaseDishGroupId", sql.UniqueIdentifier, type === "DishGroup" ? purchaseDishGroupId : null)
           .input("RewardDishId", sql.UniqueIdentifier, rewardDishId)
           .input("RequiredBills", sql.Int, billsCount)
           .input("IsActive", sql.Bit, ruleActiveState)
           .query(`
-            INSERT INTO LoyaltyRule (RuleId, CampaignId, PurchaseDishId, RewardDishId, RequiredBills, IsActive)
-            VALUES (NEWID(), @CampaignId, @PurchaseDishId, @RewardDishId, @RequiredBills, @IsActive)
+            INSERT INTO LoyaltyRule (RuleId, CampaignId, LoyaltyType, PurchaseDishId, PurchaseDishGroupId, RewardDishId, RequiredBills, IsActive)
+            VALUES (NEWID(), @CampaignId, @LoyaltyType, @PurchaseDishId, @PurchaseDishGroupId, @RewardDishId, @RequiredBills, @IsActive)
           `);
       }
 
@@ -190,24 +241,36 @@ router.patch("/:id/toggle", async (req, res) => {
     if (targetState === 1) {
       const currentRule = await pool.request()
         .input("RuleId", sql.UniqueIdentifier, id)
-        .query("SELECT PurchaseDishId FROM LoyaltyRule WHERE RuleId = @RuleId");
+        .query("SELECT LoyaltyType, PurchaseDishId, PurchaseDishGroupId FROM LoyaltyRule WHERE RuleId = @RuleId");
       
       if (currentRule.recordset.length === 0) {
         return res.status(404).json({ error: "Loyalty configuration not found." });
       }
 
-      const purchaseDishId = currentRule.recordset[0].PurchaseDishId;
+      const { LoyaltyType, PurchaseDishId, PurchaseDishGroupId } = currentRule.recordset[0];
+      const type = LoyaltyType || "Dish";
 
-      const dupCheck = await pool.request()
-        .input("PurchaseId", sql.UniqueIdentifier, purchaseDishId)
-        .input("RuleId", sql.UniqueIdentifier, id)
-        .query(`
+      const dupQuery = pool.request().input("RuleId", sql.UniqueIdentifier, id);
+      let dupSql = "";
+
+      if (type === "Dish") {
+        dupQuery.input("PurchaseId", sql.UniqueIdentifier, PurchaseDishId);
+        dupSql = `
           SELECT RuleId FROM LoyaltyRule 
-          WHERE PurchaseDishId = @PurchaseId AND IsActive = 1 AND RuleId <> @RuleId
-        `);
+          WHERE PurchaseDishId = @PurchaseId AND LoyaltyType = 'Dish' AND IsActive = 1 AND RuleId <> @RuleId
+        `;
+      } else {
+        dupQuery.input("GroupId", sql.UniqueIdentifier, PurchaseDishGroupId);
+        dupSql = `
+          SELECT RuleId FROM LoyaltyRule 
+          WHERE PurchaseDishGroupId = @GroupId AND LoyaltyType = 'DishGroup' AND IsActive = 1 AND RuleId <> @RuleId
+        `;
+      }
+
+      const dupCheck = await dupQuery.query(dupSql);
       
       if (dupCheck.recordset.length > 0) {
-        return res.status(400).json({ error: "An active loyalty configuration already exists for this purchase dish." });
+        return res.status(400).json({ error: `An active loyalty configuration already exists for this purchase ${type === "Dish" ? "dish" : "group"}.` });
       }
     }
 
