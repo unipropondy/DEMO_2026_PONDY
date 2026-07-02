@@ -34,6 +34,7 @@ export default function CompanySettingsScreen() {
   const [kitchenPrinters, setKitchenPrinters] = useState<any[]>([]);
   const [cashierIp, setCashierIp] = useState('');
   const [takeawayIp, setTakeawayIp] = useState('');
+  const [kdsIp, setKdsIp] = useState('');
   const [loadingKitchens, setLoadingKitchens] = useState(false);
   const [showAddPrinterModal, setShowAddPrinterModal] = useState(false);
   const [newPrinterName, setNewPrinterName] = useState('');
@@ -100,6 +101,12 @@ export default function CompanySettingsScreen() {
         const takeaway = data.find(p => p.PrinterType === 3);
         if (takeaway) {
           setTakeawayIp(takeaway.PrinterPath || '');
+        }
+
+        // Find KDS printer (PrinterType = 4)
+        const kds = data.find(p => p.PrinterType === 4);
+        if (kds) {
+          setKdsIp(kds.PrinterPath || '');
         }
 
         // Filter and Deduplicate Kitchen printers (PrinterType = 2)
@@ -206,6 +213,12 @@ export default function CompanySettingsScreen() {
           ip: takeawayIp,
           type: 3,
           name: 'TakeAway'
+        },
+        {
+          id: 9,
+          ip: kdsIp,
+          type: 4,
+          name: 'KDS Printer'
         },
         ...kitchenPrinters.map(kp => ({
           id: kp.KitchenTypeValue,
@@ -588,6 +601,21 @@ export default function CompanySettingsScreen() {
               />
               <Text style={[styles.note, { textAlign: 'left', marginTop: 5 }]}>
                 Used for printing Takeaway receipts and dockets.
+              </Text>
+            </View>
+
+            <View style={{ marginTop: 15 }}>
+              <Text style={styles.inputLabel}>KDS Printer IP</Text>
+              <TextInput 
+                style={styles.input}
+                value={kdsIp}
+                onChangeText={setKdsIp}
+                placeholder="e.g. 192.168.1.105"
+                placeholderTextColor={Theme.textMuted}
+                keyboardType="numeric"
+              />
+              <Text style={[styles.note, { textAlign: 'left', marginTop: 5 }]}>
+                Used exclusively for printing KDS orders.
               </Text>
             </View>
           </View>

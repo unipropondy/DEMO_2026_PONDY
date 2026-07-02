@@ -394,7 +394,7 @@ class UniversalPrinter {
   private static async logPrintJob(
     orderId: string,
     orderNo: string,
-    type: "NEW" | "ADDITIONAL" | "REPRINT"
+    type: "NEW" | "ADDITIONAL" | "REPRINT" | "KDS_PRINT"
   ): Promise<void> {
     try {
       const baseUrl = API_URL;
@@ -416,10 +416,121 @@ class UniversalPrinter {
     }
   }
 
+  static async printKDSOrder(
+    orderData: any,
+    userId?: string | number,
+    kdsPrinterIp?: string,
+  ): Promise<boolean> {
+    if (Platform.OS === "web") {
+      try {
+        const isOnline = await this.isBridgeOnline();
+        if (!isOnline) {
+          console.log("📡 [Web Print Bridge] Bridge is OFFLINE. Direct fallback to preview.");
+          const html = this.generateKOTHTML(orderData, "KDS_PRINT");
+          let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
+          if (!frame) {
+            frame = document.createElement("iframe");
+            frame.id = "kot-print-iframe";
+            frame.style.display = "none";
+            document.body.appendChild(frame);
+          }
+
+          const doc = frame.contentWindow?.document || frame.contentDocument;
+          if (doc) {
+            doc.open();
+            doc.write(html);
+            doc.close();
+
+            const triggerPrint = () => {
+              frame.contentWindow?.focus();
+              frame.contentWindow?.print();
+            };
+
+            frame.contentWindow?.addEventListener("load", triggerPrint);
+            setTimeout(triggerPrint, 50);
+          }
+          await this.logPrintJob(orderData.orderId, orderData.orderNo, "REPRINT");
+          return true;
+        }
+
+        const text = this.formatKOTThermalText(orderData, "KDS_PRINT");
+        console.log(`📡 [Web Print Bridge] Queueing KDS print`);
+        const success = await this.queuePrintJob(4, undefined, text);
+        if (success) {
+          await this.logPrintJob(orderData.orderId, orderData.orderNo, "REPRINT");
+          return true;
+        }
+
+        // Web Fallback: If Print Bridge failed, trigger iframe preview
+        console.log("⚠️ [Web KDS Print] Print Bridge queue failed. Falling back to iframe print preview.");
+        const html = this.generateKOTHTML(orderData, "KDS_PRINT");
+        let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
+        if (!frame) {
+          frame = document.createElement("iframe");
+          frame.id = "kot-print-iframe";
+          frame.style.display = "none";
+          document.body.appendChild(frame);
+        }
+
+        const doc = frame.contentWindow?.document || frame.contentDocument;
+        if (doc) {
+          doc.open();
+          doc.write(html);
+          doc.close();
+
+          const triggerPrint = () => {
+            frame.contentWindow?.focus();
+            frame.contentWindow?.print();
+          };
+
+          frame.contentWindow?.addEventListener("load", triggerPrint);
+          setTimeout(triggerPrint, 800);
+        }
+        await this.logPrintJob(orderData.orderId, orderData.orderNo, "REPRINT");
+        return true;
+      } catch (err) {
+        console.warn("[Web Print Bridge] KDS Print failed, falling back to iframe print preview:", err);
+        try {
+          const html = this.generateKOTHTML(orderData, "KDS_PRINT");
+          let frame = document.getElementById("kot-print-iframe") as HTMLIFrameElement;
+          if (!frame) {
+            frame = document.createElement("iframe");
+            frame.id = "kot-print-iframe";
+            frame.style.display = "none";
+            document.body.appendChild(frame);
+          }
+
+          const doc = frame.contentWindow?.document || frame.contentDocument;
+          if (doc) {
+            doc.open();
+            doc.write(html);
+            doc.close();
+
+            const triggerPrint = () => {
+              frame.contentWindow?.focus();
+              frame.contentWindow?.print();
+            };
+
+            frame.contentWindow?.addEventListener("load", triggerPrint);
+            setTimeout(triggerPrint, 800);
+          }
+          await this.logPrintJob(orderData.orderId, orderData.orderNo, "REPRINT");
+          return true;
+        } catch (fallbackErr) {
+          console.error("Web KDS print fallback failed:", fallbackErr);
+          return false;
+        }
+      }
+    }
+
+    // Mobile/Native
+    return this.printKOT(orderData, userId, "KDS_PRINT", kdsPrinterIp);
+  }
+
   static async printKOT(
     orderData: any,
     userId?: string | number,
-    type: "NEW" | "ADDITIONAL" | "REPRINT" = "NEW",
+    type: "NEW" | "ADDITIONAL" | "REPRINT" | "KDS_PRINT" = "NEW",
     printerIpOverride?: string,
   ): Promise<boolean> {
     if (Platform.OS === "web") {
@@ -618,11 +729,13 @@ class UniversalPrinter {
 
   private static generateKOTHTML(data: any, type: string): string {
     let title =
-      type === "REPRINT"
-        ? "REPRINT"
-        : type === "ADDITIONAL"
-          ? "ADDITIONAL"
-          : "NEW ORDER";
+      type === "KDS_PRINT"
+        ? "KDS PRINT"
+        : type === "REPRINT"
+          ? "REPRINT"
+          : type === "ADDITIONAL"
+            ? "ADDITIONAL"
+            : "NEW ORDER";
     title = title.replace(/\s*KOT\s*/gi, "").trim();
 
     const items = data.items || [];
@@ -708,16 +821,16 @@ class UniversalPrinter {
           }
           
           .item-qty {
-            font-size: 32px;
-            font-weight: bold;
+            font-size: 20px;
+            font-weight: 600;
             width: 50px;
             line-height: 1;
             margin-right: 8px;
           }
           
           .item-name {
-            font-size: 24px;
-            font-weight: bold;
+            font-size: 16px;
+            font-weight: 600;
             flex: 1;
             line-height: 1.1;
           }
@@ -779,66 +892,107 @@ class UniversalPrinter {
           </div>
 
           <div class="item-list">
-            ${items
-              .map((item: any) => {
-                const noteText =
-                  item.note || item.notes || item.Remarks || item.remarks;
+            ${(() => {
+              if (type === "KDS_PRINT") {
+                const kitchenGroups: Record<string, any[]> = {};
+                items.forEach((item: any) => {
+                  const kName = (item.KitchenTypeName || item.kitchenTypeName || item.dishGroupName || item.categoryName || "KITCHEN").toUpperCase().trim();
+                  if (!kitchenGroups[kName]) kitchenGroups[kName] = [];
+                  kitchenGroups[kName].push(item);
+                });
+
+                return Object.entries(kitchenGroups).map(([kName, groupItems]) => {
+                  return `
+                    <div style="font-size: 18px; font-weight: bold; margin-top: 15px; border-bottom: 2px solid #000; padding-bottom: 3px; text-transform: uppercase;">
+                      <b>${kName}</b>
+                    </div>
+                    ${groupItems.map((item: any) => {
+                      const noteText = item.note || item.notes || item.Remarks || item.remarks;
+                      return `
+                        <div class="item-row">
+                          <div class="item-main">
+                            <div class="item-qty">${item.quantity || item.qty || 1}</div>
+                            <div class="item-name">
+                              ${item.name}
+                              ${item.songName || item.SongName ? `<div style="font-size: 20px; font-weight: normal; color: #555; margin-top: 4px;">🎵 ${item.songName || item.SongName}</div>` : ''}
+                            </div>
+                          </div>
+                          ${
+                            item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway
+                              ? `<div class="modifier-list"><span class="modifier-item" style="font-weight: bold;">- Takeaway</span></div>`
+                              : ""
+                          }
+                          ${
+                            item.modifiers && item.modifiers.length > 0
+                              ? `<div class="modifier-list">${item.modifiers.map((m: any) => `<span class="modifier-item">- ${m.name || m.ModifierName}</span>`).join("")}</div>`
+                              : ""
+                          }
+                          ${noteText ? `<div class="remarks">* NOTE: ${noteText}</div>` : ""}
+                        </div>
+                      `;
+                    }).join("")}
+                  `;
+                }).join("");
+              }
+
+              return items.map((item: any) => {
+                const noteText = item.note || item.notes || item.Remarks || item.remarks;
                 return `
-                <div class="item-row">
-                  <div class="item-main">
-                    <div class="item-qty">${item.quantity || item.qty || 1}</div>
-                    <div class="item-name">
-                      ${item.name}
-                      ${item.songName || item.SongName ? `<div style="font-size: 20px; font-weight: normal; color: #555; margin-top: 4px;">🎵 ${item.songName || item.SongName}</div>` : ''}
+                  <div class="item-row">
+                    <div class="item-main">
+                      <div class="item-qty">${item.quantity || item.qty || 1}</div>
+                      <div class="item-name">
+                        ${item.name}
+                        ${item.songName || item.SongName ? `<div style="font-size: 20px; font-weight: normal; color: #555; margin-top: 4px;">🎵 ${item.songName || item.SongName}</div>` : ''}
+                      </div>
                     </div>
+                    ${
+                      item.isTakeaway ||
+                      item.IsTakeaway ||
+                      item.isTakeAway ||
+                      item.IsTakeAway
+                        ? `
+                      <div class="modifier-list">
+                        <span class="modifier-item" style="font-weight: bold;">- Takeaway</span>
+                      </div>
+                    `
+                        : ""
+                    }
+                    ${
+                      item.modifiers && item.modifiers.length > 0
+                        ? `
+                      <div class="modifier-list">
+                        ${item.modifiers
+                          .map(
+                            (m: any) => `
+                          <span class="modifier-item">- ${m.name || m.ModifierName}</span>
+                        `,
+                          )
+                          .join("")}
+                      </div>
+                    `
+                        : ""
+                    }
+                    ${
+                      noteText
+                        ? `
+                      <div class="remarks">
+                        * NOTE: ${noteText}
+                      </div>
+                    `
+                        : ""
+                    }
                   </div>
-                  ${
-                    item.isTakeaway ||
-                    item.IsTakeaway ||
-                    item.isTakeAway ||
-                    item.IsTakeAway
-                      ? `
-                    <div class="modifier-list">
-                      <span class="modifier-item" style="font-weight: bold;">- Takeaway</span>
-                    </div>
-                  `
-                      : ""
-                  }
-                  ${
-                    item.modifiers && item.modifiers.length > 0
-                      ? `
-                    <div class="modifier-list">
-                      ${item.modifiers
-                        .map(
-                          (m: any) => `
-                        <span class="modifier-item">- ${m.name || m.ModifierName}</span>
-                      `,
-                        )
-                        .join("")}
-                    </div>
-                  `
-                      : ""
-                  }
-                  ${
-                    noteText
-                      ? `
-                    <div class="remarks">
-                      * NOTE: ${noteText}
-                    </div>
-                  `
-                      : ""
-                  }
-                </div>
-              `;
-              })
-              .join("")}
+                `;
+              }).join("");
+            })()}
           </div>
 
           <div class="footer">
             Order By : ${waiter} #OR-${orderNo}
           </div>
 
-          <div class="kitchen-name">${kitchenName}</div>
+          ${kitchenName && kitchenName !== "KDS" ? `<div class="kitchen-name">${kitchenName}</div>` : ""}
         </div>
       </body>
       </html>
@@ -847,11 +1001,13 @@ class UniversalPrinter {
 
   private static formatKOTThermalText(data: any, type: string): string {
     const title =
-      type === "REPRINT"
-        ? "REPRINT"
-        : type === "ADDITIONAL"
-          ? "ADDITIONAL"
-          : "NEW ORDER";
+      type === "KDS_PRINT"
+        ? "KDS PRINT"
+        : type === "REPRINT"
+          ? "REPRINT"
+          : type === "ADDITIONAL"
+            ? "ADDITIONAL"
+            : "NEW ORDER";
     const items = data.items || [];
     const tableNo = data.tableNo || "N/A";
     const waiter = data.waiterName || "Staff";
@@ -871,46 +1027,94 @@ class UniversalPrinter {
     text += "[L]QTY  ITEM\n";
     text += "[L]--------------------------------\n";
 
-    items.forEach((item: any) => {
-      const qtyNum = item.quantity || item.qty || 1;
-      const itemName = item.name || item.DishName || "";
+    if (type === "KDS_PRINT") {
+      const kitchenGroups: Record<string, any[]> = {};
+      items.forEach((item: any) => {
+        const kName = (item.KitchenTypeName || item.kitchenTypeName || item.dishGroupName || item.categoryName || "KITCHEN").toUpperCase().trim();
+        if (!kitchenGroups[kName]) kitchenGroups[kName] = [];
+        kitchenGroups[kName].push(item);
+      });
 
-      // 🚀 Square brackets [1] make quantity very clear and avoid alignment drift
-      text += `[L]<font size='big'>[${qtyNum}] ${itemName}</font>\n`;
+      for (const [kName, groupItems] of Object.entries(kitchenGroups)) {
+        text += `\n[L]<B>${kName}</B>\n`;
+        text += "[L]--------------------------------\n";
+        
+        groupItems.forEach((item: any) => {
+          const qtyNum = item.quantity || item.qty || 1;
+          const itemName = item.name || item.DishName || "";
+          text += `[L]<font size='big'>[${qtyNum}] ${itemName}</font>\n`;
 
-      const songName = item.songName || item.SongName || "";
-      if (songName) {
-        text += `[L]    🎵 ${songName}\n`;
-      }
+          const songName = item.songName || item.SongName || "";
+          if (songName) {
+            text += `[L]    🎵 ${songName}\n`;
+          }
 
-      const isTw = !!(
-        item.isTakeaway ||
-        item.IsTakeaway ||
-        item.isTakeAway ||
-        item.IsTakeAway
-      );
-      if (isTw) {
-        text += `[L]    - Takeaway\n`;
-      }
+          const isTw = !!(
+            item.isTakeaway ||
+            item.IsTakeaway ||
+            item.isTakeAway ||
+            item.IsTakeAway
+          );
+          if (isTw) {
+            text += `[L]    - Takeaway\n`;
+          }
 
-      if (item.modifiers && item.modifiers.length > 0) {
-        item.modifiers.forEach((m: any) => {
-          text += `[L]    + ${m.ModifierName || m.name}\n`;
+          if (item.modifiers && item.modifiers.length > 0) {
+            item.modifiers.forEach((m: any) => {
+              text += `[L]    + ${m.ModifierName || m.name}\n`;
+            });
+          }
+
+          const noteText = item.note || item.notes || item.Remarks || item.remarks;
+          if (noteText) {
+            text += `[L]    * NOTE: ${noteText}\n`;
+          }
         });
+        
+        text += "[L]--------------------------------\n";
       }
+    } else {
+      items.forEach((item: any) => {
+        const qtyNum = item.quantity || item.qty || 1;
+        const itemName = item.name || item.DishName || "";
 
-      const noteText = item.note || item.notes || item.Remarks || item.remarks;
-      if (noteText) {
-        text += `[L]    * NOTE: ${noteText}\n`;
-      }
+        // 🚀 Square brackets [1] make quantity very clear and avoid alignment drift
+        text += `[L]<font size='big'>[${qtyNum}] ${itemName}</font>\n`;
 
-      text += "[L]--------------------------------\n";
-    });
+        const songName = item.songName || item.SongName || "";
+        if (songName) {
+          text += `[L]    🎵 ${songName}\n`;
+        }
+
+        const isTw = !!(
+          item.isTakeaway ||
+          item.IsTakeaway ||
+          item.isTakeAway ||
+          item.IsTakeAway
+        );
+        if (isTw) {
+          text += `[L]    - Takeaway\n`;
+        }
+
+        if (item.modifiers && item.modifiers.length > 0) {
+          item.modifiers.forEach((m: any) => {
+            text += `[L]    + ${m.ModifierName || m.name}\n`;
+          });
+        }
+
+        const noteText = item.note || item.notes || item.Remarks || item.remarks;
+        if (noteText) {
+          text += `[L]    * NOTE: ${noteText}\n`;
+        }
+
+        text += "[L]--------------------------------\n";
+      });
+    }
 
     text += `[L]Order By: ${waiter}\n`;
     text += `[L]Order #: ${orderNo}\n`;
 
-    if (kitchenName) {
+    if (kitchenName && kitchenName !== "KDS") {
       text += "[L]--------------------------------\n";
       text += `[C]<font size='big'><B>${kitchenName.toUpperCase()}</B></font>\n`;
     }

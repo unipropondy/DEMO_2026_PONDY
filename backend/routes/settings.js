@@ -107,6 +107,17 @@ router.get("/kitchen-printers", async (req, res) => {
       `);
     }
 
+    // 2.5 Self-healing check for KDS Printer (PrinterType = 4)
+    const kdsCheck = await pool.request()
+      .query("SELECT COUNT(*) as count FROM PrintMaster WHERE PrinterType = 4 AND IsActive = 1");
+    if (kdsCheck.recordset[0].count === 0) {
+      console.log("🛠️ Inserting default KDS Printer row into PrintMaster...");
+      await pool.request().query(`
+        INSERT INTO PrintMaster (PrinterId, PrinterName, PrinterPath, PrinterIP, PrinterType, PrintSection, KitchenTypeName, KitchenTypeValue, IsActive, PrintCopy)
+        VALUES (NEWID(), 'KDS Printer', '', '', 4, 1, 'KDS Printer', 9, 1, 1)
+      `);
+    }
+
     // 3. Fetch active categories (matching menu.js kitchens endpoint structure)
     const activeCatsResult = await pool.request().query(`
       SELECT cm.CategoryId, cm.CategoryName AS KitchenTypeName, ckt.KitchenTypeCode
@@ -138,6 +149,10 @@ router.get("/kitchen-printers", async (req, res) => {
     // Add TakeAway printer (PrinterType = 3)
     const takeawayPrinter = allPrinters.find(p => p.PrinterType === 3);
     if (takeawayPrinter) responsePrinters.push(takeawayPrinter);
+
+    // Add KDS printer (PrinterType = 4)
+    const kdsPrinter = allPrinters.find(p => p.PrinterType === 4);
+    if (kdsPrinter) responsePrinters.push(kdsPrinter);
 
     // Map active categories to kitchen printers (PrinterType = 2)
     const seenCodes = new Set();

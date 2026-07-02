@@ -587,7 +587,7 @@ class SunmiPrinterService {
     }
   }
 
-  static async printKOT(data: any, type: "NEW" | "ADDITIONAL" | "REPRINT" = "NEW"): Promise<boolean> {
+  static async printKOT(data: any, type: "NEW" | "ADDITIONAL" | "REPRINT" | "KDS_PRINT" = "NEW"): Promise<boolean> {
     try {
       if (!SunmiModule) {
         const initialized = await this.init();
@@ -608,7 +608,7 @@ class SunmiPrinterService {
         reset: is80mm ? 20 : 24,
       };
 
-      const title = type === "REPRINT" ? "REPRINT" : type === "ADDITIONAL" ? "ADDITIONAL" : "NEW ORDER";
+      const title = type === "KDS_PRINT" ? "KDS PRINT" : type === "REPRINT" ? "REPRINT" : type === "ADDITIONAL" ? "ADDITIONAL" : "NEW ORDER";
       const items = data.items || [];
       const tableNo = data.tableNo || "N/A";
       const orderNo = data.orderNo || data.orderId || "N/A";

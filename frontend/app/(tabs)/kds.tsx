@@ -21,6 +21,7 @@ import { Fonts } from "../../constants/Fonts";
 import { Theme } from "../../constants/theme";
 import { OrderItem, useActiveOrdersStore } from "../../stores/activeOrdersStore";
 import { useAuthStore } from "../../stores/authStore";
+import { API_URL } from "../../constants/Config";
 
 const URGENCY_FRESH = 15;
 const URGENCY_WARN = 30;
@@ -113,20 +114,6 @@ const OrderCard = React.memo(function OrderCard({ item, cardHeight, pulseAnim, g
               ? `${formatSection(item.context.section)} • Table ${item.context.tableNo}`
               : `Takeaway • #${item.context.takeawayNo || item.orderId.slice(-4)}`}
           </Text>
-          {item.items?.some((i: any) => i.status === "SENT" || i.status === "NEW") && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.cardHeaderReadyBtn,
-                pressed && { opacity: 0.7 }
-              ]}
-              onPress={(e) => {
-                e.stopPropagation();
-                item.onMarkAllReady?.(item);
-              }}
-            >
-              <Text style={styles.cardHeaderReadyBtnText}>READY ALL</Text>
-            </Pressable>
-          )}
           <Animated.Text style={[styles.timer, { color: ui.primary, opacity: timerOpacity }]}>
             {minutes}:{seconds.toString().padStart(2, "00")}
           </Animated.Text>
@@ -138,19 +125,56 @@ const OrderCard = React.memo(function OrderCard({ item, cardHeight, pulseAnim, g
             <Text style={[styles.statusBadgeText, { color: ui.primary }]}>{ui.label}</Text>
           </View>
         </View>
-        {/* 🍽️ LIVE ITEM COUNT BADGES */}
-        <View style={styles.itemCountRow}>
-          <View style={styles.itemCountBadge}>
-            <Ionicons name="layers-outline" size={11} color={ui.primary} />
-            <Text style={[styles.itemCountText, { color: ui.primary }]}>
-              {totalQty} item{totalQty !== 1 ? 's' : ''}
-            </Text>
+        
+        {/* 🍽️ LIVE ITEM COUNT & ACTIONS ROW */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, flexWrap: 'wrap', gap: 6 }}>
+          {/* Left Side: Badges */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.itemCountBadge}>
+              <Ionicons name="layers-outline" size={11} color={ui.primary} />
+              <Text style={[styles.itemCountText, { color: ui.primary }]}>
+                {totalQty} item{totalQty !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            <View style={styles.itemCountBadgeMuted}>
+              <Ionicons name="restaurant-outline" size={11} color="#666" />
+              <Text style={styles.itemCountMutedText}>
+                {totalUniqueDishes} dish{totalUniqueDishes !== 1 ? 'es' : ''}
+              </Text>
+            </View>
           </View>
-          <View style={styles.itemCountBadgeMuted}>
-            <Ionicons name="restaurant-outline" size={11} color="#666" />
-            <Text style={styles.itemCountMutedText}>
-              {totalUniqueDishes} dish{totalUniqueDishes !== 1 ? 'es' : ''}
-            </Text>
+
+          {/* Right Side: PRINT & READY ALL */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.cardHeaderPrintBtn,
+                pressed && { opacity: 0.7 },
+                { marginRight: 0 }
+              ]}
+              onPress={(e) => {
+                e.stopPropagation();
+                item.onPrint?.(item);
+              }}
+            >
+              <Ionicons name="print-outline" size={12} color="#FFF" />
+              <Text style={styles.cardHeaderPrintBtnText}>PRINT</Text>
+            </Pressable>
+            {item.items?.some((i: any) => i.status === "SENT" || i.status === "NEW") && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cardHeaderReadyBtn,
+                  pressed && { opacity: 0.7 },
+                  { marginRight: 0 }
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  item.onMarkAllReady?.(item);
+                }}
+              >
+                <Text style={styles.cardHeaderReadyBtnText}>READY ALL</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       </View>
@@ -273,18 +297,35 @@ export default function KDSScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const scrollOffset = useRef(0);
-
   const [time, setTime] = useState(Date.now());
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [kdsPrinterIp, setKdsPrinterIp] = useState("");
   const markItemReady = useActiveOrdersStore((s) => s.markItemReady);
-
+ 
   const pulseAnim = useRef(new Animated.Value(1)).current;
-
+ 
   useEffect(() => {
     const store = useActiveOrdersStore.getState();
     store.fetchActiveKitchenOrders();
     store.initializeSocketListeners();
     
+    // Fetch KDS Printer IP configuration
+    const fetchKdsPrinter = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/settings/kitchen-printers`);
+        const printers = await res.json();
+        if (Array.isArray(printers)) {
+          const kds = printers.find((p: any) => p.PrinterType === 4);
+          if (kds?.PrinterPath) {
+            setKdsPrinterIp(kds.PrinterPath.trim());
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch KDS printer IP on KDS screen:", e);
+      }
+    };
+    fetchKdsPrinter();
+     
     const interval = setInterval(() => setTime(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
@@ -358,7 +399,7 @@ export default function KDSScreen() {
       .map(group => {
         const itemGroups: Record<string, OrderItem[]> = {};
         group.items.forEach((i: any) => {
-          const cat = (i.dishGroupName || i.categoryName || "KITCHEN").toUpperCase();
+          const cat = (i.KitchenTypeName || i.kitchenTypeName || i.dishGroupName || i.categoryName || "KITCHEN").toUpperCase();
           if (!itemGroups[cat]) itemGroups[cat] = [];
           itemGroups[cat].push(i);
         });
@@ -426,6 +467,25 @@ export default function KDSScreen() {
     }
   };
 
+  const handlePrintOrder = async (order: any) => {
+    try {
+      const orderData = {
+        orderId: order.orderId,
+        orderNo: order.orderId,
+        tableNo: order.context.orderType === "DINE_IN" ? order.context.tableNo : `TW-${order.context.takeawayNo}`,
+        deviceNo: "1",
+        waiterName: user?.userName || "Staff",
+        items: order.items,
+        kitchenName: "KDS"
+      };
+
+      const { default: UniversalPrinter } = await import("../../components/UniversalPrinter");
+      await UniversalPrinter.printKDSOrder(orderData, undefined, kdsPrinterIp);
+    } catch (err) {
+      console.error("Print order error from KDS card:", err);
+    }
+  };
+
   const renderOrder = ({ item }: any) => {
     return (
       <OrderCard
@@ -433,6 +493,7 @@ export default function KDSScreen() {
           ...item,
           onPress: (o: any) => setSelectedOrderId(o.orderId),
           onMarkAllReady: handleMarkAllReady,
+          onPrint: handlePrintOrder,
         }}
         cardHeight={cardHeight}
         pulseAnim={pulseAnim}
@@ -997,6 +1058,22 @@ const styles = StyleSheet.create({
     ...Theme.shadowSm,
   },
   cardHeaderReadyBtnText: {
+    color: "#FFF",
+    fontSize: 10,
+    fontFamily: Fonts.black,
+  },
+  cardHeaderPrintBtn: {
+    backgroundColor: Theme.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginRight: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    ...Theme.shadowSm,
+  },
+  cardHeaderPrintBtnText: {
     color: "#FFF",
     fontSize: 10,
     fontFamily: Fonts.black,
