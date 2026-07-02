@@ -114,6 +114,20 @@ const OrderCard = React.memo(function OrderCard({ item, cardHeight, pulseAnim, g
               ? `${formatSection(item.context.section)} • Table ${item.context.tableNo}`
               : `Takeaway • #${item.context.takeawayNo || item.orderId.slice(-4)}`}
           </Text>
+          <Animated.Text style={[styles.timer, { color: ui.primary, opacity: timerOpacity }]}>
+            {minutes}:{seconds.toString().padStart(2, "00")}
+          </Animated.Text>
+        </View>
+        <View style={styles.headerRow}>
+          <Text style={styles.orderIdText}>#{item.orderId}</Text>
+          <View style={[styles.statusBadge, { borderColor: ui.primary + "40" }]}>
+            <Ionicons name={ui.icon} size={10} color={ui.primary} />
+            <Text style={[styles.statusBadgeText, { color: ui.primary }]}>{ui.label}</Text>
+          </View>
+        </View>
+        
+        {/* ACTION BUTTONS ROW */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6, marginBottom: 2 }}>
           <Pressable
             style={({ pressed }) => [
               styles.cardHeaderPrintBtn,
@@ -141,16 +155,6 @@ const OrderCard = React.memo(function OrderCard({ item, cardHeight, pulseAnim, g
               <Text style={styles.cardHeaderReadyBtnText}>READY ALL</Text>
             </Pressable>
           )}
-          <Animated.Text style={[styles.timer, { color: ui.primary, opacity: timerOpacity }]}>
-            {minutes}:{seconds.toString().padStart(2, "00")}
-          </Animated.Text>
-        </View>
-        <View style={styles.headerRow}>
-          <Text style={styles.orderIdText}>#{item.orderId}</Text>
-          <View style={[styles.statusBadge, { borderColor: ui.primary + "40" }]}>
-            <Ionicons name={ui.icon} size={10} color={ui.primary} />
-            <Text style={[styles.statusBadgeText, { color: ui.primary }]}>{ui.label}</Text>
-          </View>
         </View>
         {/* 🍽️ LIVE ITEM COUNT BADGES */}
         <View style={styles.itemCountRow}>
