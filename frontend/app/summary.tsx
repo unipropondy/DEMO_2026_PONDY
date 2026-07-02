@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -86,6 +87,7 @@ export default function SummaryScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { showToast } = useToast();
+  const isFocused = useIsFocused();
 
   const context = useOrderContextStore((state) => state.currentOrder);
   const activeOrder = context ? findActiveOrder(context) : undefined;
@@ -397,19 +399,28 @@ export default function SummaryScreen() {
         })
         .catch((err) => console.error("Summary ID sync error:", err));
     }
+  }, [activeOrder]);
 
-    // 1b. Load saved SC override for this order
-    if (displayOrderId) {
+  // Load saved SC override for this order whenever focused
+  useEffect(() => {
+    if (displayOrderId && isFocused) {
       const token = useAuthStore.getState().token;
       fetch(`${API_URL}/api/orders/${displayOrderId}/sc-override`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
         .then((r) => r.json())
         .then((d) => {
-          if (d?.serviceChargeReduced) setScReduced(true);
+          if (d?.serviceChargeReduced) {
+            setScReduced(true);
+          } else {
+            setScReduced(false);
+          }
         })
         .catch(() => {});
     }
+  }, [displayOrderId, isFocused]);
+
+  useEffect(() => {
 
     // 2. If activeOrder is missing, try fetching from kitchen ONCE
     if (!activeOrder && !hasAttemptedInitialFetch) {
