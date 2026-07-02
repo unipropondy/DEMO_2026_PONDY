@@ -904,7 +904,7 @@ class UniversalPrinter {
                 return Object.entries(kitchenGroups).map(([kName, groupItems]) => {
                   return `
                     <div style="font-size: 18px; font-weight: bold; margin-top: 15px; border-bottom: 2px solid #000; padding-bottom: 3px; text-transform: uppercase;">
-                      ${kName}
+                      <b>${kName}</b>
                     </div>
                     ${groupItems.map((item: any) => {
                       const noteText = item.note || item.notes || item.Remarks || item.remarks;
