@@ -821,16 +821,16 @@ class UniversalPrinter {
           }
           
           .item-qty {
-            font-size: 32px;
-            font-weight: bold;
+            font-size: 20px;
+            font-weight: 600;
             width: 50px;
             line-height: 1;
             margin-right: 8px;
           }
           
           .item-name {
-            font-size: 24px;
-            font-weight: bold;
+            font-size: 16px;
+            font-weight: 600;
             flex: 1;
             line-height: 1.1;
           }
