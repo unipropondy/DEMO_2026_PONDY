@@ -875,7 +875,7 @@ export default function SummaryScreen() {
         setShowBillOptions(false);
         showToast({
           type: "success",
-          message: "Service Charge Reduced",
+          message: "Service Charge Removed",
           subtitle: "Bill updated — service charge set to 0.00",
         });
       } else {
@@ -2166,7 +2166,7 @@ export default function SummaryScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.billOptionText}>
-                      {scReduced ? "Reduce Service Charge ✓" : "Reduce Service Charge"}
+                      {scReduced ? "Service Charge Removed ✓" : "Remove Service Charge"}
                     </Text>
                     {scReduced && (
                       <Text style={{ fontSize: 11, color: "#16a34a", marginTop: 2, fontFamily: Fonts.medium }}>
