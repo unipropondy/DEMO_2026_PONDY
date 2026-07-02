@@ -2063,4 +2063,74 @@ router.post("/payment-status", async (req, res) => {
   }
 });
 
+// ─── Reduce Service Charge ────────────────────────────────────────────────────
+// Self-healing: adds ServiceChargeOverride column if it doesn't exist
+router.post("/reduce-service-charge", async (req, res) => {
+  try {
+    const { orderId, reduce } = req.body; // reduce = true to zero-out SC, false to restore
+    if (!orderId) return res.status(400).json({ error: "Missing orderId" });
+    const pool = await poolPromise;
+
+    // 🔧 Self-healing: ensure column exists
+    await pool.request().query(`
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME = 'RestaurantOrderCur' AND COLUMN_NAME = 'ServiceChargeOverride'
+      )
+      ALTER TABLE RestaurantOrderCur ADD ServiceChargeOverride BIT NULL;
+    `);
+
+    const overrideValue = reduce === false ? 0 : 1; // 1 = SC reduced to 0
+    await pool
+      .request()
+      .input("orderNo", sql.NVarChar(50), String(orderId).trim())
+      .input("override", sql.Bit, overrideValue)
+      .query(`
+        UPDATE RestaurantOrderCur
+        SET ServiceChargeOverride = @override, ModifiedOn = GETDATE()
+        WHERE OrderNumber = @orderNo
+          AND (isOrderClosed = 0 OR isOrderClosed IS NULL)
+      `);
+
+    res.json({ success: true, serviceChargeReduced: overrideValue === 1 });
+  } catch (err) {
+    console.error("❌ reduce-service-charge Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET the current SC override status for an order
+router.get("/:orderId/sc-override", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    if (!orderId) return res.status(400).json({ error: "Missing orderId" });
+    const pool = await poolPromise;
+
+    // Check column exists first
+    const colCheck = await pool.request().query(`
+      SELECT 1 AS exists FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = 'RestaurantOrderCur' AND COLUMN_NAME = 'ServiceChargeOverride'
+    `);
+    if (!colCheck.recordset.length) {
+      return res.json({ serviceChargeReduced: false });
+    }
+
+    const result = await pool
+      .request()
+      .input("orderNo", sql.NVarChar(50), String(orderId).trim())
+      .query(`
+        SELECT TOP 1 ISNULL(ServiceChargeOverride, 0) AS ServiceChargeOverride
+        FROM RestaurantOrderCur
+        WHERE OrderNumber = @orderNo
+          AND (isOrderClosed = 0 OR isOrderClosed IS NULL)
+      `);
+
+    const reduced = result.recordset[0]?.ServiceChargeOverride === true || result.recordset[0]?.ServiceChargeOverride === 1;
+    res.json({ serviceChargeReduced: reduced });
+  } catch (err) {
+    console.error("❌ sc-override GET Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

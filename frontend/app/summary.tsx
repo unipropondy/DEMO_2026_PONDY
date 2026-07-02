@@ -118,6 +118,8 @@ export default function SummaryScreen() {
   const [selectedMergeOrderIds, setSelectedMergeOrderIds] = useState<string[]>([]);
   const [confirmMergeVisible, setConfirmMergeVisible] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
+  const [scReduced, setScReduced] = useState(false);
+  const [isReducingSC, setIsReducingSC] = useState(false);
   const [splitQuantities, setSplitQuantities] = useState<
     Record<string, number>
   >({});
@@ -394,6 +396,19 @@ export default function SummaryScreen() {
           }
         })
         .catch((err) => console.error("Summary ID sync error:", err));
+    }
+
+    // 1b. Load saved SC override for this order
+    if (displayOrderId) {
+      const token = useAuthStore.getState().token;
+      fetch(`${API_URL}/api/orders/${displayOrderId}/sc-override`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d?.serviceChargeReduced) setScReduced(true);
+        })
+        .catch(() => {});
     }
 
     // 2. If activeOrder is missing, try fetching from kitchen ONCE
@@ -814,6 +829,51 @@ export default function SummaryScreen() {
     }
   };
 
+  // ── Reduce Service Charge Handler ──────────────────────────────────────────
+  const handleReduceServiceCharge = async () => {
+    if (scReduced) {
+      showToast({
+        type: "info",
+        message: "Already Reduced",
+        subtitle: "Service charge has already been reduced to 0.00",
+      });
+      return;
+    }
+    if (!displayOrderId) {
+      showToast({ type: "error", message: "Order ID not found" });
+      return;
+    }
+    try {
+      setIsReducingSC(true);
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`${API_URL}/api/orders/reduce-service-charge`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ orderId: displayOrderId, reduce: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setScReduced(true);
+        setShowBillOptions(false);
+        showToast({
+          type: "success",
+          message: "Service Charge Removed",
+          subtitle: "Bill updated — service charge set to 0.00",
+        });
+      } else {
+        showToast({ type: "error", message: data.error || "Failed to reduce service charge" });
+      }
+    } catch (err) {
+      console.error("Reduce SC error:", err);
+      showToast({ type: "error", message: "Network error" });
+    } finally {
+      setIsReducingSC(false);
+    }
+  };
+
   const [loyaltyDiscountItems, setLoyaltyDiscountItems] = useState<any[]>([]);
   const [loyaltyDiscountAmount, setLoyaltyDiscountAmount] = useState(0);
   const [appliedDishRewards, setAppliedDishRewards] = useState<any[]>([]);
@@ -964,7 +1024,10 @@ export default function SummaryScreen() {
     return Math.max(0, scEligibleSubtotal - proportion * discountAmount);
   }, [scEligibleSubtotal, subtotal, discountAmount]);
 
-  const serviceChargeAmount = useMemo(() => scEligibleNet * scRate, [scEligibleNet, scRate]);
+  const serviceChargeAmount = useMemo(
+    () => (scReduced ? 0 : scEligibleNet * scRate),
+    [scEligibleNet, scRate, scReduced],
+  );
   const taxableAmount = useMemo(() => netAfterDiscount + serviceChargeAmount, [netAfterDiscount, serviceChargeAmount]);
   const gstAmountRaw = useMemo(() => taxableAmount * gstRate, [taxableAmount, gstRate]);
   // ✅ FIX: Round GST for display so breakdown matches the rounded grand total
@@ -2060,6 +2123,42 @@ export default function SummaryScreen() {
                     />
                   </View>
                   <Text style={styles.billOptionText}>Reprint KOT</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.billOptionItem,
+                    scReduced && { opacity: 0.5 },
+                  ]}
+                  onPress={handleReduceServiceCharge}
+                  disabled={isReducingSC}
+                >
+                  <View
+                    style={[
+                      styles.billOptionIcon,
+                      { backgroundColor: scReduced ? "#f0fdf4" : "#fef9c3" },
+                    ]}
+                  >
+                    {isReducingSC ? (
+                      <ActivityIndicator size={18} color="#ca8a04" />
+                    ) : (
+                      <MaterialCommunityIcons
+                        name="percent-outline"
+                        size={20}
+                        color={scReduced ? "#16a34a" : "#ca8a04"}
+                      />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.billOptionText}>
+                      {scReduced ? "Service Charge Removed ✓" : "Reduce Service Charge"}
+                    </Text>
+                    {scReduced && (
+                      <Text style={{ fontSize: 11, color: "#16a34a", marginTop: 2, fontFamily: Fonts.medium }}>
+                        Service charge set to 0.00
+                      </Text>
+                    )}
+                  </View>
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
