@@ -21,10 +21,10 @@ export const pollerStats = {
 
 async function processJob(job: any) {
   try {
-    logger.info(`Starting execution of Job ${job.JobId} for printer IP ${job.PrinterIp}:${job.PrinterPort}`);
+    console.log(`\n[Job Received]\nJobId: ${job.JobId}\nPrinter: ${job.PrinterName || 'Receipt Printer'}\n`);
     
     // Connect & Print via TCP socket
-    await sendToPrinter(job.PrinterIp, job.PrinterPort, job.Content);
+    await sendToPrinter(job.PrinterIp, job.PrinterPort, job.Content, job.JobId);
     
     // Report success to backend
     await railwayApi.markComplete(job.JobId);

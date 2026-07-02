@@ -40,20 +40,65 @@ function parseFormatting(content: string): Buffer {
 }
 
 /**
+ * Verifies that the destination printer is reachable using a short TCP connection check.
+ * Checks the actual ESC/POS port (9100) with a 750ms timeout. Returns true if reachable, false otherwise.
+ * Does not throw exceptions for expected offline printers.
+ */
+export function checkPrinterReachable(ip: string, port: number = 9100, timeoutMs: number = 750): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let resolved = false;
+
+    socket.setTimeout(timeoutMs);
+
+    socket.connect(port, ip, () => {
+      if (!resolved) {
+        resolved = true;
+        socket.destroy();
+        resolve(true);
+      }
+    });
+
+    socket.on('error', () => {
+      if (!resolved) {
+        resolved = true;
+        socket.destroy();
+        resolve(false);
+      }
+    });
+
+    socket.on('timeout', () => {
+      if (!resolved) {
+        resolved = true;
+        socket.destroy();
+        resolve(false);
+      }
+    });
+  });
+}
+
+/**
  * Sends a raw data payload to a LAN/Wi-Fi thermal printer using a TCP socket connection.
  * Supports both base64 binary encoding and standard UTF-8 string encoding with tag translation.
  */
-export function sendToPrinter(ip: string, port: number, content: string): Promise<void> {
+export async function sendToPrinter(ip: string, port: number, content: string, jobId: string | number): Promise<void> {
+  const checkStart = Date.now();
+  const isReachable = await checkPrinterReachable(ip, port, 750);
+  const latency = Date.now() - checkStart;
+
+  if (!isReachable) {
+    console.log(`\n[Printer Check]\nIP: ${ip}\nPort: ${port}\nReachable: NO\nReason: Timeout\n\n[Print]\nStatus: FAILED\nError: Printer unreachable\n`);
+    throw new Error('Printer unreachable');
+  }
+
+  console.log(`\n[Printer Check]\nIP: ${ip}\nPort: ${port}\nReachable: YES\nLatency: ${latency}ms\n`);
+
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     const client = new net.Socket();
-    const timeoutVal = 30000; // Increased to 30 seconds for diagnostic testing
+    const timeoutVal = 30000;
 
     client.setTimeout(timeoutVal);
-
-    logger.info(`[PRINT BRIDGE] Preparing job for printer at ${ip}:${port}`);
-    logger.info(`[PRINT BRIDGE] Current timeout setting: ${timeoutVal}ms`);
-    logger.info(`[PRINT BRIDGE] Content preview (first 300 chars): "${content.slice(0, 300)}"`);
 
     let payload: Buffer;
     
@@ -62,46 +107,35 @@ export function sendToPrinter(ip: string, port: number, content: string): Promis
     const isBase64 = /^[A-Za-z0-9+/]+={0,2}$/.test(trimmed) && (trimmed.length % 4 === 0);
 
     if (isBase64) {
-      logger.info(`[PRINT BRIDGE] Detected base64 binary payload`);
       payload = Buffer.from(trimmed, 'base64');
     } else {
-      logger.info(`[PRINT BRIDGE] Detected text payload - parsing ESC/POS format tags`);
       payload = parseFormatting(content);
     }
 
-    logger.info(`[PRINT BRIDGE] Connecting to printer... IP: ${ip}, Port: ${port}, Payload length: ${payload.length} bytes`);
+    console.log(`\n[Print]\nStarted...\n`);
 
     client.connect(port, ip, () => {
-      const elapsed = Date.now() - startTime;
-      logger.info(`[PRINT BRIDGE] Socket connected after ${elapsed}ms`);
-      
-      logger.info(`[PRINT BRIDGE] Writing payload...`);
       client.write(payload, () => {
-        const writeElapsed = Date.now() - startTime;
-        logger.info(`[PRINT BRIDGE] Payload written successfully (Total elapsed: ${writeElapsed}ms)`);
-        
         client.end();
       });
     });
 
     client.on('close', () => {
-      const closeElapsed = Date.now() - startTime;
-      logger.info(`[PRINT BRIDGE] Socket closed (Total elapsed: ${closeElapsed}ms)`);
+      const duration = Date.now() - startTime;
+      console.log(`Completed\nDuration: ${duration}ms\nStatus: COMPLETED\n`);
       resolve();
     });
 
     client.on('error', (err: any) => {
       client.destroy();
-      const errElapsed = Date.now() - startTime;
-      logger.error(`[PRINT BRIDGE] TCP Socket error after ${errElapsed}ms:`, err);
+      console.log(`Status: FAILED\nError: ${err.message || 'TCP Socket Connection Failed'}\n`);
       reject(err);
     });
 
     client.on('timeout', () => {
       client.destroy();
-      const elapsed = Date.now() - startTime;
-      logger.error(`[PRINT BRIDGE] Socket timeout after ${elapsed}ms (Timeout limit: ${timeoutVal}ms)`);
-      reject(new Error(`Connection to printer timed out after ${elapsed}ms`));
+      console.log(`Status: FAILED\nError: Connection timed out\n`);
+      reject(new Error(`Connection to printer timed out`));
     });
   });
 }

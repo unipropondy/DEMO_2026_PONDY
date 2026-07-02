@@ -74,7 +74,7 @@ app.post('/test-print', async (req: Request, res: Response) => {
 
   try {
     logger.info(`Manual test print initiated for printer: ${ip}:${targetPort}`);
-    await sendToPrinter(ip, targetPort, testContent);
+    await sendToPrinter(ip, targetPort, testContent, 'TEST-JOB');
     res.json({ success: true, message: `Test receipt sent to printer at ${ip}:${targetPort}` });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Printing failed' });
@@ -94,7 +94,7 @@ app.post('/direct-test-print', async (req: Request, res: Response) => {
 
   try {
     logger.info(`Direct simple test print initiated for printer: ${ip}:${targetPort}`);
-    await sendToPrinter(ip, targetPort, testContent);
+    await sendToPrinter(ip, targetPort, testContent, 'TEST-JOB');
     res.json({ success: true, message: `Direct text sent to printer at ${ip}:${targetPort}` });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Printing failed' });
