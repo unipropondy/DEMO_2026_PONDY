@@ -529,6 +529,21 @@ export default function CartScreen() {
                   const isAdditional = cart.some((i: any) => isItemSent(i));
                   await UniversalPrinter.printKOT(kotData, "SYSTEM", isAdditional ? "ADDITIONAL" : "NEW", printerIp);
                 }
+
+                // 🚀 KDS Auto-Print Copy
+                const enableKDSPrint = useGeneralSettingsStore.getState().settings.enableKDSPrint !== false;
+                if (enableKDSPrint) {
+                  const kdsData = {
+                    orderId: officialOrderId,
+                    orderNo: officialOrderId,
+                    tableNo: context.orderType === "DINE_IN" ? context.tableNo : `TW-${context.takeawayNo}`,
+                    deviceNo: "1",
+                    waiterName: user?.userName || "Staff",
+                    items: cart.filter((i: any) => i.status !== 'VOIDED' && !i.isVoided),
+                    kitchenName: "KDS",
+                  };
+                  await UniversalPrinter.printKDSOrder(kdsData, "SYSTEM");
+                }
               } catch (printErr) { console.error(printErr); }
             }
           }

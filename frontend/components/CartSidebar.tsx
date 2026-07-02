@@ -1424,6 +1424,29 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
           console.log("🖨️ [SidebarTurboPrint] KOT printing is disabled in General Settings.");
         }
       }
+
+      // 🚀 KDS Auto-Print Copy
+      const enableKDSPrint = useGeneralSettingsStore.getState().settings.enableKDSPrint !== false;
+      if (enableKDSPrint) {
+        (async () => {
+          try {
+            const kdsData = {
+              orderId: currentOrderId,
+              orderNo: currentOrderId,
+              tableNo:
+                orderContext.orderType === "DINE_IN"
+                  ? orderContext.tableNo
+                  : `TW-${orderContext.takeawayNo}`,
+              waiterName: user?.userName || "Staff",
+              items: currentItems,
+              kitchenName: "KDS",
+            };
+            await UniversalPrinter.printKDSOrder(kdsData, "SYSTEM");
+          } catch (err) {
+            console.error("KDS Auto-Print failed:", err);
+          }
+        })();
+      }
     })();
 
     // 3. Close Sidebar & Redirect instantly

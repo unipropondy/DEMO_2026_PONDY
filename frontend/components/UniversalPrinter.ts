@@ -640,7 +640,23 @@ class UniversalPrinter {
     try {
       const company = await BillPDFGenerator.loadSettings(userId);
       const html = this.generateKOTHTML(orderData, type);
-      const targetIp = printerIpOverride || company.printerIp;
+      
+      let targetIp = printerIpOverride;
+      if (!targetIp) {
+        if (type === "KDS_PRINT") {
+          try {
+            const res = await fetch(`${API_URL}/api/settings/kitchen-printers`);
+            const printers = await res.json();
+            const kdsPrinter = printers.find((p: any) => p.PrinterType === 4);
+            targetIp = kdsPrinter?.PrinterIP || "";
+          } catch (err) {
+            console.warn("Failed to fetch KDS printer IP:", err);
+          }
+        }
+        if (!targetIp) {
+          targetIp = company.printerIp;
+        }
+      }
 
       // ✅ 1. Try Hardware Printer (WiFi or Bluetooth)
       let isReachable = false;
