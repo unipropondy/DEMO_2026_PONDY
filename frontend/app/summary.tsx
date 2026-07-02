@@ -843,20 +843,13 @@ export default function SummaryScreen() {
     }
   };
 
-  // ── Reduce Service Charge Handler ──────────────────────────────────────────
+  // ── Reduce/Restore Service Charge Handler ──────────────────────────────────
   const handleReduceServiceCharge = async () => {
-    if (scReduced) {
-      showToast({
-        type: "info",
-        message: "Already Reduced",
-        subtitle: "Service charge has already been reduced to 0.00",
-      });
-      return;
-    }
     if (!displayOrderId) {
       showToast({ type: "error", message: "Order ID not found" });
       return;
     }
+    const shouldReduce = !scReduced;
     try {
       setIsReducingSC(true);
       const token = useAuthStore.getState().token;
@@ -866,23 +859,25 @@ export default function SummaryScreen() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ orderId: displayOrderId, reduce: true }),
+        body: JSON.stringify({ orderId: displayOrderId, reduce: shouldReduce }),
       });
       const data = await res.json();
       if (data.success) {
-        setScReduced(true);
-        useServiceChargeOverrideStore.getState().setOverride(displayOrderId, true);
+        setScReduced(shouldReduce);
+        useServiceChargeOverrideStore.getState().setOverride(displayOrderId, shouldReduce);
         setShowBillOptions(false);
         showToast({
           type: "success",
-          message: "Service Charge Removed",
-          subtitle: "Bill updated — service charge set to 0.00",
+          message: shouldReduce ? "Service Charge Removed" : "Service Charge Restored",
+          subtitle: shouldReduce 
+            ? "Bill updated — service charge set to 0.00" 
+            : "Bill updated — service charge restored to normal",
         });
       } else {
-        showToast({ type: "error", message: data.error || "Failed to reduce service charge" });
+        showToast({ type: "error", message: data.error || "Failed to update service charge" });
       }
     } catch (err) {
-      console.error("Reduce SC error:", err);
+      console.error("SC toggle error:", err);
       showToast({ type: "error", message: "Network error" });
     } finally {
       setIsReducingSC(false);
@@ -2141,10 +2136,7 @@ export default function SummaryScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[
-                    styles.billOptionItem,
-                    scReduced && { opacity: 0.5 },
-                  ]}
+                  style={styles.billOptionItem}
                   onPress={handleReduceServiceCharge}
                   disabled={isReducingSC}
                 >
@@ -2166,11 +2158,11 @@ export default function SummaryScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.billOptionText}>
-                      {scReduced ? "Service Charge Removed ✓" : "Reduce Service Charge"}
+                      {scReduced ? "Restore Service Charge" : "Remove Service Charge"}
                     </Text>
                     {scReduced && (
                       <Text style={{ fontSize: 11, color: "#16a34a", marginTop: 2, fontFamily: Fonts.medium }}>
-                        Service charge set to 0.00
+                        Service charge set to 0.00 (Tap to restore)
                       </Text>
                     )}
                   </View>
