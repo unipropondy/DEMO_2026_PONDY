@@ -1,6 +1,7 @@
 import { app as electronApp } from 'electron';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import * as path from 'path';
 import { config } from './config';
 import { startPoller, pollerStats } from './poller';
 import { sendToPrinter } from './printer';
@@ -100,44 +101,47 @@ app.post('/direct-test-print', async (req: Request, res: Response) => {
   }
 });
 
+// Serve the static customer display files
+app.use(express.static(path.join(electronApp.getAppPath(), 'customer-display-web')));
+
 // Mount new customer display endpoints
 app.use('/customer-display', displayRouter);
 
 // Initialize Electron Lifecycle
 electronApp.whenReady().then(() => {
   logger.info('[Electron] Platform ready. Starting services...');
-  
-  loadPersistedState();
-  startMonitorWatcher();
 
-  // If a secondary display is already plugged in on start, launch display
-  if (getSecondaryDisplay()) {
-    launchCustomerDisplay();
-  }
+  // Launch the Express listener + poller first
+  app.listen(config.port, () => {
+    logger.info(`UniPro Print Bridge server listening locally on port ${config.port}`);
+    startPoller();
 
-  // Handle display changes (added/removed/metrics changes)
-  monitorEvents.on('display-changed', () => {
+    loadPersistedState();
+    startMonitorWatcher();
+
+    // If a secondary display is already plugged in on start, launch display
     if (getSecondaryDisplay()) {
       launchCustomerDisplay();
-      // Re-push the current state so the display isn't blank/stale after connecting
-      setTimeout(() => {
-        pushStateToDisplay(getCurrentState());
-      }, 2000);
-    } else {
-      closeCustomerDisplay();
     }
+
+    // Handle display changes (added/removed/metrics changes)
+    monitorEvents.on('display-changed', () => {
+      if (getSecondaryDisplay()) {
+        launchCustomerDisplay();
+        // Re-push the current state so the display isn't blank/stale after connecting
+        setTimeout(() => {
+          pushStateToDisplay(getCurrentState());
+        }, 2000);
+      } else {
+        closeCustomerDisplay();
+      }
+    });
   });
 
   // Windows Startup Registry Configuration
   electronApp.setLoginItemSettings({
     openAtLogin: true,
     name: 'UniPro Print Bridge',
-  });
-
-  // Launch the Express listener + poller
-  app.listen(config.port, () => {
-    logger.info(`UniPro Print Bridge server listening locally on port ${config.port}`);
-    startPoller();
   });
 });
 

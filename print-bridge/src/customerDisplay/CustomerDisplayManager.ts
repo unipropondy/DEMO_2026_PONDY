@@ -2,6 +2,7 @@ import { BrowserWindow } from 'electron';
 import * as path from 'path';
 import { getSecondaryDisplay } from './MonitorService';
 import { logger } from '../logger';
+import { config } from '../config';
 
 let displayWindow: BrowserWindow | null = null;
 
@@ -43,10 +44,46 @@ export function launchCustomerDisplay() {
   });
 
   const uiPath = getUIPath();
-  logger.info(`[CustomerDisplay] Loading UI from: ${uiPath}`);
+  const exists = require('fs').existsSync(uiPath);
+  logger.info(`[CustomerDisplay] Loading UI from: ${uiPath} (File Exists: ${exists})`);
 
-  // Deep-link to the standalone Expo Router route inside the SPA bundle
-  displayWindow.loadFile(uiPath, { hash: '/customer-display-standalone' });
+  // Open DevTools automatically for debugging if in development
+  if (!require('electron').app.isPackaged) {
+    displayWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+
+  // Event Listeners for thorough tracking
+  displayWindow.webContents.on('did-start-loading', () => {
+    logger.info('[CustomerDisplay Event] did-start-loading');
+  });
+
+  displayWindow.webContents.on('did-finish-load', () => {
+    logger.info('[CustomerDisplay Event] did-finish-load');
+  });
+
+  displayWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    logger.error(`[CustomerDisplay Event] did-fail-load: code=${errorCode}, desc=${errorDescription}, url=${validatedURL}`);
+  });
+
+  displayWindow.webContents.on('render-process-gone', (event, details) => {
+    logger.error(`[CustomerDisplay Event] render-process-gone: reason=${details.reason}`);
+  });
+
+  displayWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    logger.info(`[CustomerDisplay Console] [level=${level}] ${message} (at ${sourceId}:${line})`);
+  });
+
+  // Load the standalone Expo route via local Express server to resolve absolute path assets correctly
+  const url = `http://localhost:${config.port}/customer-display-standalone.html`;
+  logger.info(`[CustomerDisplay] Loading UI from URL: ${url}`);
+
+  displayWindow.loadURL(url)
+    .then(() => {
+      logger.info('[CustomerDisplay] loadURL promise resolved successfully');
+    })
+    .catch((err) => {
+      logger.error(`[CustomerDisplay] loadURL promise rejected: ${err.message}`);
+    });
 
   displayWindow.on('closed', () => {
     logger.warn('[CustomerDisplay] Window was closed.');
