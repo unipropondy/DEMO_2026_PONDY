@@ -126,49 +126,55 @@ const OrderCard = React.memo(function OrderCard({ item, cardHeight, pulseAnim, g
           </View>
         </View>
         
-        {/* ACTION BUTTONS ROW */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6, marginBottom: 2 }}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.cardHeaderPrintBtn,
-              pressed && { opacity: 0.7 }
-            ]}
-            onPress={(e) => {
-              e.stopPropagation();
-              item.onPrint?.(item);
-            }}
-          >
-            <Ionicons name="print-outline" size={12} color="#FFF" />
-            <Text style={styles.cardHeaderPrintBtnText}>PRINT</Text>
-          </Pressable>
-          {item.items?.some((i: any) => i.status === "SENT" || i.status === "NEW") && (
+        {/* 🍽️ LIVE ITEM COUNT & ACTIONS ROW */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, flexWrap: 'wrap', gap: 6 }}>
+          {/* Left Side: Badges */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.itemCountBadge}>
+              <Ionicons name="layers-outline" size={11} color={ui.primary} />
+              <Text style={[styles.itemCountText, { color: ui.primary }]}>
+                {totalQty} item{totalQty !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            <View style={styles.itemCountBadgeMuted}>
+              <Ionicons name="restaurant-outline" size={11} color="#666" />
+              <Text style={styles.itemCountMutedText}>
+                {totalUniqueDishes} dish{totalUniqueDishes !== 1 ? 'es' : ''}
+              </Text>
+            </View>
+          </View>
+
+          {/* Right Side: PRINT & READY ALL */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Pressable
               style={({ pressed }) => [
-                styles.cardHeaderReadyBtn,
-                pressed && { opacity: 0.7 }
+                styles.cardHeaderPrintBtn,
+                pressed && { opacity: 0.7 },
+                { marginRight: 0 }
               ]}
               onPress={(e) => {
                 e.stopPropagation();
-                item.onMarkAllReady?.(item);
+                item.onPrint?.(item);
               }}
             >
-              <Text style={styles.cardHeaderReadyBtnText}>READY ALL</Text>
+              <Ionicons name="print-outline" size={12} color="#FFF" />
+              <Text style={styles.cardHeaderPrintBtnText}>PRINT</Text>
             </Pressable>
-          )}
-        </View>
-        {/* 🍽️ LIVE ITEM COUNT BADGES */}
-        <View style={styles.itemCountRow}>
-          <View style={styles.itemCountBadge}>
-            <Ionicons name="layers-outline" size={11} color={ui.primary} />
-            <Text style={[styles.itemCountText, { color: ui.primary }]}>
-              {totalQty} item{totalQty !== 1 ? 's' : ''}
-            </Text>
-          </View>
-          <View style={styles.itemCountBadgeMuted}>
-            <Ionicons name="restaurant-outline" size={11} color="#666" />
-            <Text style={styles.itemCountMutedText}>
-              {totalUniqueDishes} dish{totalUniqueDishes !== 1 ? 'es' : ''}
-            </Text>
+            {item.items?.some((i: any) => i.status === "SENT" || i.status === "NEW") && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cardHeaderReadyBtn,
+                  pressed && { opacity: 0.7 },
+                  { marginRight: 0 }
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  item.onMarkAllReady?.(item);
+                }}
+              >
+                <Text style={styles.cardHeaderReadyBtnText}>READY ALL</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       </View>
