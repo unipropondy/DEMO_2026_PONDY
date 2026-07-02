@@ -159,12 +159,25 @@ export default function CustomerDisplayContent() {
     const handler = (event: MessageEvent) => {
       if (!event.data || typeof event.data !== 'object') return;
       if (event.data.__source !== 'electron-print-bridge') return;
+
       console.log(
         '🖥️ [CustomerDisplay] Received Electron IPC state:',
         event.data.payload?.paymentSuccess ? 'SUCCESS'
           : event.data.payload?.active ? 'CART' : 'IDLE',
       );
+      
       setDisplayState(event.data.payload);
+
+      // Auto-detect and configure terminal code if pushed locally by the POS
+      const payload = event.data.payload;
+      if (payload && payload.terminalCode) {
+        const currentCode = useTerminalStore.getState().terminalCode;
+        if (currentCode !== payload.terminalCode) {
+          console.log(`🖥️ [CustomerDisplay] Auto-detecting and setting terminal from Electron payload: ${payload.terminalCode}`);
+          useTerminalStore.getState().setTerminal(payload.terminalCode, payload.terminalCode);
+          setShowTerminalModal(false);
+        }
+      }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
