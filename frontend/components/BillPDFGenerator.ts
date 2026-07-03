@@ -510,12 +510,12 @@ private static escapeHtml(str: string): string {
           }
           
           .shop-name { 
-            font-size: 15px; /* ✅ Smaller, matching reference proportion */
-            font-weight: 800; 
+            font-size: 22px; /* ✅ Bigger font size */
+            font-weight: 900; /* ✅ Bolder font weight */
             text-transform: uppercase; 
             letter-spacing: 4px; /* ✅ Wide spacing like MC DONALDS ref */
             line-height: 1.2; 
-            margin-bottom: 1mm;
+            margin-bottom: 1.5mm;
             display: block;
             font-family: monospace;
           }

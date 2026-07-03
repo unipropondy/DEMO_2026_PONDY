@@ -1436,6 +1436,32 @@ class UniversalPrinter {
       return false;
     }
   }
+  private static async getBase64LogoStr(logoUrl: string): Promise<string | null> {
+    if (!logoUrl) return null;
+    try {
+      let url = logoUrl;
+      if (url && !url.startsWith("http") && !url.startsWith("data:")) {
+        url = url.startsWith("/") ? `${API_URL}${url}` : `${API_URL}/${url}`;
+      }
+      if (Platform.OS === 'android' || Platform.OS === 'ios') {
+        const FileSystem = require('expo-file-system');
+        const filename = 'temp_logo_thermal_' + Date.now() + '.png';
+        const fileUri = FileSystem.cacheDirectory + filename;
+        const downloadRes = await FileSystem.downloadAsync(url, fileUri);
+        const base64 = await FileSystem.readAsStringAsync(downloadRes.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        try {
+          await FileSystem.deleteAsync(fileUri, { idempotent: true });
+        } catch (_) {}
+        return base64;
+      }
+    } catch (e) {
+      console.warn("Failed to convert logo to base64 for thermal printer:", e);
+    }
+    return null;
+  }
+
   // ==================== NETWORK PRINTING ====================
   private static async printNetwork(
     saleData: any,
@@ -1445,11 +1471,28 @@ class UniversalPrinter {
   ): Promise<boolean> {
     try {
       const company = await BillPDFGenerator.loadSettings(userId);
-      const text = this.formatThermalTextWithDiscount(
+      let text = this.formatThermalTextWithDiscount(
         saleData,
         company,
         discountInfo,
       );
+
+      // Prepend company logo if configured and visible
+      if (company.showCompanyLogo && company.companyLogo) {
+        const base64Logo = await this.getBase64LogoStr(company.companyLogo);
+        if (base64Logo) {
+          text = `[C]<img>${base64Logo}</img>\n\n` + text;
+        }
+      }
+
+      // Append halal logo at the end if configured and visible
+      if (company.showHalalLogo && company.halalLogo) {
+        const base64Halal = await this.getBase64LogoStr(company.halalLogo);
+        if (base64Halal) {
+          text = text + `\n\n[C]<img>${base64Halal}</img>\n`;
+        }
+      }
+
       const targetAddress = printer?.address || company.printerIp || "";
 
       if (!targetAddress) return false;
@@ -1508,7 +1551,7 @@ class UniversalPrinter {
     text += "[C]================================================\n";
 
     // Header Info
-    text += `[C]<B>${(company.name || "YOUR STORE").toUpperCase()}</B>\n`;
+    text += `[C]<font size='big'><B>${(company.name || "YOUR STORE").toUpperCase()}</B></font>\n`;
     if (company.address) text += `[C]${company.address}\n`;
     if (company.phone) text += `[C]Tel: ${company.phone}\n`;
     if (company.email) text += `[C]Email: ${company.email}\n`;

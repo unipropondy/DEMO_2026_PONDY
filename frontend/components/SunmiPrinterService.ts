@@ -230,7 +230,25 @@ class SunmiPrinterService {
   }
 
   private static async urlToBase64(url: string): Promise<string> {
-    console.log("🔄 Converting URL to Base64:", url);
+    console.log("🔄 Converting URL to Base64 (Robust):", url);
+    try {
+      if (Platform.OS === 'android' || Platform.OS === 'ios') {
+        const FileSystem = require('expo-file-system');
+        const filename = 'temp_logo_sunmi_' + Date.now() + '.png';
+        const fileUri = FileSystem.cacheDirectory + filename;
+        const downloadRes = await FileSystem.downloadAsync(url, fileUri);
+        const base64 = await FileSystem.readAsStringAsync(downloadRes.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        try {
+          await FileSystem.deleteAsync(fileUri, { idempotent: true });
+        } catch (_) {}
+        return base64;
+      }
+    } catch (err) {
+      console.warn("⚠️ FileSystem Base64 conversion failed, trying fallback fetch:", err);
+    }
+
     const response = await fetch(url);
     const blob = await response.blob();
 
@@ -326,8 +344,20 @@ class SunmiPrinterService {
 
       await this.printLogos(companySettings);
 
+      try {
+        if (SunmiModule.setFontSize) await SunmiModule.setFontSize(32);
+        else if (SunmiModule.setTextSize) await SunmiModule.setTextSize(32);
+        if (SunmiModule.setBold) await SunmiModule.setBold(true);
+      } catch (_) {}
+
       await SunmiModule.printText(formatter.center(companySettings.name || "YOUR STORE"));
       await SunmiModule.lineWrap(1);
+
+      try {
+        if (SunmiModule.setFontSize) await SunmiModule.setFontSize(24);
+        else if (SunmiModule.setTextSize) await SunmiModule.setTextSize(24);
+        if (SunmiModule.setBold) await SunmiModule.setBold(false);
+      } catch (_) {}
 
       if (companySettings.address) {
         const addressLines = companySettings.address.split("\n");
