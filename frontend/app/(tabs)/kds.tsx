@@ -253,7 +253,7 @@ const OrderCard = React.memo(function OrderCard({ item, cardHeight, pulseAnim, g
                       <Text key={idx} style={styles.modifierText}>• {mod.ModifierName}</Text>
                     ))}
 
-                    {i.comboSelections && i.comboSelections.map((group: any, gIdx: number) => (
+                    {i.comboSelections && Array.isArray(i.comboSelections) && i.comboSelections.map((group: any, gIdx: number) => (
                       <View key={`g-${gIdx}`} style={{ marginTop: 2, paddingLeft: 4 }}>
                         <Text style={[styles.modifierText, { fontFamily: Fonts.bold, color: Theme.primary }]}>
                           {group.groupName}:
