@@ -258,9 +258,9 @@ export default function ComboCustomizer({
                             <Text style={[styles.optionName, isSelected && styles.optionTextSelected]}>
                               {option.name}
                             </Text>
-                            {option.surcharge > 0 && (
+                            {(option.surcharge > 0 || option.dishPrice > 0) && (
                               <Text style={[styles.optionSurcharge, isSelected && styles.optionTextSelected]}>
-                                +${option.surcharge.toFixed(2)}
+                                +${(option.surcharge + (option.dishPrice || 0)).toFixed(2)}
                               </Text>
                             )}
                             {isSelected && (
