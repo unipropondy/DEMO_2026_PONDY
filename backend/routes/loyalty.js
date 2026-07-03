@@ -137,7 +137,7 @@ router.get("/customer/:phone/dish-progress", async (req, res) => {
           r.RuleId,
           r.RequiredBills,
           ISNULL(pd.Name, dg.DishGroupName) AS PurchaseDishName,
-          rd.Name AS RewardDishName,
+          ISNULL(rd.Name, dgReward.DishGroupName) AS RewardDishName,
           ISNULL(s.CurrentCount, 0) AS CurrentCount,
           ISNULL(s.RewardsAvailable, 0) AS RewardsAvailable,
           ISNULL(s.RewardCyclesCompleted, 0) AS RewardCyclesCompleted,
@@ -148,6 +148,7 @@ router.get("/customer/:phone/dish-progress", async (req, res) => {
         LEFT JOIN DishMaster pd ON r.PurchaseDishId = pd.DishId
         LEFT JOIN DishGroupMaster dg ON r.PurchaseDishGroupId = dg.DishGroupId
         LEFT JOIN DishMaster rd ON r.RewardDishId = rd.DishId
+        LEFT JOIN DishGroupMaster dgReward ON r.RewardDishGroupId = dgReward.DishGroupId
         LEFT JOIN LoyaltyCustomer cust ON cust.Phone = @Phone
         LEFT JOIN CustomerDishLoyaltyState s ON s.RuleId = r.RuleId AND s.CustomerId = cust.LoyaltyCustomerId
         WHERE 
@@ -186,7 +187,7 @@ router.post("/calculate-bill-rewards", async (req, res) => {
 
     // 2. Fetch active rules
     const rulesRes = await pool.request().query(`
-      SELECT r.RuleId, r.LoyaltyType, r.PurchaseDishId, r.PurchaseDishGroupId, r.RewardDishId, r.RequiredBills,
+      SELECT r.RuleId, r.LoyaltyType, r.PurchaseDishId, r.PurchaseDishGroupId, r.RewardDishId, r.RewardDishGroupId, r.RequiredBills,
              d.Name AS RewardDishName, d.currentcost AS RewardDishPrice
       FROM LoyaltyRule r
       INNER JOIN LoyaltyCampaign c ON r.CampaignId = c.CampaignId
@@ -284,11 +285,21 @@ router.post("/calculate-bill-rewards", async (req, res) => {
         }
       }
 
-      // Check how many of the reward dish are present in the cart
+      // Check how many of the reward dish/group items are present in the cart
       let availableRewardDishQty = 0;
       for (const item of updatedItems) {
-        if (String(item.DishId || item.dishId || item.id).toLowerCase() === rewardDishIdLower && !item.isDishReward) {
-          availableRewardDishQty += (item.Qty || 1);
+        const itemDishIdLower = String(item.DishId || item.dishId || item.id || "").toLowerCase();
+        if (item.isDishReward) continue;
+
+        if (loyaltyType === "DishGroup" && rule.RewardDishGroupId) {
+          const resolvedGroupId = itemGroupIdMap[itemDishIdLower];
+          if (resolvedGroupId === String(rule.RewardDishGroupId).toLowerCase()) {
+            availableRewardDishQty += (item.Qty || 1);
+          }
+        } else if (loyaltyType === "Dish" && rule.RewardDishId) {
+          if (itemDishIdLower === String(rule.RewardDishId).toLowerCase()) {
+            availableRewardDishQty += (item.Qty || 1);
+          }
         }
       }
 
@@ -304,56 +315,107 @@ router.post("/calculate-bill-rewards", async (req, res) => {
       const totalRewardsToApply = storedRewards + newRewardsEarned;
       if (totalRewardsToApply <= 0) continue;
 
-      // The free reward should not reduce the bill unless the reward dish is in the cart
+      // The free reward should not reduce the bill unless the reward item is in the cart
       const rewardsForThisBill = Math.min(totalRewardsToApply, availableRewardDishQty);
       if (rewardsForThisBill <= 0) continue;
 
       let rewardsApplied = 0;
-      // We will traverse the reward dish line items to deduct the free quantities and add free line items
-      for (let i = 0; i < updatedItems.length; i++) {
-        const item = updatedItems[i];
-        if (String(item.DishId || item.dishId || item.id).toLowerCase() === rewardDishIdLower && !item.isDishReward) {
-          const qtyToFree = Math.min(item.Qty || 1, rewardsForThisBill - rewardsApplied);
-          if (qtyToFree > 0) {
-            const originalPrice = parseFloat(item.Price || item.price || 0);
-            const crypto = require("crypto");
-            
-            if (item.Qty > qtyToFree) {
-              // Split line item
-              item.Qty = item.Qty - qtyToFree;
-              if (item.qty !== undefined) item.qty = item.Qty;
+      if (loyaltyType === "DishGroup" && rule.RewardDishGroupId) {
+        // Traverse the cart in reverse order (last added first) to select eligible items from the group
+        const originalLength = updatedItems.length;
+        for (let i = originalLength - 1; i >= 0; i--) {
+          if (rewardsApplied >= rewardsForThisBill) break;
+          const item = updatedItems[i];
+          const itemDishIdLower = String(item.DishId || item.dishId || item.id || "").toLowerCase();
+          const resolvedGroupId = itemGroupIdMap[itemDishIdLower];
+          if (resolvedGroupId === String(rule.RewardDishGroupId).toLowerCase() && !item.isDishReward) {
+            const qtyToFree = Math.min(item.Qty || 1, rewardsForThisBill - rewardsApplied);
+            if (qtyToFree > 0) {
+              const originalPrice = parseFloat(item.Price || item.price || 0);
+              const crypto = require("crypto");
+              
+              if (item.Qty > qtyToFree) {
+                // Split line item
+                item.Qty = item.Qty - qtyToFree;
+                if (item.qty !== undefined) item.qty = item.Qty;
 
-              updatedItems.push({
-                ...item,
-                lineItemId: crypto.randomUUID(),
-                Qty: qtyToFree,
-                qty: qtyToFree,
-                Price: 0,
-                price: 0,
-                originalPrice: originalPrice,
-                isDishReward: true,
-                rewardRuleId: rule.RuleId,
-                rewardDishId: rule.RewardDishId
+                updatedItems.push({
+                  ...item,
+                  lineItemId: crypto.randomUUID(),
+                  Qty: qtyToFree,
+                  qty: qtyToFree,
+                  Price: 0,
+                  price: 0,
+                  originalPrice: originalPrice,
+                  isDishReward: true,
+                  rewardRuleId: rule.RuleId,
+                  rewardDishId: item.DishId || item.dishId || item.id
+                });
+              } else {
+                item.originalPrice = originalPrice;
+                item.Price = 0;
+                item.price = 0;
+                item.isDishReward = true;
+                item.rewardRuleId = rule.RuleId;
+                item.rewardDishId = item.DishId || item.dishId || item.id;
+              }
+
+              rewardsApplied += qtyToFree;
+              totalDiscount += originalPrice * qtyToFree;
+              appliedRewards.push({
+                ruleId: rule.RuleId,
+                campaignName: rule.CampaignName,
+                rewardDishId: item.DishId || item.dishId || item.id,
+                qty: qtyToFree
               });
-            } else {
-              item.originalPrice = originalPrice;
-              item.Price = 0;
-              item.price = 0;
-              item.isDishReward = true;
-              item.rewardRuleId = rule.RuleId;
-              item.rewardDishId = rule.RewardDishId;
             }
+          }
+        }
+      } else {
+        // Dish loyalty: auto-apply reward to matches using original forward traverse order
+        for (let i = 0; i < updatedItems.length; i++) {
+          if (rewardsApplied >= rewardsForThisBill) break;
+          const item = updatedItems[i];
+          if (String(item.DishId || item.dishId || item.id).toLowerCase() === rewardDishIdLower && !item.isDishReward) {
+            const qtyToFree = Math.min(item.Qty || 1, rewardsForThisBill - rewardsApplied);
+            if (qtyToFree > 0) {
+              const originalPrice = parseFloat(item.Price || item.price || 0);
+              const crypto = require("crypto");
+              
+              if (item.Qty > qtyToFree) {
+                // Split line item
+                item.Qty = item.Qty - qtyToFree;
+                if (item.qty !== undefined) item.qty = item.Qty;
 
-            rewardsApplied += qtyToFree;
-            totalDiscount += originalPrice * qtyToFree;
-            appliedRewards.push({
-              ruleId: rule.RuleId,
-              rewardDishId: rule.RewardDishId,
-              qty: qtyToFree
-            });
+                updatedItems.push({
+                  ...item,
+                  lineItemId: crypto.randomUUID(),
+                  Qty: qtyToFree,
+                  qty: qtyToFree,
+                  Price: 0,
+                  price: 0,
+                  originalPrice: originalPrice,
+                  isDishReward: true,
+                  rewardRuleId: rule.RuleId,
+                  rewardDishId: rule.RewardDishId
+                });
+              } else {
+                item.originalPrice = originalPrice;
+                item.Price = 0;
+                item.price = 0;
+                item.isDishReward = true;
+                item.rewardRuleId = rule.RuleId;
+                item.rewardDishId = rule.RewardDishId;
+              }
 
-            if (rewardsApplied >= rewardsForThisBill) {
-              break;
+              rewardsApplied += qtyToFree;
+              totalDiscount += originalPrice * qtyToFree;
+              appliedRewards.push({
+                ruleId: rule.RuleId,
+                campaignName: rule.CampaignName,
+                rewardDishId: rule.RewardDishId,
+                qty: qtyToFree
+              });
             }
           }
         }

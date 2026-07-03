@@ -57,9 +57,12 @@ export default function LoyaltyConfigScreen() {
   // Dish Group Loyalty states
   const [loyaltyType, setLoyaltyType] = useState<"Dish" | "DishGroup">("Dish");
   const [purchaseDishGroupId, setPurchaseDishGroupId] = useState("");
+  const [rewardDishGroupId, setRewardDishGroupId] = useState("");
   const [dishGroups, setDishGroups] = useState<any[]>([]);
   const [showDishGroupDropdown, setShowDishGroupDropdown] = useState(false);
+  const [showRewardGroupDropdown, setShowRewardGroupDropdown] = useState(false);
   const [dishGroupSearch, setDishGroupSearch] = useState("");
+  const [rewardGroupSearch, setRewardGroupSearch] = useState("");
 
   const fetchConfigs = async () => {
     setIsLoading(true);
@@ -131,8 +134,12 @@ export default function LoyaltyConfigScreen() {
       showToast({ type: "error", message: "Please select a purchase dish group." });
       return;
     }
-    if (!rewardDishId) {
+    if (loyaltyType === "Dish" && !rewardDishId) {
       showToast({ type: "error", message: "Please select a reward dish." });
+      return;
+    }
+    if (loyaltyType === "DishGroup" && !rewardDishGroupId) {
+      showToast({ type: "error", message: "Please select a reward dish group." });
       return;
     }
     const bills = parseInt(requiredBills);
@@ -156,7 +163,8 @@ export default function LoyaltyConfigScreen() {
           loyaltyType,
           purchaseDishId: loyaltyType === "Dish" ? purchaseDishId : null,
           purchaseDishGroupId: loyaltyType === "DishGroup" ? purchaseDishGroupId : null,
-          rewardDishId,
+          rewardDishId: loyaltyType === "Dish" ? rewardDishId : null,
+          rewardDishGroupId: loyaltyType === "DishGroup" ? rewardDishGroupId : null,
           requiredBills: bills,
           isActive,
           startDate: startDate ? new Date(startDate).toISOString() : null,
@@ -239,7 +247,8 @@ export default function LoyaltyConfigScreen() {
     
     setPurchaseDishId(config.PurchaseDishId || "");
     setPurchaseDishGroupId(config.PurchaseDishGroupId || "");
-    setRewardDishId(config.RewardDishId);
+    setRewardDishId(config.RewardDishId || "");
+    setRewardDishGroupId(config.RewardDishGroupId || "");
     setRequiredBills(String(config.RequiredBills));
     setIsActive(config.IsActive === 1 || config.IsActive === true);
     setStartDate(config.StartDate ? config.StartDate.split("T")[0] : "");
@@ -249,14 +258,19 @@ export default function LoyaltyConfigScreen() {
       const pDish = dishes.find(d => d.DishId === config.PurchaseDishId);
       setPurchaseSearch(pDish ? pDish.Name : "");
       setDishGroupSearch("");
+
+      const rDish = dishes.find(d => d.DishId === config.RewardDishId);
+      setRewardSearch(rDish ? rDish.Name : "");
+      setRewardGroupSearch("");
     } else {
       const pGroup = dishGroups.find(dg => dg.DishGroupId === config.PurchaseDishGroupId);
       setDishGroupSearch(pGroup ? pGroup.DishGroupName : "");
       setPurchaseSearch("");
-    }
 
-    const rDish = dishes.find(d => d.DishId === config.RewardDishId);
-    setRewardSearch(rDish ? rDish.Name : "");
+      const rGroup = dishGroups.find(dg => dg.DishGroupId === config.RewardDishGroupId);
+      setRewardGroupSearch(rGroup ? rGroup.DishGroupName : "");
+      setRewardSearch("");
+    }
 
     setShowSaveModal(true);
   };
@@ -268,6 +282,7 @@ export default function LoyaltyConfigScreen() {
     setPurchaseDishId("");
     setPurchaseDishGroupId("");
     setRewardDishId("");
+    setRewardDishGroupId("");
     setRequiredBills("9");
     setIsActive(true);
     setStartDate("");
@@ -275,6 +290,7 @@ export default function LoyaltyConfigScreen() {
     setPurchaseSearch("");
     setDishGroupSearch("");
     setRewardSearch("");
+    setRewardGroupSearch("");
   };
 
   const getFilteredConfigs = () => {
@@ -283,7 +299,8 @@ export default function LoyaltyConfigScreen() {
         c.CampaignName?.toLowerCase().includes(searchText.toLowerCase()) ||
         c.PurchaseDishName?.toLowerCase().includes(searchText.toLowerCase()) ||
         c.PurchaseDishGroupName?.toLowerCase().includes(searchText.toLowerCase()) ||
-        c.RewardDishName?.toLowerCase().includes(searchText.toLowerCase());
+        c.RewardDishName?.toLowerCase().includes(searchText.toLowerCase()) ||
+        c.RewardDishGroupName?.toLowerCase().includes(searchText.toLowerCase());
 
       const isActiveBool = c.IsActive === 1 || c.IsActive === true;
       if (statusFilter === "active") return matchesSearch && isActiveBool;
@@ -304,6 +321,10 @@ export default function LoyaltyConfigScreen() {
     dg.DishGroupName?.toLowerCase().includes(dishGroupSearch.toLowerCase())
   );
 
+  const rewardGroupsFiltered = dishGroups.filter(dg =>
+    dg.DishGroupName?.toLowerCase().includes(rewardGroupSearch.toLowerCase())
+  );
+
   const getPurchaseDishName = () => {
     const dish = dishes.find(d => d.DishId === purchaseDishId);
     return dish ? dish.Name : "Select Purchase Dish";
@@ -317,6 +338,11 @@ export default function LoyaltyConfigScreen() {
   const getRewardDishName = () => {
     const dish = dishes.find(d => d.DishId === rewardDishId);
     return dish ? dish.Name : "Select Reward Dish";
+  };
+
+  const getRewardGroupName = () => {
+    const group = dishGroups.find(dg => dg.DishGroupId === rewardDishGroupId);
+    return group ? group.DishGroupName : "Select Reward Dish Group";
   };
 
   return (
@@ -421,7 +447,11 @@ export default function LoyaltyConfigScreen() {
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Free Reward:</Text>
-                    <Text style={styles.detailValue}>{item.RewardDishName || "Unknown"}</Text>
+                    <Text style={styles.detailValue}>
+                      {item.LoyaltyType === "DishGroup" 
+                        ? `${item.RewardDishGroupName || "Unknown"} (Group)` 
+                        : item.RewardDishName || "Unknown"}
+                    </Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Required Qty:</Text>
@@ -628,49 +658,98 @@ export default function LoyaltyConfigScreen() {
                 </View>
               )}
 
-              {/* Reward Dish Selection */}
-              <View style={{ zIndex: 90 }}>
-                <Text style={styles.inputLabel}>Reward Dish (Free Item) *</Text>
-                <TouchableOpacity 
-                  style={styles.dropdownTrigger}
-                  onPress={() => {
-                    setShowRewardDropdown(!showRewardDropdown);
-                    setShowPurchaseDropdown(false);
-                  }}
-                >
-                  <Text style={[styles.dropdownTriggerText, rewardDishId ? styles.dropdownSelected : null]}>
-                    {getRewardDishName()}
-                  </Text>
-                  <Ionicons name="chevron-down" size={14} color={Theme.textSecondary} />
-                </TouchableOpacity>
+              {/* Reward Selection */}
+              {loyaltyType === "Dish" ? (
+                <View style={{ zIndex: 90 }}>
+                  <Text style={styles.inputLabel}>Reward Dish (Free Item) *</Text>
+                  <TouchableOpacity 
+                    style={styles.dropdownTrigger}
+                    onPress={() => {
+                      setShowRewardDropdown(!showRewardDropdown);
+                      setShowPurchaseDropdown(false);
+                      setShowDishGroupDropdown(false);
+                      setShowRewardGroupDropdown(false);
+                    }}
+                  >
+                    <Text style={[styles.dropdownTriggerText, rewardDishId ? styles.dropdownSelected : null]}>
+                      {getRewardDishName()}
+                    </Text>
+                    <Ionicons name="chevron-down" size={14} color={Theme.textSecondary} />
+                  </TouchableOpacity>
 
-                {showRewardDropdown && (
-                  <View style={styles.dropdownContainer}>
-                    <TextInput
-                      style={styles.dropdownSearch}
-                      placeholder="Search dish..."
-                      value={rewardSearch}
-                      onChangeText={setRewardSearch}
-                      placeholderTextColor={Theme.textMuted}
-                    />
-                    <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled">
-                      {rewardDishesFiltered.map((dish) => (
-                        <TouchableOpacity
-                          key={dish.DishId}
-                          style={styles.dropdownItem}
-                          onPress={() => {
-                            setRewardDishId(dish.DishId);
-                            setRewardSearch(dish.Name);
-                            setShowRewardDropdown(false);
-                          }}
-                        >
-                          <Text style={styles.dropdownItemText}>{dish.Name}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-              </View>
+                  {showRewardDropdown && (
+                    <View style={styles.dropdownContainer}>
+                      <TextInput
+                        style={styles.dropdownSearch}
+                        placeholder="Search dish..."
+                        value={rewardSearch}
+                        onChangeText={setRewardSearch}
+                        placeholderTextColor={Theme.textMuted}
+                      />
+                      <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled">
+                        {rewardDishesFiltered.map((dish) => (
+                          <TouchableOpacity
+                            key={dish.DishId}
+                            style={styles.dropdownItem}
+                            onPress={() => {
+                              setRewardDishId(dish.DishId);
+                              setRewardSearch(dish.Name);
+                              setShowRewardDropdown(false);
+                            }}
+                          >
+                            <Text style={styles.dropdownItemText}>{dish.Name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <View style={{ zIndex: 90 }}>
+                  <Text style={styles.inputLabel}>Reward Dish Group (Free Item Group) *</Text>
+                  <TouchableOpacity 
+                    style={styles.dropdownTrigger}
+                    onPress={() => {
+                      setShowRewardGroupDropdown(!showRewardGroupDropdown);
+                      setShowPurchaseDropdown(false);
+                      setShowDishGroupDropdown(false);
+                      setShowRewardDropdown(false);
+                    }}
+                  >
+                    <Text style={[styles.dropdownTriggerText, rewardDishGroupId ? styles.dropdownSelected : null]}>
+                      {getRewardGroupName()}
+                    </Text>
+                    <Ionicons name="chevron-down" size={14} color={Theme.textSecondary} />
+                  </TouchableOpacity>
+
+                  {showRewardGroupDropdown && (
+                    <View style={styles.dropdownContainer}>
+                      <TextInput
+                        style={styles.dropdownSearch}
+                        placeholder="Search group..."
+                        value={rewardGroupSearch}
+                        onChangeText={setRewardGroupSearch}
+                        placeholderTextColor={Theme.textMuted}
+                      />
+                      <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled">
+                        {rewardGroupsFiltered.map((group) => (
+                          <TouchableOpacity
+                            key={group.DishGroupId}
+                            style={styles.dropdownItem}
+                            onPress={() => {
+                              setRewardDishGroupId(group.DishGroupId);
+                              setRewardGroupSearch(group.DishGroupName);
+                              setShowRewardGroupDropdown(false);
+                            }}
+                          >
+                            <Text style={styles.dropdownItemText}>{group.DishGroupName}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              )}
 
               {/* Required Quantity & Status */}
               <View style={{ flexDirection: "row", gap: 12 }}>

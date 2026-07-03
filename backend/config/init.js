@@ -727,7 +727,7 @@ async function initDB(pool) {
     `);
 
     // 25.1. Loyalty tables schema/columns migrations (Phase 1)
-    await runQuery("Migration - LoyaltyRule Type & PurchaseDishGroupId", `
+    await runQuery("Migration - LoyaltyRule Type & PurchaseDishGroupId & RewardDishGroupId", `
       IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[LoyaltyRule]') AND type in (N'U'))
       BEGIN
           IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[LoyaltyRule]') AND name = 'LoyaltyType')
@@ -740,8 +740,16 @@ async function initDB(pool) {
               ALTER TABLE [dbo].[LoyaltyRule] ADD [PurchaseDishGroupId] UNIQUEIDENTIFIER NULL;
           END
 
+          IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[LoyaltyRule]') AND name = 'RewardDishGroupId')
+          BEGIN
+              ALTER TABLE [dbo].[LoyaltyRule] ADD [RewardDishGroupId] UNIQUEIDENTIFIER NULL;
+          END
+
           -- Ensure PurchaseDishId is nullable
           ALTER TABLE [dbo].[LoyaltyRule] ALTER COLUMN [PurchaseDishId] UNIQUEIDENTIFIER NULL;
+
+          -- Ensure RewardDishId is nullable
+          ALTER TABLE [dbo].[LoyaltyRule] ALTER COLUMN [RewardDishId] UNIQUEIDENTIFIER NULL;
       END
     `);
 

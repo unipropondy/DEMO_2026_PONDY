@@ -22,6 +22,8 @@ router.get("/", async (req, res) => {
         dg.DishGroupName AS PurchaseDishGroupName,
         r.RewardDishId,
         rd.Name AS RewardDishName,
+        r.RewardDishGroupId,
+        rg.DishGroupName AS RewardDishGroupName,
         r.RequiredBills,
         r.IsActive,
         c.Name AS CampaignName,
@@ -33,6 +35,7 @@ router.get("/", async (req, res) => {
       LEFT JOIN DishMaster pd ON r.PurchaseDishId = pd.DishId
       LEFT JOIN DishGroupMaster dg ON r.PurchaseDishGroupId = dg.DishGroupId
       LEFT JOIN DishMaster rd ON r.RewardDishId = rd.DishId
+      LEFT JOIN DishGroupMaster rg ON r.RewardDishGroupId = rg.DishGroupId
       ORDER BY r.CreatedOn DESC
     `);
     res.json(result.recordset || []);
@@ -45,12 +48,12 @@ router.get("/", async (req, res) => {
 // ================= SAVE / CREATE CONFIGURATION =================
 router.post("/save", async (req, res) => {
   try {
-    const { ruleId, campaignName, loyaltyType, purchaseDishId, purchaseDishGroupId, rewardDishId, requiredBills, isActive, startDate, endDate } = req.body;
+    const { ruleId, campaignName, loyaltyType, purchaseDishId, purchaseDishGroupId, rewardDishId, rewardDishGroupId, requiredBills, isActive, startDate, endDate } = req.body;
 
     const type = loyaltyType || "Dish";
 
-    if (!campaignName || !rewardDishId || !requiredBills) {
-      return res.status(400).json({ error: "Missing required fields: campaignName, rewardDishId, requiredBills" });
+    if (!campaignName || !requiredBills) {
+      return res.status(400).json({ error: "Missing required fields: campaignName, requiredBills" });
     }
 
     if (type === "Dish" && !purchaseDishId) {
@@ -71,6 +74,9 @@ router.post("/save", async (req, res) => {
 
     // 1. Validation: Verify dishes / groups exist
     if (type === "Dish") {
+      if (!purchaseDishId || !rewardDishId) {
+        return res.status(400).json({ error: "Missing purchaseDishId or rewardDishId for Dish loyalty." });
+      }
       const dishCheck = await pool.request()
         .input("PurchaseId", sql.UniqueIdentifier, purchaseDishId)
         .input("RewardId", sql.UniqueIdentifier, rewardDishId)
@@ -82,24 +88,18 @@ router.post("/save", async (req, res) => {
         return res.status(400).json({ error: "One or both selected dishes do not exist in DishMaster." });
       }
     } else {
-      const groupCheck = await pool.request()
-        .input("GroupId", sql.UniqueIdentifier, purchaseDishGroupId)
-        .query(`
-          SELECT DishGroupId FROM DishGroupMaster WHERE DishGroupId = @GroupId
-        `);
-      
-      if (groupCheck.recordset.length === 0) {
-        return res.status(400).json({ error: "Selected dish group does not exist." });
+      if (!purchaseDishGroupId || !rewardDishGroupId) {
+        return res.status(400).json({ error: "Missing purchaseDishGroupId or rewardDishGroupId for Dish Group loyalty." });
       }
-
-      const rewardCheck = await pool.request()
-        .input("RewardId", sql.UniqueIdentifier, rewardDishId)
+      const groupCheck = await pool.request()
+        .input("PurchaseGroupId", sql.UniqueIdentifier, purchaseDishGroupId)
+        .input("RewardGroupId", sql.UniqueIdentifier, rewardDishGroupId)
         .query(`
-          SELECT DishId FROM DishMaster WHERE DishId = @RewardId
+          SELECT DishGroupId FROM DishGroupMaster WHERE DishGroupId IN (@PurchaseGroupId, @RewardGroupId)
         `);
       
-      if (rewardCheck.recordset.length === 0) {
-        return res.status(400).json({ error: "Selected reward dish does not exist." });
+      if (groupCheck.recordset.length < (purchaseDishGroupId === rewardDishGroupId ? 1 : 2)) {
+        return res.status(400).json({ error: "One or both selected dish groups do not exist." });
       }
     }
 
@@ -170,7 +170,8 @@ router.post("/save", async (req, res) => {
           .input("LoyaltyType", sql.NVarChar(50), type)
           .input("PurchaseDishId", sql.UniqueIdentifier, type === "Dish" ? purchaseDishId : null)
           .input("PurchaseDishGroupId", sql.UniqueIdentifier, type === "DishGroup" ? purchaseDishGroupId : null)
-          .input("RewardDishId", sql.UniqueIdentifier, rewardDishId)
+          .input("RewardDishId", sql.UniqueIdentifier, type === "Dish" ? rewardDishId : null)
+          .input("RewardDishGroupId", sql.UniqueIdentifier, type === "DishGroup" ? rewardDishGroupId : null)
           .input("RequiredBills", sql.Int, billsCount)
           .input("IsActive", sql.Bit, ruleActiveState)
           .query(`
@@ -179,6 +180,7 @@ router.post("/save", async (req, res) => {
                 PurchaseDishId = @PurchaseDishId,
                 PurchaseDishGroupId = @PurchaseDishGroupId,
                 RewardDishId = @RewardDishId,
+                RewardDishGroupId = @RewardDishGroupId,
                 RequiredBills = @RequiredBills,
                 IsActive = @IsActive
             WHERE RuleId = @RuleId
@@ -203,12 +205,13 @@ router.post("/save", async (req, res) => {
           .input("LoyaltyType", sql.NVarChar(50), type)
           .input("PurchaseDishId", sql.UniqueIdentifier, type === "Dish" ? purchaseDishId : null)
           .input("PurchaseDishGroupId", sql.UniqueIdentifier, type === "DishGroup" ? purchaseDishGroupId : null)
-          .input("RewardDishId", sql.UniqueIdentifier, rewardDishId)
+          .input("RewardDishId", sql.UniqueIdentifier, type === "Dish" ? rewardDishId : null)
+          .input("RewardDishGroupId", sql.UniqueIdentifier, type === "DishGroup" ? rewardDishGroupId : null)
           .input("RequiredBills", sql.Int, billsCount)
           .input("IsActive", sql.Bit, ruleActiveState)
           .query(`
-            INSERT INTO LoyaltyRule (RuleId, CampaignId, LoyaltyType, PurchaseDishId, PurchaseDishGroupId, RewardDishId, RequiredBills, IsActive)
-            VALUES (NEWID(), @CampaignId, @LoyaltyType, @PurchaseDishId, @PurchaseDishGroupId, @RewardDishId, @RequiredBills, @IsActive)
+            INSERT INTO LoyaltyRule (RuleId, CampaignId, LoyaltyType, PurchaseDishId, PurchaseDishGroupId, RewardDishId, RewardDishGroupId, RequiredBills, IsActive)
+            VALUES (NEWID(), @CampaignId, @LoyaltyType, @PurchaseDishId, @PurchaseDishGroupId, @RewardDishId, @RewardDishGroupId, @RequiredBills, @IsActive)
           `);
       }
 
