@@ -47,6 +47,18 @@ const normalizeKitchenItem = (item: any) => {
           }
         })()
       : [];
+
+  let comboSelections = undefined;
+  const comboJson = item?.ComboDetailsJSON ?? item?.comboDetailsJSON;
+  if (comboJson) {
+    try {
+      const parsed = typeof comboJson === "string" ? JSON.parse(comboJson) : comboJson;
+      comboSelections = Array.isArray(parsed) ? parsed : parsed?.groups;
+    } catch {
+      comboSelections = undefined;
+    }
+  }
+
   return {
     ...item,
     lineItemId: item.lineItemId ? String(item.lineItemId).toLowerCase() : undefined,
@@ -57,6 +69,7 @@ const normalizeKitchenItem = (item: any) => {
     oil: item?.oil ?? item?.Oil ?? "",
     sugar: item?.sugar ?? item?.Sugar ?? "",
     modifiers,
+    comboSelections,
   };
 };
 
