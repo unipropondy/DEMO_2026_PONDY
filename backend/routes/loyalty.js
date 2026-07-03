@@ -135,6 +135,7 @@ router.get("/customer/:phone/dish-progress", async (req, res) => {
       .query(`
         SELECT 
           r.RuleId,
+          r.LoyaltyType,
           r.RequiredBills,
           ISNULL(pd.Name, dg.DishGroupName) AS PurchaseDishName,
           ISNULL(rd.Name, dgReward.DishGroupName) AS RewardDishName,

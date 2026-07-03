@@ -549,7 +549,7 @@ export default function LoyaltyScreen() {
                           >
                             <View style={styles.dishProgressHeader}>
                               <Text style={styles.dishProgressName}>
-                                {prog.CampaignName} ({prog.PurchaseDishName})
+                                {prog.CampaignName} ({prog.LoyaltyType === "DishGroup" ? `${prog.PurchaseDishName} (Group)` : prog.PurchaseDishName})
                               </Text>
                               {prog.RewardsAvailable > 0 && (
                                 <View style={styles.dishRewardBadge}>
@@ -579,7 +579,7 @@ export default function LoyaltyScreen() {
                                 quantities purchased
                               </Text>
                               <Text style={styles.dishRewardTarget}>
-                                Reward: Free {prog.RewardDishName}
+                                Reward: Free {prog.LoyaltyType === "DishGroup" ? `${prog.RewardDishName} (Group)` : prog.RewardDishName}
                               </Text>
                             </View>
                           </View>
