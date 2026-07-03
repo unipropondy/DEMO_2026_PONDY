@@ -410,6 +410,14 @@ private static escapeHtml(str: string): string {
               }).join('')
             : '';
 
+          const comboSelectionsHTML = (item.isCombo && item.comboSelections && Array.isArray(item.comboSelections))
+            ? item.comboSelections.map((group: any) => {
+                return group.items?.map((opt: any) => {
+                  return `<div class="item-modifiers">↳ ${opt.name} ${opt.surcharge > 0 ? `(+${currencySymbol}${opt.surcharge.toFixed(2)})` : ''}</div>`;
+                }).join('') || '';
+              }).join('')
+            : '';
+
           return `
             <tr>
                 <td class="item-name">
@@ -417,6 +425,7 @@ private static escapeHtml(str: string): string {
                     ${item.songName || item.SongName ? `<div style="font-size: 8.5px; color: #555; font-style: italic; margin-top: 0.5mm;">🎵 ${item.songName || item.SongName}</div>` : ''}
                     ${(Number(item.isServiceCharge) === 1 || item.isServiceCharge === true) && !allItemsHaveSC ? `<div style="font-size: 8.5px; color: #555; font-style: italic; margin-top: 0.5mm;">[Service Charge ${company.serviceChargePercentage}%]</div>` : ''}
                     ${modifiersHTML}
+                    ${comboSelectionsHTML}
                     ${(() => {
                       const discAmt = Number(item.discountAmount ?? item.discount ?? 0);
                       if (discAmt > 0) {

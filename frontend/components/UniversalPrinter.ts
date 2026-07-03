@@ -1090,6 +1090,15 @@ class UniversalPrinter {
             });
           }
 
+          if (item.comboSelections && item.comboSelections.length > 0) {
+            item.comboSelections.forEach((g: any) => {
+              text += `[L]    ${g.groupName}:\n`;
+              g.items?.forEach((opt: any) => {
+                text += `[L]      ↳ ${opt.name}\n`;
+              });
+            });
+          }
+
           const noteText = item.note || item.notes || item.Remarks || item.remarks;
           if (noteText) {
             text += `[L]    * NOTE: ${noteText}\n`;
@@ -1124,6 +1133,15 @@ class UniversalPrinter {
         if (item.modifiers && item.modifiers.length > 0) {
           item.modifiers.forEach((m: any) => {
             text += `[L]    + ${m.ModifierName || m.name}\n`;
+          });
+        }
+
+        if (item.comboSelections && item.comboSelections.length > 0) {
+          item.comboSelections.forEach((g: any) => {
+            text += `[L]    ${g.groupName}:\n`;
+            g.items?.forEach((opt: any) => {
+              text += `[L]      ↳ ${opt.name}\n`;
+            });
           });
         }
 
