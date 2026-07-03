@@ -170,6 +170,14 @@ const normalizeCartItem = (item: any, fallback: Partial<CartItem> = {}): CartIte
   const _comboBasePrice: number | undefined = (!Array.isArray(_parsedCombo) && _parsedCombo && (_parsedCombo as any).basePrice !== undefined)
     ? Number((_parsedCombo as any).basePrice)
     : undefined;
+
+  // If item.comboSelections was already parsed by backend/other layers and passed as the wrapper object, extract the array
+  let incomingComboSelections = item.comboSelections || item.ComboSelections;
+  if (incomingComboSelections && !Array.isArray(incomingComboSelections) && typeof incomingComboSelections === 'object') {
+    if (Array.isArray((incomingComboSelections as any).groups)) {
+      incomingComboSelections = (incomingComboSelections as any).groups;
+    }
+  }
   const qty = Number(item.qty ?? item.Quantity ?? item.quantity ?? fallback.qty ?? 1);
   const price = Number(item.price ?? item.Cost ?? item.Price ?? fallback.price ?? 0);
   const note = getNormalizedText(item.note, item.Note, item.notes, item.Notes, item.Remarks, item.remarks, fallback.note);
@@ -232,7 +240,7 @@ const normalizeCartItem = (item: any, fallback: Partial<CartItem> = {}): CartIte
     IsOpenItem: item.IsOpenItem !== undefined ? item.IsOpenItem : fallback.IsOpenItem,
     isServiceCharge: item.isServiceCharge !== undefined ? item.isServiceCharge : (fallback.isServiceCharge !== undefined ? fallback.isServiceCharge : 0),
     isCombo: getNormalizedBoolean(item.isCombo, item.IsCombo, item.ComboDetailsJSON, fallback.isCombo),
-    comboSelections: item.comboSelections || item.ComboSelections || _comboGroups || fallback.comboSelections || undefined,
+    comboSelections: incomingComboSelections || _comboGroups || fallback.comboSelections || undefined,
   };
 };
 
