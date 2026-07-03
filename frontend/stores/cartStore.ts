@@ -53,6 +53,8 @@ export type CartItem = {
   sentDate?: string | number;
   IsOpenItem?: boolean | number | string;
   isServiceCharge?: number | boolean;
+  isCombo?: boolean;
+  comboSelections?: any[];
 };
 
 export type DiscountInfo = {
@@ -214,6 +216,8 @@ const normalizeCartItem = (item: any, fallback: Partial<CartItem> = {}): CartIte
     KitchenTypeCode: item.KitchenTypeCode || fallback.KitchenTypeCode,
     IsOpenItem: item.IsOpenItem !== undefined ? item.IsOpenItem : fallback.IsOpenItem,
     isServiceCharge: item.isServiceCharge !== undefined ? item.isServiceCharge : (fallback.isServiceCharge !== undefined ? fallback.isServiceCharge : 0),
+    isCombo: getNormalizedBoolean(item.isCombo, item.IsCombo, fallback.isCombo),
+    comboSelections: item.comboSelections || item.ComboSelections || fallback.comboSelections || undefined,
   };
 };
 
@@ -221,6 +225,11 @@ const canMergeCartItems = (left: CartItem, right: CartItem) => {
   if (left.id !== right.id) return false;
   if (isOpenPriceItem(left) || isOpenPriceItem(right)) {
     if (left.price !== right.price) return false;
+  }
+  if (left.isCombo || right.isCombo) {
+    // Never merge combo items unless they are identical, or simply never merge to keep orders clean
+    if (left.isCombo !== right.isCombo) return false;
+    if (JSON.stringify(left.comboSelections) !== JSON.stringify(right.comboSelections)) return false;
   }
   return (
     (left.status || "NEW") === "NEW" &&
