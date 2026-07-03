@@ -155,6 +155,21 @@ const updateCartItemInArray = (items: CartItem[], lineItemId: string, updates: P
 };
 
 const normalizeCartItem = (item: any, fallback: Partial<CartItem> = {}): CartItem => {
+  // Parse ComboDetailsJSON once — handles both old array format and new { basePrice, groups } format
+  let _parsedCombo: { basePrice?: number; groups?: any[] } | any[] | null = null;
+  if (typeof item.ComboDetailsJSON === 'string' && item.ComboDetailsJSON) {
+    try { _parsedCombo = JSON.parse(item.ComboDetailsJSON); } catch { _parsedCombo = null; }
+  } else if (Array.isArray(item.ComboDetailsJSON)) {
+    _parsedCombo = item.ComboDetailsJSON;
+  }
+  // Extract groups array from parsed combo (backward-compatible)
+  const _comboGroups: any[] | undefined = _parsedCombo
+    ? (Array.isArray(_parsedCombo) ? _parsedCombo : (_parsedCombo as any).groups)
+    : undefined;
+  // Extract stored basePrice from parsed combo (prevents double-counting on re-sync)
+  const _comboBasePrice: number | undefined = (!Array.isArray(_parsedCombo) && _parsedCombo && (_parsedCombo as any).basePrice !== undefined)
+    ? Number((_parsedCombo as any).basePrice)
+    : undefined;
   const qty = Number(item.qty ?? item.Quantity ?? item.quantity ?? fallback.qty ?? 1);
   const price = Number(item.price ?? item.Cost ?? item.Price ?? fallback.price ?? 0);
   const note = getNormalizedText(item.note, item.Note, item.notes, item.Notes, item.Remarks, item.remarks, fallback.note);
@@ -192,7 +207,7 @@ const normalizeCartItem = (item: any, fallback: Partial<CartItem> = {}): CartIte
     ),
     qty,
     price,
-    basePrice: Number(item.basePrice ?? fallback.basePrice ?? price),
+    basePrice: Number(item.basePrice ?? _comboBasePrice ?? fallback.basePrice ?? price),
     note,
     isTakeaway,
     discount,
@@ -217,7 +232,7 @@ const normalizeCartItem = (item: any, fallback: Partial<CartItem> = {}): CartIte
     IsOpenItem: item.IsOpenItem !== undefined ? item.IsOpenItem : fallback.IsOpenItem,
     isServiceCharge: item.isServiceCharge !== undefined ? item.isServiceCharge : (fallback.isServiceCharge !== undefined ? fallback.isServiceCharge : 0),
     isCombo: getNormalizedBoolean(item.isCombo, item.IsCombo, item.ComboDetailsJSON, fallback.isCombo),
-    comboSelections: item.comboSelections || item.ComboSelections || (typeof item.ComboDetailsJSON === 'string' && item.ComboDetailsJSON ? (() => { try { return JSON.parse(item.ComboDetailsJSON); } catch { return undefined; } })() : (Array.isArray(item.ComboDetailsJSON) ? item.ComboDetailsJSON : undefined)) || fallback.comboSelections || undefined,
+    comboSelections: item.comboSelections || item.ComboSelections || _comboGroups || fallback.comboSelections || undefined,
   };
 };
 

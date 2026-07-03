@@ -394,13 +394,18 @@ async function syncToProfessionalTables(
     const modsJSON = JSON.stringify(modifiers);
 
     // ─── COMBO HANDLING ────────────────────────────────────────────
-    // If the item is a combo, calculate the total price including surcharges
-    // and serialize the selections into ComboDetailsJSON for KDS and billing.
+    // Store combo selections + basePrice together in ComboDetailsJSON so that
+    // on subsequent syncs we always recalculate from the ORIGINAL dish cost,
+    // not the already-calculated final price (prevents double-counting).
     const isCombo = item.isCombo === true || String(item.isCombo) === "1";
     let comboDetailsJSON = null;
     let resolvedUnitPrice = unitPrice;
     if (isCombo && Array.isArray(item.comboSelections) && item.comboSelections.length > 0) {
-      // Sum all surcharges from every selected option in every group
+      // Prefer the basePrice sent by the frontend; fall back to item.price.
+      // item.basePrice is the original combo dish cost BEFORE options are added.
+      // Using it prevents surcharges from stacking on repeated DB syncs.
+      const basePrice = parseFloat(item.basePrice || unitPrice);
+
       let totalSurcharge = 0;
       item.comboSelections.forEach(group => {
         if (Array.isArray(group.items)) {
@@ -409,8 +414,32 @@ async function syncToProfessionalTables(
           });
         }
       });
-      resolvedUnitPrice = parseFloat(unitPrice) + totalSurcharge;
-      comboDetailsJSON = JSON.stringify(item.comboSelections);
+      resolvedUnitPrice = basePrice + totalSurcharge;
+
+      // Wrap selections with the basePrice so we can recover it from the DB
+      comboDetailsJSON = JSON.stringify({ basePrice, groups: item.comboSelections });
+    } else if (isCombo) {
+      // Combo with no selections saved yet — check if ComboDetailsJSON is already stored
+      try {
+        const existing = item.ComboDetailsJSON || item.comboDetailsJSON;
+        if (existing) {
+          const parsed = typeof existing === "string" ? JSON.parse(existing) : existing;
+          const bp = parsed.basePrice;
+          if (bp !== undefined) {
+            const groups = parsed.groups || [];
+            let totalSurcharge = 0;
+            groups.forEach((group: any) => {
+              if (Array.isArray(group.items)) {
+                group.items.forEach((opt: any) => {
+                  totalSurcharge += parseFloat(opt.surcharge || 0) + parseFloat(opt.dishPrice || 0);
+                });
+              }
+            });
+            resolvedUnitPrice = parseFloat(bp) + totalSurcharge;
+            comboDetailsJSON = existing; // preserve as-is
+          }
+        }
+      } catch (_) { /* leave as unitPrice */ }
     }
 
     const p_id = `id${idx}`,

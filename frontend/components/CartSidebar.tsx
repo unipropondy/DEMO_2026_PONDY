@@ -666,11 +666,14 @@ const CartItemRow = React.memo(
                     <Text style={[styles.modifierTextSmall, { fontFamily: Fonts.bold, color: Theme.primary }]}>
                       {group.groupName}:
                     </Text>
-                    {group.items.map((opt: any, oIdx: number) => (
-                      <Text key={`o-${oIdx}`} style={[styles.modifierTextSmall, { paddingLeft: 6 }]}>
-                        ↳ {opt.name} {opt.surcharge > 0 ? `(+$${opt.surcharge.toFixed(2)})` : ""}
-                      </Text>
-                    ))}
+                    {(group.items || []).map((opt: any, oIdx: number) => {
+                      const effectiveAdd = (parseFloat(opt.surcharge || 0) + parseFloat(opt.dishPrice || 0));
+                      return (
+                        <Text key={`o-${oIdx}`} style={[styles.modifierTextSmall, { paddingLeft: 6 }]}>
+                          ↳ {opt.name}{effectiveAdd > 0 ? ` (+$${effectiveAdd.toFixed(2)})` : ""}
+                        </Text>
+                      );
+                    })}
                   </View>
                 ))}
               {item.note || item.notes ? (
