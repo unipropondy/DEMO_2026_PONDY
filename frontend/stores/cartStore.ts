@@ -456,6 +456,11 @@ export const useCartStore = create<CartState>()(
               if (p.price !== normalizedIncoming.price) return false;
             }
 
+            if (p.isCombo || normalizedIncoming.isCombo) {
+              if (p.isCombo !== normalizedIncoming.isCombo) return false;
+              if (JSON.stringify(p.comboSelections) !== JSON.stringify(normalizedIncoming.comboSelections)) return false;
+            }
+
             return getModifierKey(p.modifiers) === newItemModKey;
           });
 
