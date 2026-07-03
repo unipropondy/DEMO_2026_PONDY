@@ -933,6 +933,12 @@ class UniversalPrinter {
                     </div>
                     ${groupItems.map((item: any) => {
                       const noteText = item.note || item.notes || item.Remarks || item.remarks;
+                      const comboSels = item.comboSelections || 
+                        (typeof item.ComboDetailsJSON === 'string' && item.ComboDetailsJSON 
+                          ? (() => { try { const p = JSON.parse(item.ComboDetailsJSON); return Array.isArray(p) ? p : p.groups; } catch { return undefined; } })() 
+                          : (Array.isArray(item.ComboDetailsJSON) ? item.ComboDetailsJSON : undefined)) || [];
+                      const hasCombo = Array.isArray(comboSels) && comboSels.length > 0;
+
                       return `
                         <div class="item-row">
                           <div class="item-main">
@@ -952,6 +958,14 @@ class UniversalPrinter {
                               ? `<div class="modifier-list">${item.modifiers.map((m: any) => `<span class="modifier-item">- ${m.name || m.ModifierName}</span>`).join("")}</div>`
                               : ""
                           }
+                          ${
+                            hasCombo
+                              ? `<div class="modifier-list">${comboSels.map((g: any) => `
+                                  <div style="font-weight: bold; margin-top: 2px;">${g.groupName}:</div>
+                                  ${g.items?.map((opt: any) => `<span class="modifier-item" style="padding-left: 10px;">↳ ${opt.name}</span>`).join("")}
+                                `).join("")}</div>`
+                              : ""
+                          }
                           ${noteText ? `<div class="remarks">* NOTE: ${noteText}</div>` : ""}
                         </div>
                       `;
@@ -962,6 +976,12 @@ class UniversalPrinter {
 
               return items.map((item: any) => {
                 const noteText = item.note || item.notes || item.Remarks || item.remarks;
+                const comboSels = item.comboSelections || 
+                  (typeof item.ComboDetailsJSON === 'string' && item.ComboDetailsJSON 
+                    ? (() => { try { const p = JSON.parse(item.ComboDetailsJSON); return Array.isArray(p) ? p : p.groups; } catch { return undefined; } })() 
+                    : (Array.isArray(item.ComboDetailsJSON) ? item.ComboDetailsJSON : undefined)) || [];
+                const hasCombo = Array.isArray(comboSels) && comboSels.length > 0;
+
                 return `
                   <div class="item-row">
                     <div class="item-main">
@@ -991,6 +1011,22 @@ class UniversalPrinter {
                           .map(
                             (m: any) => `
                           <span class="modifier-item">- ${m.name || m.ModifierName}</span>
+                        `,
+                          )
+                          .join("")}
+                      </div>
+                    `
+                        : ""
+                    }
+                    ${
+                      hasCombo
+                        ? `
+                      <div class="modifier-list">
+                        ${comboSels
+                          .map(
+                            (g: any) => `
+                          <div style="font-weight: bold; margin-top: 2px;">${g.groupName}:</div>
+                          ${g.items?.map((opt: any) => `<span class="modifier-item" style="padding-left: 10px;">↳ ${opt.name}</span>`).join("")}
                         `,
                           )
                           .join("")}
