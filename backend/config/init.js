@@ -770,6 +770,48 @@ async function initDB(pool) {
       END
     `);
 
+    // 27. Combo Meal Schema Migration
+    await runQuery("DishMaster - IsCombo", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[DishMaster]') AND name = 'IsCombo') ALTER TABLE [dbo].[DishMaster] ADD IsCombo BIT NOT NULL DEFAULT 0");
+    await runQuery("RestaurantOrderDetailCur - ComboDetailsJSON", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[RestaurantOrderDetailCur]') AND name = 'ComboDetailsJSON') ALTER TABLE [dbo].[RestaurantOrderDetailCur] ADD ComboDetailsJSON NVARCHAR(MAX) NULL");
+    await runQuery("RestaurantOrderDetail - ComboDetailsJSON", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[RestaurantOrderDetail]') AND name = 'ComboDetailsJSON') ALTER TABLE [dbo].[RestaurantOrderDetail] ADD ComboDetailsJSON NVARCHAR(MAX) NULL");
+    await runQuery("SettlementItemDetail - ComboDetailsJSON", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[SettlementItemDetail]') AND name = 'ComboDetailsJSON') ALTER TABLE [dbo].[SettlementItemDetail] ADD ComboDetailsJSON NVARCHAR(MAX) NULL");
+
+    await runQuery("Create ComboGroupMaster", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ComboGroupMaster]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[ComboGroupMaster](
+              [ComboGroupId] [uniqueidentifier] NOT NULL PRIMARY KEY DEFAULT NEWID(),
+              [ParentComboDishId] [uniqueidentifier] NOT NULL,
+              [GroupName] [nvarchar](100) NOT NULL,
+              [DisplayOrder] [int] NOT NULL DEFAULT 0,
+              [MinSelection] [int] NOT NULL DEFAULT 1,
+              [MaxSelection] [int] NOT NULL DEFAULT 1,
+              [IsMultiSelect] [bit] NOT NULL DEFAULT 0,
+              [IsActive] [bit] NOT NULL DEFAULT 1,
+              [CreatedOn] [datetime] DEFAULT GETDATE()
+          );
+          CREATE NONCLUSTERED INDEX IX_ComboGroupMaster_ParentComboDishId ON [dbo].[ComboGroupMaster](ParentComboDishId);
+      END
+    `);
+
+    await runQuery("Create ComboGroupDishMapping", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ComboGroupDishMapping]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[ComboGroupDishMapping](
+              [MappingId] [uniqueidentifier] NOT NULL PRIMARY KEY DEFAULT NEWID(),
+              [ComboGroupId] [uniqueidentifier] NOT NULL,
+              [DishId] [uniqueidentifier] NOT NULL,
+              [Surcharge] [decimal](18, 2) NOT NULL DEFAULT 0.00,
+              [IsDefault] [bit] NOT NULL DEFAULT 0,
+              [SortOrder] [int] NOT NULL DEFAULT 0,
+              [StoreId] [uniqueidentifier] NULL,
+              [IsActive] [bit] NOT NULL DEFAULT 1,
+              [CreatedOn] [datetime] DEFAULT GETDATE()
+          );
+          CREATE NONCLUSTERED INDEX IX_ComboGroupDishMapping_ComboGroupId ON [dbo].[ComboGroupDishMapping](ComboGroupId);
+      END
+    `);
+
     console.log("✅ Database schema and performance indexes are up to date.");
 
 

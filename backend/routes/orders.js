@@ -393,6 +393,26 @@ async function syncToProfessionalTables(
     const modifiers = Array.isArray(item.modifiers) ? item.modifiers : [];
     const modsJSON = JSON.stringify(modifiers);
 
+    // ─── COMBO HANDLING ────────────────────────────────────────────
+    // If the item is a combo, calculate the total price including surcharges
+    // and serialize the selections into ComboDetailsJSON for KDS and billing.
+    const isCombo = item.isCombo === true || String(item.isCombo) === "1";
+    let comboDetailsJSON = null;
+    let resolvedUnitPrice = unitPrice;
+    if (isCombo && Array.isArray(item.comboSelections) && item.comboSelections.length > 0) {
+      // Sum all surcharges from every selected option in every group
+      let totalSurcharge = 0;
+      item.comboSelections.forEach(group => {
+        if (Array.isArray(group.items)) {
+          group.items.forEach(opt => {
+            totalSurcharge += parseFloat(opt.surcharge || 0);
+          });
+        }
+      });
+      resolvedUnitPrice = parseFloat(unitPrice) + totalSurcharge;
+      comboDetailsJSON = JSON.stringify(item.comboSelections);
+    }
+
     const p_id = `id${idx}`,
       p_dish = `dish${idx}`,
       p_qty = `qty${idx}`,
@@ -406,18 +426,20 @@ async function syncToProfessionalTables(
       p_disc = `disc${idx}`,
       p_disctype = `disctype${idx}`,
       p_created = `created${idx}`,
-      p_sc = `sc${idx}`;
+      p_sc = `sc${idx}`,
+      p_combo = `combo${idx}`;
 
     itemRequest.input(p_id, sql.UniqueIdentifier, lineItemId);
     itemRequest.input(p_dish, sql.UniqueIdentifier, finalProdId);
     itemRequest.input(p_qty, sql.Int, item.qty || 1);
-    itemRequest.input(p_cost, sql.Decimal(18, 2), unitPrice);
+    itemRequest.input(p_cost, sql.Decimal(18, 2), resolvedUnitPrice);
     itemRequest.input(p_status, sql.Int, currentStatusCode);
     itemRequest.input(p_name, sql.NVarChar(200), dishName);
     itemRequest.input(p_song, sql.NVarChar(200), songName);
     itemRequest.input(p_note, sql.NVarChar(sql.MAX), noteInfo.value);
     itemRequest.input(p_mods, sql.NVarChar(sql.MAX), modsJSON);
     itemRequest.input(p_tw, sql.Bit, takeawayInfo.value ? 1 : 0);
+    itemRequest.input(p_combo, sql.NVarChar(sql.MAX), comboDetailsJSON);
     itemRequest.input(p_disc, sql.Decimal(18, 2), item.discount || 0);
     // Use actual discountType from cart item; fall back to 'percentage' if there's a discount but no type,
     // or 'fixed' (i.e. no discount) when discount is 0/null.
@@ -475,15 +497,15 @@ async function syncToProfessionalTables(
           BaseAmount = @${p_cost} * @${p_qty},
           StatusCode = CASE WHEN @${p_status} = 0 THEN 0 ELSE (CASE WHEN @${p_status} > StatusCode THEN @${p_status} ELSE StatusCode END) END, 
           Description = @${p_name}, DishName = @${p_name},SongName = @${p_song}, ModifiedBy = @userId, ModifiedOn = GETDATE(), 
-          ModifiersJSON = @${p_mods}, OrderNumber = @orderNo, Remarks = @${p_note}, isTakeAway = @${p_tw},
+          ModifiersJSON = @${p_mods}, ComboDetailsJSON = @${p_combo}, OrderNumber = @orderNo, Remarks = @${p_note}, isTakeAway = @${p_tw},
           DiscountAmount = @${p_disc}, DiscountType = @${p_disctype}, ServiceCharge = @${p_sc},
           CreatedOn = CASE WHEN StatusCode = 1 AND @${p_status} = 2 THEN GETDATE() ELSE ISNULL(CreatedOn, @${p_created}) END
         WHERE OrderDetailId = @${p_id};
       END
       ELSE
       BEGIN
-        INSERT INTO RestaurantOrderDetailCur (OrderDetailId, OrderId, DishId, Description, DishName,SongName, Quantity, PricePerUnit, ActualAmount, TotalDetailLineAmount, BaseAmount, StatusCode, CreatedBy, CreatedOn, ModifiersJSON, OrderNumber, Remarks, isTakeAway, BusinessUnitId, OrderDateTime, DiscountAmount, DiscountType, ServiceCharge)
-        VALUES (@${p_id}, @orderId, @${p_dish}, @${p_name}, @${p_name}, @${p_song}, @${p_qty}, @${p_cost}, @${p_cost} * @${p_qty}, @${p_cost} * @${p_qty}, @${p_cost} * @${p_qty}, @${p_status}, @userId, CASE WHEN @${p_status} = 2 THEN GETDATE() ELSE @${p_created} END, @${p_mods}, @orderNo, @${p_note}, @${p_tw}, @bizId, GETDATE(), @${p_disc}, @${p_disctype}, @${p_sc});
+        INSERT INTO RestaurantOrderDetailCur (OrderDetailId, OrderId, DishId, Description, DishName,SongName, Quantity, PricePerUnit, ActualAmount, TotalDetailLineAmount, BaseAmount, StatusCode, CreatedBy, CreatedOn, ModifiersJSON, ComboDetailsJSON, OrderNumber, Remarks, isTakeAway, BusinessUnitId, OrderDateTime, DiscountAmount, DiscountType, ServiceCharge)
+        VALUES (@${p_id}, @orderId, @${p_dish}, @${p_name}, @${p_name}, @${p_song}, @${p_qty}, @${p_cost}, @${p_cost} * @${p_qty}, @${p_cost} * @${p_qty}, @${p_cost} * @${p_qty}, @${p_status}, @userId, CASE WHEN @${p_status} = 2 THEN GETDATE() ELSE @${p_created} END, @${p_mods}, @${p_combo}, @orderNo, @${p_note}, @${p_tw}, @bizId, GETDATE(), @${p_disc}, @${p_disctype}, @${p_sc});
       END
 
       -- Sync Modifiers for Item ${idx}
@@ -1042,7 +1064,7 @@ router.get("/cart/:tableId", async (req, res) => {
           d.OrderDetailId as lineItemId, d.DishId as id,ISNULL(d.SongName,'') as songName,d.Quantity as qty, 
           d.PricePerUnit as price, 
           ISNULL(NULLIF(d.DishName,''), dish.Name) as name,
-          d.ModifiersJSON, d.Remarks as note, d.isTakeAway as isTakeaway,
+          d.ModifiersJSON, d.ComboDetailsJSON, d.Remarks as note, d.isTakeAway as isTakeaway,
           ISNULL(d.DiscountAmount, 0) as discount,
           ISNULL(d.DiscountType, NULL) as discountType,
           d.CreatedOn as DateCreated,
@@ -1085,6 +1107,15 @@ router.get("/cart/:tableId", async (req, res) => {
         ? (() => {
             try {
               return JSON.parse(i.ModifiersJSON);
+            } catch {
+              return [];
+            }
+          })()
+        : [],
+      comboSelections: i.ComboDetailsJSON
+        ? (() => {
+            try {
+              return JSON.parse(i.ComboDetailsJSON);
             } catch {
               return [];
             }
@@ -1628,7 +1659,7 @@ router.get("/active-kitchen", async (req, res) => {
         d.OrderDetailId as lineItemId, d.DishId as id, d.Quantity as qty, d.StatusCode, 
         d.PricePerUnit as price,
         h.OrderNumber as orderId, dish.Name as name, h.Tableno as tableNo, 
-        d.Remarks as note, d.ModifiersJSON, d.isTakeAway, DATEDIFF(SECOND, d.CreatedOn, GETDATE()) as elapsedSeconds,
+        d.Remarks as note, d.ModifiersJSON, d.ComboDetailsJSON, d.isTakeAway, DATEDIFF(SECOND, d.CreatedOn, GETDATE()) as elapsedSeconds,
         ISNULL(ckt.KitchenTypeCode, '0') as KitchenTypeCode, 
         ISNULL(ISNULL(ckt.KitchenTypeName, cat.CategoryName), 'KITCHEN') as KitchenTypeName,
         pm.PrinterPath as PrinterIP,
@@ -1703,6 +1734,7 @@ router.get("/active-kitchen", async (req, res) => {
         ...row,
         status: statusMap[row.StatusCode],
         modifiers: row.ModifiersJSON ? JSON.parse(row.ModifiersJSON) : [],
+        comboSelections: row.ComboDetailsJSON ? JSON.parse(row.ComboDetailsJSON) : [],
       });
     });
     res.json({ serverTime: Date.now(), orders: Object.values(orders) });
