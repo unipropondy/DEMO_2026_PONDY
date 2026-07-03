@@ -25,7 +25,7 @@ const normalizeReportPayModeSql = (columnName = "sts.PayMode", settlementIdColum
     WHERE pd2.RestaurantBillId = ${settlementIdColumn}
   ))`;
 
-  return `
+  const rawSql = `
     UPPER(ISNULL(
       (SELECT TOP 1 LTRIM(RTRIM(Description)) 
        FROM Paymode pm 
@@ -46,6 +46,8 @@ const normalizeReportPayModeSql = (columnName = "sts.PayMode", settlementIdColum
       END
     ))
   `;
+
+  return `CASE WHEN (${rawSql}) = 'PAYNOW' THEN 'YEAHPAY PAYNOW' ELSE (${rawSql}) END`;
 };
 
 const getReportDateRange = (req) => {
@@ -118,7 +120,7 @@ const normalizePayMode = (paymentMethod = "CASH") => {
   if (raw.includes("YEAHPAY PAYNOW") || raw === "YEAHPAY PAYNOW") return "Yeahpay Paynow";
   if (raw.includes("YEAHPAY CARD") || raw === "YEAHPAY CARD") return "Yeahpay Card";
   if (raw.includes("CARD") || raw.includes("VISA") || raw.includes("MASTER") || raw.includes("AMEX") || raw.includes("DINERS")) return "CARD";
-  if (raw.includes("PAYNOW") || raw.includes("GRAB") || raw.includes("FOODPANDA")) return "PAYNOW";
+  if (raw.includes("PAYNOW") || raw.includes("GRAB") || raw.includes("FOODPANDA")) return "Yeahpay Paynow";
   if (raw.includes("UPI") || raw.includes("GPAY") || raw.includes("PHONE") || raw.includes("PAYTM")) return "UPI";
   if (raw.includes("NETS")) return "NETS";
   if (raw.includes("MEMBER") || raw === "5") return "MEMBER";
@@ -641,7 +643,15 @@ router.get("/detail/:id/payments", async (req, res) => {
         }
       }
     }
-    
+
+    payments = payments.map(pm => {
+      const mode = String(pm.PayModeName || '').trim().toUpperCase();
+      if (mode === 'PAYNOW' || (mode.includes('PAYNOW') && !mode.includes('YEAHPAY'))) {
+        pm.PayModeName = 'Yeahpay Paynow';
+      }
+      return pm;
+    });
+
     res.json(payments);
   } catch (err) {
     res.status(500).json({ error: err.message });

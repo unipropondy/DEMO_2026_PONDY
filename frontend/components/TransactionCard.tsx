@@ -24,9 +24,9 @@ const TransactionCard = React.memo(
 
     const modeUpper = String(item.PayMode || "").toUpperCase();
     const isUpi = modeUpper.includes("UPI") || modeUpper.includes("GPAY");
-    const isYeahpayPaynow = modeUpper.includes("YEAHPAY PAYNOW");
+    const isYeahpayPaynow = modeUpper.includes("YEAHPAY PAYNOW") || modeUpper === "PAYNOW";
     const isYeahpayCard = modeUpper.includes("YEAHPAY CARD");
-    const isPayNow = modeUpper.includes("PAYNOW") && !isYeahpayPaynow;
+    const isPayNow = false;
     const isNets = modeUpper.includes("NETS");
 
     return (
