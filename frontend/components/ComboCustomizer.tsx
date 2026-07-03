@@ -275,13 +275,26 @@ export default function ComboCustomizer({
                   </View>
                 );
               }}
-              ListFooterComponent={
-                <View style={styles.footer}>
-                  <TouchableOpacity style={styles.confirmButton} onPress={handleAddToCart}>
-                    <Text style={styles.confirmButtonText}>Add Combo to Cart</Text>
-                  </TouchableOpacity>
-                </View>
-              }
+              ListFooterComponent={(() => {
+                let currentTotal = config?.basePrice || 0;
+                config?.groups?.forEach(group => {
+                  const selectedIds = selections[group.comboGroupId] || [];
+                  const selectedOptions = group.options.filter(o => selectedIds.includes(o.dishId));
+                  selectedOptions.forEach(opt => {
+                    currentTotal += (opt.surcharge || 0) + (opt.dishPrice || 0);
+                  });
+                });
+
+                return (
+                  <View style={styles.footer}>
+                    <TouchableOpacity style={styles.confirmButton} onPress={handleAddToCart}>
+                      <Text style={styles.confirmButtonText}>
+                        Add Combo to Cart - ${currentTotal.toFixed(2)}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })()}
             />
           )}
         </View>
@@ -374,84 +387,111 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
   },
   body: {
-    padding: 16,
+    padding: 20,
   },
   groupSection: {
     marginBottom: 24,
   },
   groupHeader: {
     flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: 10,
+    alignItems: "center",
+    marginBottom: 12,
   },
   groupTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: Fonts.bold,
-    color: Theme.textPrimary || "#1E1E1E",
+    color: "#2C3E50",
+    letterSpacing: 0.3,
   },
   groupRules: {
-    marginLeft: 6,
-    fontSize: 12,
-    fontFamily: Fonts.medium,
-    color: Theme.textSecondary || "#666",
+    marginLeft: 8,
+    fontSize: 11,
+    fontFamily: Fonts.semiBold,
+    color: "#95A5A6",
+    backgroundColor: "#F2F4F4",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    textTransform: "uppercase",
   },
   optionsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: 12,
   },
   optionCard: {
-    minWidth: 120,
+    minWidth: 140,
     flex: 1,
-    backgroundColor: Theme.bgMuted || "#F9F9F9",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
-    borderColor: Theme.border || "#E5E5E5",
-    borderRadius: 8,
-    padding: 12,
+    borderColor: "#EAECEE",
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
+    // Premium soft card shadows
+    shadowColor: "#17202A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
   },
   optionCardSelected: {
     borderColor: Theme.primary,
-    backgroundColor: Theme.primaryLight || "#FFF5EB",
+    backgroundColor: "#FFF5EB",
+    shadowColor: Theme.primary,
+    shadowOpacity: 0.08,
   },
   optionName: {
     fontSize: 14,
     fontFamily: Fonts.semiBold,
-    color: Theme.textPrimary || "#1E1E1E",
+    color: "#2C3E50",
     textAlign: "center",
   },
   optionSurcharge: {
     fontSize: 12,
     fontFamily: Fonts.bold,
     color: Theme.primary,
-    marginTop: 4,
+    marginTop: 6,
+    backgroundColor: "#FFEEDB",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: "hidden",
   },
   optionTextSelected: {
     color: Theme.primary,
   },
   checkmarkWrap: {
     position: "absolute",
-    top: 4,
-    right: 4,
+    top: 6,
+    right: 6,
   },
   footer: {
-    marginTop: 10,
+    marginTop: 15,
     borderTopWidth: 1,
-    borderTopColor: Theme.border || "#E5E5E5",
-    paddingTop: 16,
+    borderTopColor: "#EAECEE",
+    paddingTop: 20,
+    paddingBottom: 10,
   },
   confirmButton: {
     backgroundColor: Theme.primary,
-    borderRadius: 8,
-    paddingVertical: 14,
+    borderRadius: 12,
+    paddingVertical: 15,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: Theme.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
   confirmButtonText: {
     color: "#FFF",
     fontFamily: Fonts.bold,
     fontSize: 16,
+    letterSpacing: 0.5,
   },
 });
