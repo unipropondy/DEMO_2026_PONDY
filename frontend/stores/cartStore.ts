@@ -216,8 +216,8 @@ const normalizeCartItem = (item: any, fallback: Partial<CartItem> = {}): CartIte
     KitchenTypeCode: item.KitchenTypeCode || fallback.KitchenTypeCode,
     IsOpenItem: item.IsOpenItem !== undefined ? item.IsOpenItem : fallback.IsOpenItem,
     isServiceCharge: item.isServiceCharge !== undefined ? item.isServiceCharge : (fallback.isServiceCharge !== undefined ? fallback.isServiceCharge : 0),
-    isCombo: getNormalizedBoolean(item.isCombo, item.IsCombo, fallback.isCombo),
-    comboSelections: item.comboSelections || item.ComboSelections || fallback.comboSelections || undefined,
+    isCombo: getNormalizedBoolean(item.isCombo, item.IsCombo, item.ComboDetailsJSON, fallback.isCombo),
+    comboSelections: item.comboSelections || item.ComboSelections || (typeof item.ComboDetailsJSON === 'string' && item.ComboDetailsJSON ? (() => { try { return JSON.parse(item.ComboDetailsJSON); } catch { return undefined; } })() : (Array.isArray(item.ComboDetailsJSON) ? item.ComboDetailsJSON : undefined)) || fallback.comboSelections || undefined,
   };
 };
 
