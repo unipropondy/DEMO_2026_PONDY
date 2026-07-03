@@ -428,9 +428,9 @@ async function syncToProfessionalTables(
           if (bp !== undefined) {
             const groups = parsed.groups || [];
             let totalSurcharge = 0;
-            groups.forEach((group: any) => {
+            groups.forEach(group => {
               if (Array.isArray(group.items)) {
-                group.items.forEach((opt: any) => {
+                group.items.forEach(opt => {
                   totalSurcharge += parseFloat(opt.surcharge || 0) + parseFloat(opt.dishPrice || 0);
                 });
               }
