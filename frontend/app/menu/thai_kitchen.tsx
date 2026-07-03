@@ -27,6 +27,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import CartSidebar from "../../components/CartSidebar";
+import ComboCustomizer from "../../components/ComboCustomizer";
 import { useToast } from "../../components/Toast";
 import { Skeleton } from "../../components/ui/Skeleton";
 import UniversalPrinter from "../../components/UniversalPrinter";
@@ -376,6 +377,10 @@ export default function MenuScreen() {
   const [openItemDish, setOpenItemDish] = useState<any | null>(null);
   const [openItemPrice, setOpenItemPrice] = useState("");
   const [openItemError, setOpenItemError] = useState("");
+
+  // Combo modal state
+  const [showComboModal, setShowComboModal] = useState(false);
+  const [comboDish, setComboDish] = useState<any | null>(null);
 
   // Custom Item Submodal (Screenshot Flow)
   const [showCustomModal, setShowCustomModal] = useState(false);
@@ -918,6 +923,14 @@ export default function MenuScreen() {
         }
       } catch (err) {
         console.log("Split API Error", err);
+      }
+
+      // COMBO ITEM: Open wizard customizer instead of standard cart addition
+      const isItCombo = dish.IsCombo === true || String(dish.IsCombo) === "1" || String(dish.IsCombo) === "true";
+      if (isItCombo) {
+        setComboDish(dish);
+        setShowComboModal(true);
+        return;
       }
 
       const currentKitchen = kitchens.find(
@@ -1765,6 +1778,16 @@ export default function MenuScreen() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+      <ComboCustomizer
+        visible={showComboModal}
+        onClose={() => {
+          setShowComboModal(false);
+          setComboDish(null);
+        }}
+        dish={comboDish}
+        kitchenName={kitchens.find((k) => k.CategoryId === selectedKitchenId)?.KitchenTypeName || "KITCHEN"}
+        kitchenCode={kitchens.find((k) => k.CategoryId === selectedKitchenId)?.KitchenTypeCode || String(selectedKitchenId || "0")}
+      />
     </SafeAreaView>
   );
 }

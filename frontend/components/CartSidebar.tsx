@@ -660,6 +660,19 @@ const CartItemRow = React.memo(
                     {m.Price > 0 ? ` (+$${m.Price.toFixed(2)})` : ""}
                   </Text>
                 ))}
+              {item.isCombo && item.comboSelections &&
+                item.comboSelections.map((group: any, gIdx: number) => (
+                  <View key={`g-${gIdx}`} style={{ marginTop: 2, paddingLeft: 2 }}>
+                    <Text style={[styles.modifierTextSmall, { fontFamily: Fonts.bold, color: Theme.primary }]}>
+                      {group.groupName}:
+                    </Text>
+                    {group.items.map((opt: any, oIdx: number) => (
+                      <Text key={`o-${oIdx}`} style={[styles.modifierTextSmall, { paddingLeft: 6 }]}>
+                        ↳ {opt.name} {opt.surcharge > 0 ? `(+$${opt.surcharge.toFixed(2)})` : ""}
+                      </Text>
+                    ))}
+                  </View>
+                ))}
               {item.note || item.notes ? (
                 <Text style={styles.modifierTextSmall}>
                   • Note: {item.note || item.notes}
