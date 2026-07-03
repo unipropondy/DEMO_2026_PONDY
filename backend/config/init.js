@@ -750,6 +750,23 @@ async function initDB(pool) {
 
           -- Ensure RewardDishId is nullable
           ALTER TABLE [dbo].[LoyaltyRule] ALTER COLUMN [RewardDishId] UNIQUEIDENTIFIER NULL;
+
+          -- Drop old index and create filtered ones to allow multiple NULL values
+          IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'UX_LoyaltyRule_ActivePurchaseDish' AND object_id = OBJECT_ID('[dbo].[LoyaltyRule]'))
+          BEGIN
+              -- We drop it so we can re-create it as a filtered index
+              DROP INDEX UX_LoyaltyRule_ActivePurchaseDish ON [dbo].[LoyaltyRule];
+          END
+
+          IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'UX_LoyaltyRule_ActivePurchaseDish' AND object_id = OBJECT_ID('[dbo].[LoyaltyRule]'))
+          BEGIN
+              CREATE UNIQUE NONCLUSTERED INDEX UX_LoyaltyRule_ActivePurchaseDish ON [dbo].[LoyaltyRule](PurchaseDishId) WHERE PurchaseDishId IS NOT NULL AND IsActive = 1;
+          END
+
+          IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'UX_LoyaltyRule_ActivePurchaseDishGroup' AND object_id = OBJECT_ID('[dbo].[LoyaltyRule]'))
+          BEGIN
+              CREATE UNIQUE NONCLUSTERED INDEX UX_LoyaltyRule_ActivePurchaseDishGroup ON [dbo].[LoyaltyRule](PurchaseDishGroupId) WHERE PurchaseDishGroupId IS NOT NULL AND IsActive = 1;
+          END
       END
     `);
 
