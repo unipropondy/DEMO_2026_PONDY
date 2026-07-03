@@ -413,7 +413,8 @@ private static escapeHtml(str: string): string {
           const comboSelectionsHTML = (item.isCombo && item.comboSelections && Array.isArray(item.comboSelections))
             ? item.comboSelections.map((group: any) => {
                 return group.items?.map((opt: any) => {
-                  return `<div class="item-modifiers">↳ ${opt.name} ${opt.surcharge > 0 ? `(+${currencySymbol}${opt.surcharge.toFixed(2)})` : ''}</div>`;
+                  const effectiveAdd = (parseFloat(opt.surcharge || 0) + parseFloat(opt.dishPrice || 0));
+                  return `<div class="item-modifiers">↳ ${opt.name}${effectiveAdd > 0 ? ` (+${currencySymbol}${effectiveAdd.toFixed(2)})` : ''}</div>`;
                 }).join('') || '';
               }).join('')
             : '';

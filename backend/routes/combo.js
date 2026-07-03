@@ -135,6 +135,7 @@ router.get("/config/:DishId", async (req, res) => {
         d.Description AS DishDescription,
         d.Imageid AS Image,
         m.Surcharge,
+        d.currentcost AS DishPrice,
         m.IsDefault,
         m.SortOrder
       FROM ComboGroupDishMapping m
@@ -155,6 +156,7 @@ router.get("/config/:DishId", async (req, res) => {
         description:     opt.DishDescription,
         image:           opt.Image,
         surcharge:       parseFloat(opt.Surcharge || 0),
+        dishPrice:       parseFloat(opt.DishPrice || 0),
         isDefault:       !!opt.IsDefault,
         sortOrder:       opt.SortOrder,
       });

@@ -405,7 +405,7 @@ async function syncToProfessionalTables(
       item.comboSelections.forEach(group => {
         if (Array.isArray(group.items)) {
           group.items.forEach(opt => {
-            totalSurcharge += parseFloat(opt.surcharge || 0);
+            totalSurcharge += parseFloat(opt.surcharge || 0) + parseFloat(opt.dishPrice || 0);
           });
         }
       });

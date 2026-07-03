@@ -21,6 +21,7 @@ interface ComboOption {
   description?: string;
   image?: string;
   surcharge: number;
+  dishPrice: number;
   isDefault: boolean;
   sortOrder: number;
 }
@@ -154,15 +155,16 @@ export default function ComboCustomizer({
           dishId: o.dishId,
           name: o.name,
           surcharge: o.surcharge,
+          dishPrice: o.dishPrice || 0,
         }))
       };
     });
 
-    // Sum surcharges
+    // Sum surcharges and dish prices
     let totalSurcharge = 0;
     chosenSelections.forEach(grp => {
       grp.items.forEach(opt => {
-        totalSurcharge += opt.surcharge;
+        totalSurcharge += opt.surcharge + (opt.dishPrice || 0);
       });
     });
 
