@@ -173,7 +173,8 @@ const TableItemComponent = React.memo(
 
     return (
       <TouchableOpacity
-        activeOpacity={0.8}
+        activeOpacity={isPaid ? 1 : 0.8}
+        disabled={isPaid}
         style={[
           styles.tableBox,
           {
@@ -183,6 +184,7 @@ const TableItemComponent = React.memo(
             backgroundColor: bgColor,
             borderWidth: status !== 0 ? 2 : 1.5,
             elevation: status !== 0 ? 0 : 2,
+            opacity: isPaid ? 0.92 : 1,
           },
         ]}
         onPress={() => onPress(item, tableData)}
@@ -1021,6 +1023,22 @@ export default function Category() {
 
   const handleTablePress = React.useCallback(
     async (item: TableItem, tableData: any, isCheckoutAction?: boolean) => {
+      // 🌹 PAID QR TABLE: Block entry — table is paid and waiting for kitchen to serve
+      const tablePaymentStatus = (tableData as any)?.paymentStatus !== undefined
+        ? Number((tableData as any).paymentStatus)
+        : Number(item.paymentStatus) || 0;
+      const tableEntryStatus = tableData?.entryStatus !== undefined
+        ? tableData.entryStatus
+        : item.entryStatus;
+      if (tableEntryStatus === 'q' && tablePaymentStatus === 1) {
+        showToast({
+          type: 'info',
+          message: 'Order Paid',
+          subtitle: 'This QR order is already paid. Waiting for kitchen to serve.',
+        });
+        return;
+      }
+
       const effectiveStatus =
         tableData && tableData.status !== "EMPTY"
           ? tableData.status === "SENT"
