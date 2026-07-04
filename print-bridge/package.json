@@ -5,7 +5,7 @@
   "author": "UniPro",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && xcopy /E /I /Y src\\public dist\\public",
     "start": "electron .",
     "dev": "ts-node src/index.ts",
     "package": "npm run build && electron-builder --win --x64"
