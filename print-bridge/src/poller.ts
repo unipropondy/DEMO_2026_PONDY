@@ -1,85 +1,114 @@
 import { config } from './config';
-import { railwayApi } from './railwayApi';
+import { getBackendInstances, BackendInstance } from './railwayApi';
 import { sendToPrinter } from './printer';
 import { logger } from './logger';
 import { HealthStatus } from './types';
 
-let isPolling = false;
-let isConnected = false;
-let lastPollTime: string | undefined = undefined;
-let totalJobsProcessed = 0;
+const pollingUrls = new Set<string>();
 
 export const pollerStats = {
   getHealth(): HealthStatus {
+    const backends = getBackendInstances();
+    const enabledBackends = backends.filter(b => b.enabled !== false);
+    
+    // Connected if at least one enabled backend is connected (or all if preferred, let's use some/any)
+    const connected = enabledBackends.length > 0 ? enabledBackends.some(b => b.connected) : false;
+    const totalJobs = backends.reduce((sum, b) => sum + b.jobsProcessed, 0);
+
     return {
-      connected: isConnected,
-      lastPoll: lastPollTime,
-      jobsProcessed: totalJobsProcessed
+      connected,
+      jobsProcessed: totalJobs,
+      backends: backends.map(b => ({
+        name: b.name,
+        url: b.url,
+        enabled: b.enabled !== false,
+        connected: b.connected,
+        authenticated: b.authenticated,
+        lastHeartbeat: b.lastHeartbeat,
+        lastConnectedTime: b.lastConnectedTime,
+        jobsProcessed: b.jobsProcessed
+      }))
     };
   }
 };
 
-async function processJob(job: any) {
+async function processJob(backend: BackendInstance, job: any) {
   try {
-    console.log(`\n[Job Received]\nJobId: ${job.JobId}\nPrinter: ${job.PrinterName || 'Receipt Printer'}\n`);
+    console.log(`\n[${backend.name}] [Job Received]\nJobId: ${job.JobId}\nPrinter: ${job.PrinterName || 'Receipt Printer'}\n`);
     
     // Connect & Print via TCP socket
     await sendToPrinter(job.PrinterIp, job.PrinterPort, job.Content, job.JobId);
     
     // Report success to backend
-    await railwayApi.markComplete(job.JobId);
-    totalJobsProcessed++;
-    logger.info(`Job ${job.JobId} printed and reported completed successfully.`);
+    await backend.markComplete(job.JobId);
+    logger.info(`[${backend.name}] Job ${job.JobId} printed and reported completed successfully.`);
   } catch (err: any) {
     const errorMsg = err.message || 'TCP Socket Connection Failed';
-    logger.error(`Printing job ${job.JobId} failed: ${errorMsg}`);
+    logger.error(`[${backend.name}] Printing job ${job.JobId} failed: ${errorMsg}`);
     
     // Report failure to backend
-    await railwayApi.markFailed(job.JobId, errorMsg);
+    await backend.markFailed(job.JobId, errorMsg);
+  }
+}
+
+async function pollBackend(backend: BackendInstance) {
+  if (backend.enabled === false) return;
+
+  // Authenticate if not already authenticated
+  if (!backend.authenticated) {
+    const success = await backend.authenticate();
+    if (!success) {
+      logger.warn(`[${backend.name}] Authentication failed. Will retry in the next cycle.`);
+      return;
+    }
+  }
+
+  try {
+    const jobs = await backend.fetchPendingJobs();
+    if (jobs.length > 0) {
+      logger.info(`[${backend.name}] Retrieved ${jobs.length} pending print job(s) from Railway.`);
+      // Process all jobs in parallel
+      await Promise.all(jobs.map(job => processJob(backend, job)));
+    }
+  } catch (err: any) {
+    logger.error(`[${backend.name}] Poll cycle encountered an error: ${err.message}`);
   }
 }
 
 async function pollCycle() {
-  if (isPolling) return; // Prevent concurrent polling runs
-  isPolling = true;
-  lastPollTime = new Date().toISOString();
+  const backends = getBackendInstances();
 
-  try {
-    const jobs = await railwayApi.fetchPendingJobs();
-    isConnected = true;
-    
-    if (jobs.length > 0) {
-      logger.info(`Retrieved ${jobs.length} pending print job(s) from Railway.`);
-      // Process all jobs in parallel (or sequential depending on order requirements)
-      // Since printing speed is quick, parallel execution handles multiple kitchen printers well.
-      await Promise.all(jobs.map(job => processJob(job)));
+  await Promise.all(backends.map(async (backend) => {
+    if (backend.enabled === false) return;
+    if (pollingUrls.has(backend.url)) return; // Prevent concurrent cycles for same backend
+
+    pollingUrls.add(backend.url);
+    try {
+      await pollBackend(backend);
+    } finally {
+      pollingUrls.delete(backend.url);
     }
-  } catch (err: any) {
-    isConnected = false;
-    logger.error(`Poll cycle encountered an error: ${err.message}`);
-  } finally {
-    isPolling = false;
-    // Reschedule next execution cycle
-    setTimeout(pollCycle, config.pollIntervalMs);
-  }
+  }));
+
+  // Reschedule the polling cycle
+  setTimeout(pollCycle, config.pollIntervalMs);
 }
 
 export async function startPoller() {
   logger.info('Initializing UniPro Print Bridge Poller...');
   
-  // Authenticate first before starting the poller
-  let authenticated = false;
-  while (!authenticated) {
-    authenticated = await railwayApi.authenticate();
-    if (authenticated) {
-      isConnected = true;
-      logger.info('Bridge successfully authenticated and registered with backend.');
+  const backends = getBackendInstances();
+  logger.info(`Found ${backends.length} configured backend(s). Initializing startup authentication...`);
+
+  await Promise.all(backends.map(async (backend) => {
+    if (backend.enabled === false) return;
+    const success = await backend.authenticate();
+    if (success) {
+      logger.info(`[${backend.name}] Successfully authenticated on startup.`);
     } else {
-      isConnected = false;
-      logger.warn(`Authentication failed. Retrying in 10 seconds...`);
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      logger.warn(`[${backend.name}] Startup authentication failed. Will retry in background.`);
     }
-  }
+  }));
 
   // Start the polling loop
   pollCycle();
