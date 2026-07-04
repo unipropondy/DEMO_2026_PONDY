@@ -745,19 +745,70 @@ async function initDB(pool) {
               ALTER TABLE [dbo].[LoyaltyRule] ADD [RewardDishGroupId] UNIQUEIDENTIFIER NULL;
           END
 
+          -- 1. Drop DEFAULT constraints on PurchaseDishId or RewardDishId
+          DECLARE @drop_defaults NVARCHAR(MAX) = '';
+          SELECT @drop_defaults = @drop_defaults + 'ALTER TABLE [dbo].[LoyaltyRule] DROP CONSTRAINT [' + d.name + '];' + CHAR(13)
+          FROM sys.default_constraints d
+          JOIN sys.columns c ON d.parent_column_id = c.column_id AND d.parent_object_id = c.object_id
+          WHERE d.parent_object_id = OBJECT_ID('[dbo].[LoyaltyRule]')
+            AND c.name IN ('PurchaseDishId', 'RewardDishId');
+          IF @drop_defaults <> '' EXEC sp_executesql @drop_defaults;
+
+          -- 2. Drop Foreign Keys defined ON LoyaltyRule for PurchaseDishId or RewardDishId
+          DECLARE @drop_fks NVARCHAR(MAX) = '';
+          SELECT @drop_fks = @drop_fks + 'ALTER TABLE [dbo].[LoyaltyRule] DROP CONSTRAINT [' + fk.name + '];' + CHAR(13)
+          FROM sys.foreign_keys fk
+          JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+          WHERE fk.parent_object_id = OBJECT_ID('[dbo].[LoyaltyRule]')
+            AND fkc.parent_column_id IN (
+                SELECT column_id FROM sys.columns 
+                WHERE object_id = OBJECT_ID('[dbo].[LoyaltyRule]') 
+                  AND name IN ('PurchaseDishId', 'RewardDishId')
+            );
+          IF @drop_fks <> '' EXEC sp_executesql @drop_fks;
+
+          -- 3. Drop Foreign Keys REFERENCING LoyaltyRule(PurchaseDishId/RewardDishId) from other tables
+          DECLARE @drop_ref_fks NVARCHAR(MAX) = '';
+          SELECT @drop_ref_fks = @drop_ref_fks + 'ALTER TABLE [' + OBJECT_SCHEMA_NAME(fk.parent_object_id) + '].[' + OBJECT_NAME(fk.parent_object_id) + '] DROP CONSTRAINT [' + fk.name + '];' + CHAR(13)
+          FROM sys.foreign_keys fk
+          JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+          WHERE fk.referenced_object_id = OBJECT_ID('[dbo].[LoyaltyRule]')
+            AND fkc.referenced_column_id IN (
+                SELECT column_id FROM sys.columns 
+                WHERE object_id = OBJECT_ID('[dbo].[LoyaltyRule]') 
+                  AND name IN ('PurchaseDishId', 'RewardDishId')
+            );
+          IF @drop_ref_fks <> '' EXEC sp_executesql @drop_ref_fks;
+
+          -- 4. Drop Indexes referencing PurchaseDishId or RewardDishId
+          DECLARE @drop_indexes NVARCHAR(MAX) = '';
+          SELECT @drop_indexes = @drop_indexes + 'DROP INDEX [' + i.name + '] ON [dbo].[LoyaltyRule];' + CHAR(13)
+          FROM sys.indexes i
+          JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+          JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+          WHERE i.object_id = OBJECT_ID('[dbo].[LoyaltyRule]')
+            AND c.name IN ('PurchaseDishId', 'RewardDishId')
+            AND i.is_primary_key = 0;
+          IF @drop_indexes <> '' EXEC sp_executesql @drop_indexes;
+
+          -- Drop old index first to allow changing the column to nullable
+          IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'UX_LoyaltyRule_ActivePurchaseDish' AND object_id = OBJECT_ID('[dbo].[LoyaltyRule]'))
+          BEGIN
+              DROP INDEX UX_LoyaltyRule_ActivePurchaseDish ON [dbo].[LoyaltyRule];
+          END
+
+          IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'UX_LoyaltyRule_ActivePurchaseDishGroup' AND object_id = OBJECT_ID('[dbo].[LoyaltyRule]'))
+          BEGIN
+              DROP INDEX UX_LoyaltyRule_ActivePurchaseDishGroup ON [dbo].[LoyaltyRule];
+          END
+
           -- Ensure PurchaseDishId is nullable
           ALTER TABLE [dbo].[LoyaltyRule] ALTER COLUMN [PurchaseDishId] UNIQUEIDENTIFIER NULL;
 
           -- Ensure RewardDishId is nullable
           ALTER TABLE [dbo].[LoyaltyRule] ALTER COLUMN [RewardDishId] UNIQUEIDENTIFIER NULL;
 
-          -- Drop old index and create filtered ones to allow multiple NULL values
-          IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'UX_LoyaltyRule_ActivePurchaseDish' AND object_id = OBJECT_ID('[dbo].[LoyaltyRule]'))
-          BEGIN
-              -- We drop it so we can re-create it as a filtered index
-              DROP INDEX UX_LoyaltyRule_ActivePurchaseDish ON [dbo].[LoyaltyRule];
-          END
-
+          -- Re-create filtered indexes to allow multiple NULL values
           IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'UX_LoyaltyRule_ActivePurchaseDish' AND object_id = OBJECT_ID('[dbo].[LoyaltyRule]'))
           BEGIN
               CREATE UNIQUE NONCLUSTERED INDEX UX_LoyaltyRule_ActivePurchaseDish ON [dbo].[LoyaltyRule](PurchaseDishId) WHERE PurchaseDishId IS NOT NULL AND IsActive = 1;
