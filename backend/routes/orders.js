@@ -1601,9 +1601,9 @@ router.post("/update-item-status", async (req, res) => {
         const row = qrCheck.recordset[0];
         const isQR = row.entry_status === "q";
         const isPaid = row.PAYMENT_STATUS === 1;
-        // Only auto-clear the table if it is already paid (e.g. pre-paid QR orders).
-        // If it is post-paid (not paid yet), we keep it occupied/payment pending so the cashier can collect payment.
-        if (isPaid) {
+        // Only auto-clear the table if it is a QR order (entry_status='q') AND already paid.
+        // Regular dine-in orders are NOT auto-cleared — the cashier still needs to settle them.
+        if (isQR && isPaid) {
           // Check if there are any items that are NOT served (4) and NOT voided (0)
           const pendingItems = await pool
             .request()
