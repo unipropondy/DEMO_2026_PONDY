@@ -954,7 +954,8 @@ export default function MenuScreen() {
       }
 
       // COMBO ITEM: Open wizard customizer instead of standard cart addition if config exists
-      const isItCombo = dish.IsCombo === true || String(dish.IsCombo) === "1" || String(dish.IsCombo) === "true";
+      const isComboEnabled = useGeneralSettingsStore.getState().settings.enableCombo !== false;
+      const isItCombo = isComboEnabled && (dish.IsCombo === true || String(dish.IsCombo) === "1" || String(dish.IsCombo) === "true");
       if (isItCombo) {
         setLoadingModifiers(true);
         try {
