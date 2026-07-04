@@ -22,14 +22,64 @@ try {
 const packageConfigPath = appPath ? path.join(appPath, CONFIG_FILENAME) : '';
 let finalConfigPath = '';
 
-if (fs.existsSync(execConfigPath)) {
+// Check if a path is writable
+function isWritable(filePath: string): boolean {
+  try {
+    if (!fs.existsSync(filePath)) {
+      // Check if parent directory is writable
+      const dir = path.dirname(filePath);
+      fs.accessSync(dir, fs.constants.W_OK);
+      return true;
+    }
+    fs.accessSync(filePath, fs.constants.W_OK);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Fallback user config path (similar to logger logs directory)
+let userConfigPath = '';
+try {
+  if (app) {
+    userConfigPath = path.join(app.getPath('userData'), CONFIG_FILENAME);
+  }
+} catch (e) {}
+if (!userConfigPath) {
+  userConfigPath = process.env.APPDATA
+    ? path.join(process.env.APPDATA, 'UniPro Print Bridge', CONFIG_FILENAME)
+    : path.join(process.cwd(), CONFIG_FILENAME);
+}
+
+// Determine best writable config path
+if (fs.existsSync(execConfigPath) && isWritable(execConfigPath)) {
   finalConfigPath = execConfigPath;
-} else if (fs.existsSync(localConfigPath)) {
+} else if (fs.existsSync(localConfigPath) && isWritable(localConfigPath)) {
   finalConfigPath = localConfigPath;
-} else if (packageConfigPath && fs.existsSync(packageConfigPath)) {
+} else if (packageConfigPath && fs.existsSync(packageConfigPath) && isWritable(packageConfigPath)) {
   finalConfigPath = packageConfigPath;
 } else {
-  finalConfigPath = localConfigPath;
+  // If we can't write to any of the standard locations (like when installed in Program Files),
+  // copy the template config to the writable user data directory if it doesn't exist yet.
+  finalConfigPath = userConfigPath;
+  const parentDir = path.dirname(userConfigPath);
+  if (!fs.existsSync(parentDir)) {
+    fs.mkdirSync(parentDir, { recursive: true });
+  }
+  
+  if (!fs.existsSync(userConfigPath)) {
+    // Attempt to copy template from read-only locations
+    let templateSource = '';
+    if (fs.existsSync(execConfigPath)) templateSource = execConfigPath;
+    else if (fs.existsSync(localConfigPath)) templateSource = localConfigPath;
+    else if (packageConfigPath && fs.existsSync(packageConfigPath)) templateSource = packageConfigPath;
+
+    if (templateSource) {
+      try {
+        fs.copyFileSync(templateSource, userConfigPath);
+      } catch (err) {}
+    }
+  }
 }
 
 const defaultConfig: BridgeConfig = {
