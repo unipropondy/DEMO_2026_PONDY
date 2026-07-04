@@ -13,6 +13,8 @@ import { Fonts } from "../constants/Fonts";
 import { Theme } from "../constants/theme";
 import { API_URL } from "../constants/Config";
 import { addToCartGlobal } from "../stores/cartStore";
+import { useAuthStore } from "../stores/authStore";
+
 
 interface ComboOption {
   mappingId: string;
@@ -77,7 +79,12 @@ export default function ComboCustomizer({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/combo/config/${dish.DishId}`);
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`${API_URL}/api/combo/config/${dish.DishId}`, {
+        headers: {
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        }
+      });
       if (!res.ok) throw new Error("Failed to load combo options.");
       const payload = await res.json();
       if (payload.success && payload.data) {
@@ -156,6 +163,9 @@ export default function ComboCustomizer({
           name: o.name,
           surcharge: o.surcharge,
           dishPrice: o.dishPrice || 0,
+          KitchenTypeCode: (o as any).KitchenTypeCode,
+          KitchenTypeName: (o as any).KitchenTypeName,
+          PrinterIP: (o as any).PrinterIP,
         }))
       };
     });

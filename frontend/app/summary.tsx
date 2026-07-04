@@ -739,13 +739,41 @@ export default function SummaryScreen() {
 
     try {
       const kitchenGroups: Record<string, any[]> = {};
+      const expandedItems: any[] = [];
+      
       cart
         .filter((i: any) => i.status !== "VOIDED")
         .forEach((item: any) => {
-          const kCode = item.KitchenTypeCode || "0";
-          if (!kitchenGroups[kCode]) kitchenGroups[kCode] = [];
-          kitchenGroups[kCode].push(item);
+          expandedItems.push(item);
+          if (item.comboSelections && item.comboSelections.length > 0) {
+            item.comboSelections.forEach((g: any) => {
+              if (Array.isArray(g.items)) {
+                g.items.forEach((opt: any) => {
+                  const optKitchenCode = opt.KitchenTypeCode || opt.kitchenCode || opt.kitchenTypeCode;
+                  const parentKitchenCode = item.KitchenTypeCode || item.kitchenCode || item.kitchenTypeCode || "0";
+                  if (optKitchenCode && optKitchenCode !== parentKitchenCode) {
+                    expandedItems.push({
+                      ...opt,
+                      id: opt.dishId,
+                      qty: item.quantity || item.qty || 1,
+                      price: 0,
+                      name: `${opt.name} (Combo - ${item.name})`,
+                      KitchenTypeCode: optKitchenCode,
+                      KitchenTypeName: opt.KitchenTypeName || opt.kitchenTypeName,
+                      PrinterIP: opt.PrinterIP || opt.printerIp,
+                    });
+                  }
+                });
+              }
+            });
+          }
         });
+
+      expandedItems.forEach((item: any) => {
+        const kCode = item.KitchenTypeCode || "0";
+        if (!kitchenGroups[kCode]) kitchenGroups[kCode] = [];
+        kitchenGroups[kCode].push(item);
+      });
 
       for (const [kCode, items] of Object.entries(kitchenGroups)) {
         const kName =
@@ -1356,6 +1384,22 @@ export default function SummaryScreen() {
                             .join("  ·  ")}
                         </Text>
                       )}
+                    {item.isCombo && item.comboSelections && Array.isArray(item.comboSelections) &&
+                      item.comboSelections.map((group: any, gIdx: number) => (
+                        <View key={`g-${gIdx}`} style={{ marginTop: 2, paddingLeft: 2 }}>
+                          <Text style={[styles.sub, { fontFamily: Fonts.bold, color: Theme.primary }]}>
+                            {group.groupName}:
+                          </Text>
+                          {(group.items || []).map((opt: any, oIdx: number) => {
+                            const effectiveAdd = (parseFloat(opt.surcharge || 0) + parseFloat(opt.dishPrice || 0));
+                            return (
+                              <Text key={`o-${oIdx}`} style={[styles.sub, { paddingLeft: 6 }]}>
+                                ↳ {opt.name}{effectiveAdd > 0 ? ` (+$${effectiveAdd.toFixed(2)})` : ""}
+                              </Text>
+                            );
+                          })}
+                        </View>
+                      ))}
                     {isSC && settings.serviceChargePercentage > 0 && item.status !== "VOIDED" && (
                       <Text style={[styles.sub, { color: Theme.primary, fontFamily: Fonts.bold, marginTop: 4 }]}>
                         Item Service Charge ({settings.serviceChargePercentage}%): {currencySymbol}{((((item.price || 0) * item.qty) - ((item.discountType === 'fixed' || (item.discountType == null && item.discountAmount > 0 && !item.discount)) ? (Number(item.discountAmount ?? item.discount ?? 0) * item.qty) : (((item.price || 0) * item.qty) * (Number(item.discountAmount ?? item.discount ?? 0) / 100)))) * (settings.serviceChargePercentage / 100)).toFixed(2)}

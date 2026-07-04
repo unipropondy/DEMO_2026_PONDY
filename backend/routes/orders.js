@@ -1777,7 +1777,19 @@ router.post("/log-print", async (req, res) => {
     const { orderId, orderNumber, printType } = req.body;
     const pool = await poolPromise;
 
-    const safeOrderId = toGuidOrNull(orderId);
+    let safeOrderId = toGuidOrNull(orderId);
+    if (!safeOrderId && orderNumber) {
+      const orderQuery = await pool.request()
+        .input("orderNumber", sql.VarChar(50), String(orderNumber).trim())
+        .query("SELECT TOP 1 OrderId FROM RestaurantOrderCur WHERE OrderNumber = @orderNumber ORDER BY CreatedOn DESC");
+      if (orderQuery.recordset.length > 0) {
+        safeOrderId = orderQuery.recordset[0].OrderId;
+      }
+    }
+    if (!safeOrderId) {
+      safeOrderId = DEFAULT_GUID;
+    }
+
     const safeOrderNo = orderNumber
       ? String(orderNumber).substring(0, 50)
       : "N/A";

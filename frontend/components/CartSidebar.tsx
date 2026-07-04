@@ -1407,10 +1407,37 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
     // 2. Start Printers immediately (No waiting)
     (async () => {
       const kitchenGroups: Record<string, any[]> = {};
+      const expandedItems: any[] = [];
+      
       currentItems.forEach((item: any) => {
+        expandedItems.push(item);
+        if (item.comboSelections && item.comboSelections.length > 0) {
+          item.comboSelections.forEach((g: any) => {
+            if (Array.isArray(g.items)) {
+              g.items.forEach((opt: any) => {
+                const optKitchenCode = opt.KitchenTypeCode || opt.kitchenCode || opt.kitchenTypeCode;
+                const parentKitchenCode = item.KitchenTypeCode || item.kitchenCode || item.kitchenTypeCode || "0";
+                if (optKitchenCode && optKitchenCode !== parentKitchenCode) {
+                  expandedItems.push({
+                    ...opt,
+                    id: opt.dishId,
+                    qty: item.quantity || item.qty || 1,
+                    price: 0,
+                    name: `${opt.name} (Combo - ${item.name})`,
+                    KitchenTypeCode: optKitchenCode,
+                    KitchenTypeName: opt.KitchenTypeName || opt.kitchenTypeName,
+                    PrinterIP: opt.PrinterIP || opt.printerIp,
+                  });
+                }
+              });
+            }
+          });
+        }
+      });
+
+      expandedItems.forEach((item: any) => {
         const kCode = item.KitchenTypeCode || "0";
         if (!kitchenGroups[kCode]) kitchenGroups[kCode] = [];
-
         kitchenGroups[kCode].push(item);
       });
 
@@ -1947,50 +1974,20 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
                         </>
                       );
                     } else if (currentTableStatus === "SENT" || currentTableStatus === "HOLD") {
-                      // Dine-in Flow 2: 2-button layout when unsentCount === 0 and status is SENT or HOLD
+                      // Dine-in Flow 2: Only show Pay button when unsentCount === 0
                       return (
-                        <>
-                          {/* KOT button (Indigo, text 'KOT', 50px) */}
-                          <TouchableOpacity
-                            disabled={isCheckingOut}
-                            style={[
-                              styles.compactIconBtn,
-                              { backgroundColor: "#4F46E5" },
-                              isCheckingOut && { opacity: 0.6 }
-                            ]}
-                            onPress={async () => {
-                              if (isCheckingOut) return;
-                              setIsCheckingOut(true);
-                              try {
-                                await handleSendOrder(true);
-                              } catch (err) {
-                                console.error("KOT send error:", err);
-                              } finally {
-                                setIsCheckingOut(false);
-                              }
-                            }}
-                          >
-                            {isCheckingOut ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <Text style={{ color: "#fff", fontFamily: Fonts.black, fontSize: 13 }}>KOT</Text>
-                            )}
-                          </TouchableOpacity>
-
-                          {/* Pay button (Green, flex-grow) */}
-                          <TouchableOpacity
-                            style={[
-                              styles.proceedBtn,
-                              { backgroundColor: "#10B981" },
-                            ]}
-                            onPress={() => {
-                              router.push("/summary");
-                            }}
-                          >
-                            <Ionicons name="card-outline" size={iconSize} color="#fff" />
-                            <Text style={styles.btnText}>Pay</Text>
-                          </TouchableOpacity>
-                        </>
+                        <TouchableOpacity
+                          style={[
+                            styles.proceedBtn,
+                            { flex: 1, backgroundColor: "#10B981" },
+                          ]}
+                          onPress={() => {
+                            router.push("/summary");
+                          }}
+                        >
+                          <Ionicons name="card-outline" size={iconSize} color="#fff" />
+                          <Text style={styles.btnText}>Pay</Text>
+                        </TouchableOpacity>
                       );
                     } else if (currentTableStatus === "BILL_REQUESTED") {
                       // Dine-in Flow 2: 1-button layout when status is BILL_REQUESTED

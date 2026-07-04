@@ -518,7 +518,33 @@ export default function CartScreen() {
               router.replace(`/(tabs)/category?section=${context.section}`);
               try {
                 const kitchenGroups: Record<string, any[]> = {};
+                const expandedItems: any[] = [];
                 cart.filter((i: any) => i.status !== 'VOIDED' && !i.isVoided).forEach((item: any) => {
+                  expandedItems.push(item);
+                  if (item.comboSelections && item.comboSelections.length > 0) {
+                    item.comboSelections.forEach((g: any) => {
+                      if (Array.isArray(g.items)) {
+                        g.items.forEach((opt: any) => {
+                          const optKitchenCode = opt.KitchenTypeCode || opt.kitchenCode || opt.kitchenTypeCode;
+                          const parentKitchenCode = item.KitchenTypeCode || item.kitchenCode || item.kitchenTypeCode || "0";
+                          if (optKitchenCode && optKitchenCode !== parentKitchenCode) {
+                            expandedItems.push({
+                              ...opt,
+                              id: opt.dishId,
+                              qty: item.quantity || item.qty || 1,
+                              price: 0,
+                              name: `${opt.name} (Combo - ${item.name})`,
+                              KitchenTypeCode: optKitchenCode,
+                              KitchenTypeName: opt.KitchenTypeName || opt.kitchenTypeName,
+                              PrinterIP: opt.PrinterIP || opt.printerIp,
+                            });
+                          }
+                        });
+                      }
+                    });
+                  }
+                });
+                expandedItems.forEach((item: any) => {
                   const kCode = item.KitchenTypeCode || "0";
                   if (!kitchenGroups[kCode]) kitchenGroups[kCode] = [];
                   kitchenGroups[kCode].push(item);

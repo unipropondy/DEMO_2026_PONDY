@@ -448,13 +448,41 @@ export default function MenuScreen() {
     try {
       const cart = useCartStore.getState().carts[currentContextId!] || [];
       const kitchenGroups: Record<string, any[]> = {};
+      const expandedItems: any[] = [];
+      
       cart
         .filter((i: any) => i.status !== "VOIDED")
         .forEach((item: any) => {
-          const kCode = item.KitchenTypeCode || "0";
-          if (!kitchenGroups[kCode]) kitchenGroups[kCode] = [];
-          kitchenGroups[kCode].push(item);
+          expandedItems.push(item);
+          if (item.comboSelections && item.comboSelections.length > 0) {
+            item.comboSelections.forEach((g: any) => {
+              if (Array.isArray(g.items)) {
+                g.items.forEach((opt: any) => {
+                  const optKitchenCode = opt.KitchenTypeCode || opt.kitchenCode || opt.kitchenTypeCode;
+                  const parentKitchenCode = item.KitchenTypeCode || item.kitchenCode || item.kitchenTypeCode || "0";
+                  if (optKitchenCode && optKitchenCode !== parentKitchenCode) {
+                    expandedItems.push({
+                      ...opt,
+                      id: opt.dishId,
+                      qty: item.quantity || item.qty || 1,
+                      price: 0,
+                      name: `${opt.name} (Combo - ${item.name})`,
+                      KitchenTypeCode: optKitchenCode,
+                      KitchenTypeName: opt.KitchenTypeName || opt.kitchenTypeName,
+                      PrinterIP: opt.PrinterIP || opt.printerIp,
+                    });
+                  }
+                });
+              }
+            });
+          }
         });
+
+      expandedItems.forEach((item: any) => {
+        const kCode = item.KitchenTypeCode || "0";
+        if (!kitchenGroups[kCode]) kitchenGroups[kCode] = [];
+        kitchenGroups[kCode].push(item);
+      });
 
       for (const [kCode, items] of Object.entries(kitchenGroups)) {
         const kName =
@@ -925,12 +953,30 @@ export default function MenuScreen() {
         console.log("Split API Error", err);
       }
 
-      // COMBO ITEM: Open wizard customizer instead of standard cart addition
+      // COMBO ITEM: Open wizard customizer instead of standard cart addition if config exists
       const isItCombo = dish.IsCombo === true || String(dish.IsCombo) === "1" || String(dish.IsCombo) === "true";
       if (isItCombo) {
-        setComboDish(dish);
-        setShowComboModal(true);
-        return;
+        setLoadingModifiers(true);
+        try {
+          const token = useAuthStore.getState().token;
+          const res = await fetch(`${API_URL}/api/combo/config/${dish.DishId}`, {
+            headers: {
+              ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            }
+          });
+          if (res.ok) {
+            const payload = await res.json();
+            if (payload.success && payload.data && payload.data.groups && payload.data.groups.length > 0) {
+              setComboDish(dish);
+              setShowComboModal(true);
+              setLoadingModifiers(false);
+              return;
+            }
+          }
+        } catch (err) {
+          console.log("Combo config pre-fetch error:", err);
+        }
+        setLoadingModifiers(false);
       }
 
       const currentKitchen = kitchens.find(
