@@ -13,6 +13,7 @@ export type TableStatus = {
   isHoldOvertime?: boolean;
   lastModified?: string;
   entryStatus?: string;
+  paymentStatus?: number;
   customerName?: string;
   pax?: number;
 };
