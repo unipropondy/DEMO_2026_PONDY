@@ -85,9 +85,17 @@ const HEALTH_POLICY: NetworkPolicy = {
   budget: 5000,
 };
 
+const TERMINAL_POLICY: NetworkPolicy = {
+  timeout: 165000, // 165 seconds to match/exceed YeahPay backend timeout (160s)
+  maxRetries: 0,   // Do not retry payments to avoid idempotency conflicts
+  initialDelay: 300,
+  budget: 170000,
+};
+
 const classifyRequest = (url: string): NetworkPolicy => {
   if (!url) return NORMAL_POLICY;
   if (url.includes("/health")) return HEALTH_POLICY;
+  if (url.includes("/yeahpay") || url.includes("yeahpay")) return TERMINAL_POLICY;
 
   const criticalKeywords = [
     "checkout",
