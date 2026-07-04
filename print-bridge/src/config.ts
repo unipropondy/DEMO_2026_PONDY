@@ -89,8 +89,13 @@ const defaultConfig: BridgeConfig = {
   port: 3050,
   backends: [
     {
-      name: 'Default',
+      name: 'RN POS',
       url: 'https://demo2026pondy-production.up.railway.app',
+      enabled: true
+    },
+    {
+      name: 'QR POS',
+      url: 'https://new-qrcode-production-fe4e.up.railway.app',
       enabled: true
     }
   ]
