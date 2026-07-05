@@ -1384,22 +1384,24 @@ export default function SummaryScreen() {
                             .join("  ·  ")}
                         </Text>
                       )}
-                    {item.isCombo && item.comboSelections && Array.isArray(item.comboSelections) &&
-                      item.comboSelections.map((group: any, gIdx: number) => (
-                        <View key={`g-${gIdx}`} style={{ marginTop: 2, paddingLeft: 2 }}>
-                          <Text style={[styles.sub, { fontFamily: Fonts.bold, color: Theme.primary }]}>
-                            {group.groupName}:
-                          </Text>
-                          {(group.items || []).map((opt: any, oIdx: number) => {
-                            const effectiveAdd = (parseFloat(opt.surcharge || 0) + parseFloat(opt.dishPrice || 0));
-                            return (
-                              <Text key={`o-${oIdx}`} style={[styles.sub, { paddingLeft: 6 }]}>
-                                ↳ {opt.name}{effectiveAdd > 0 ? ` (+$${effectiveAdd.toFixed(2)})` : ""}
-                              </Text>
-                            );
-                          })}
-                        </View>
-                      ))}
+                     {item.isCombo && item.comboSelections && Array.isArray(item.comboSelections) &&
+                      item.comboSelections
+                        .filter((group: any) => group.items && group.items.length > 0)
+                        .map((group: any, gIdx: number) => (
+                          <View key={`g-${gIdx}`} style={{ marginTop: 2, paddingLeft: 2 }}>
+                            <Text style={[styles.sub, { fontFamily: Fonts.bold, color: Theme.primary }]}>
+                              {group.groupName}:
+                            </Text>
+                            {(group.items || []).map((opt: any, oIdx: number) => {
+                              const effectiveAdd = (parseFloat(opt.surcharge || 0) + parseFloat(opt.dishPrice || 0));
+                              return (
+                                <Text key={`o-${oIdx}`} style={[styles.sub, { paddingLeft: 6 }]}>
+                                  ↳ {opt.name}{effectiveAdd > 0 ? ` (+$${effectiveAdd.toFixed(2)})` : ""}
+                                </Text>
+                              );
+                            })}
+                          </View>
+                        ))}
                     {isSC && settings.serviceChargePercentage > 0 && item.status !== "VOIDED" && (
                       <Text style={[styles.sub, { color: Theme.primary, fontFamily: Fonts.bold, marginTop: 4 }]}>
                         Item Service Charge ({settings.serviceChargePercentage}%): {currencySymbol}{((((item.price || 0) * item.qty) - ((item.discountType === 'fixed' || (item.discountType == null && item.discountAmount > 0 && !item.discount)) ? (Number(item.discountAmount ?? item.discount ?? 0) * item.qty) : (((item.price || 0) * item.qty) * (Number(item.discountAmount ?? item.discount ?? 0) / 100)))) * (settings.serviceChargePercentage / 100)).toFixed(2)}

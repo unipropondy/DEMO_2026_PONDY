@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc && xcopy /E /I /Y src\\public dist\\public",
     "start": "electron .",
-    "dev": "ts-node src/index.ts",
+    "dev": "npm run build && electron .",
     "package": "npm run build && electron-builder --win --x64"
   },
   "dependencies": {

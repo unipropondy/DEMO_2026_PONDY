@@ -106,11 +106,57 @@ export default function ComboCustomizer({
       if (!res.ok) throw new Error("Failed to load combo options.");
       const payload = await res.json();
       if (payload.success && payload.data) {
-        setConfig(payload.data);
+        const rawGroups = payload.data.groups || [];
+        const normalizedGroups = rawGroups.map((g: any) => {
+          const parseBool = (v: any) => v === true || v === 1 || String(v) === "1" || String(v) === "true";
+          const isMulti = g.isMultiSelect !== undefined ? parseBool(g.isMultiSelect) : parseBool(g.IsMultiSelect);
+          let maxSelect = g.maxSelection !== undefined ? Number(g.maxSelection) : Number(g.MaxSelection || 1);
+          if (isMulti && maxSelect <= 1) {
+            maxSelect = 999;
+          }
+          const minSelect = g.minSelection !== undefined ? Number(g.minSelection) : Number(g.MinSelection || 0);
+          const comboGroupId = g.comboGroupId || g.ComboGroupId;
+          const groupName = g.groupName || g.GroupName;
+          const rawOptions = g.options || g.Options || [];
+
+          const normalizedOptions = rawOptions.map((o: any) => ({
+            mappingId: o.mappingId || o.MappingId,
+            dishId: o.dishId || o.DishId,
+            name: o.name || o.DishName || o.Name,
+            description: o.description || o.DishDescription || o.Description,
+            surcharge: o.surcharge !== undefined ? Number(o.surcharge) : Number(o.Surcharge || 0),
+            dishPrice: o.dishPrice !== undefined ? Number(o.dishPrice) : Number(o.DishPrice || 0),
+            isDefault: o.isDefault !== undefined ? parseBool(o.isDefault) : parseBool(o.IsDefault),
+            sortOrder: o.sortOrder !== undefined ? Number(o.sortOrder) : Number(o.SortOrder || 0),
+            KitchenTypeCode: o.KitchenTypeCode,
+            KitchenTypeName: o.KitchenTypeName,
+            PrinterIP: o.PrinterIP,
+          }));
+
+          return {
+            comboGroupId,
+            groupName,
+            displayOrder: g.displayOrder || g.DisplayOrder || 0,
+            minSelection: minSelect,
+            maxSelection: maxSelect,
+            isMultiSelect: isMulti,
+            options: normalizedOptions,
+          };
+        });
+
+        const normalizedConfig: ComboConfig = {
+          dishId: payload.data.dishId || payload.data.DishId,
+          name: payload.data.name || payload.data.Name,
+          basePrice: parseFloat(payload.data.basePrice || payload.data.BasePrice || 0),
+          description: payload.data.description || payload.data.Description,
+          groups: normalizedGroups,
+        };
+
+        setConfig(normalizedConfig);
         
         // Auto-select defaults
         const initialSelections: Record<string, string[]> = {};
-        payload.data.groups.forEach((group: ComboGroup) => {
+        normalizedGroups.forEach((group: ComboGroup) => {
           let defaults = group.options.filter(o => o.isDefault).map(o => o.dishId);
           // Defensive check: If single-select, restrict defaults to 1 item
           if (!group.isMultiSelect || group.maxSelection === 1) {
@@ -559,14 +605,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   optionCard: {
-    minWidth: 140,
-    flex: 1,
+    width: 125,
     backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
     borderColor: "#EAECEE",
     borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -584,16 +629,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
   },
   optionName: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: Fonts.semiBold,
     color: "#2C3E50",
     textAlign: "center",
   },
   optionSurcharge: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Fonts.bold,
     color: Theme.primary,
-    marginTop: 6,
+    marginTop: 4,
     backgroundColor: "#FFEEDB",
     paddingHorizontal: 8,
     paddingVertical: 2,
