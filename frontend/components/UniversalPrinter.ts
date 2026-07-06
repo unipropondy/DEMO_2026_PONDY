@@ -43,6 +43,207 @@ class UniversalPrinter {
   private static cachedPrinters: any = null;
   private static lastPrintersFetchTime: number = 0;
 
+  // ==================== DEDUPLICATION CACHE ====================
+  // Cache key = "orderId:itemFingerprint" so that a legitimate additional-round
+  // KOT (same orderId, different new items) is never blocked.
+  // Only a byte-identical replay of the same orderId + same item set is rejected.
+  // Entries older than 15 minutes are evicted to bound memory usage.
+  private static printedOrdersCache = new Map<string, number>();
+  private static printedReceiptsCache = new Map<string, number>();
+
+  /**
+   * Builds a stable, order-independent fingerprint from the items array.
+   * Uses the most-specific ID available per item, then sorts so the key is
+   * the same regardless of the order items arrive in the payload.
+   */
+  private static buildItemFingerprint(items: any[]): string {
+    return items
+      .map(
+        (i: any) =>
+          String(
+            i.lineItemId ??
+            i.LineItemId ??
+            i.dishId ??
+            i.DishId ??
+            i.id ??
+            i.name ??
+            "?"
+          )
+      )
+      .sort()
+      .join(",");
+  }
+
+  private static isDuplicatePrint(orderId: string, items: any[]): boolean {
+    const now = Date.now();
+    const TTL = 15 * 60 * 1000; // 15 minutes
+    // Evict stale entries to prevent unbounded memory growth
+    for (const [key, ts] of this.printedOrdersCache.entries()) {
+      if (now - ts > TTL) this.printedOrdersCache.delete(key);
+    }
+    // Composite key: orderId + exact item set — allows additional KOTs for the same order
+    const cacheKey = `${orderId}:${this.buildItemFingerprint(items)}`;
+    if (this.printedOrdersCache.has(cacheKey)) {
+      console.log(
+        `🛡️ [UniversalPrinter] Duplicate print blocked | Order: ${orderId} | Items: ${items.length}`
+      );
+      return true;
+    }
+    this.printedOrdersCache.set(cacheKey, now);
+    return false;
+  }
+
+  private static isDuplicateReceiptPrint(orderId: string): boolean {
+    const now = Date.now();
+    const TTL = 15 * 60 * 1000; // 15 minutes
+    for (const [key, ts] of this.printedReceiptsCache.entries()) {
+      if (now - ts > TTL) this.printedReceiptsCache.delete(key);
+    }
+    if (this.printedReceiptsCache.has(orderId)) {
+      console.log(`🛡️ [UniversalPrinter] Duplicate receipt print blocked for Order: ${orderId}`);
+      return true;
+    }
+    this.printedReceiptsCache.set(orderId, now);
+    return false;
+  }
+
+  // ==================== SHARED KITCHEN PRINT PIPELINE ====================
+  /**
+   * routeAndPrintOrderKOT
+   *
+   * Single source of truth for kitchen routing and printing.
+   * Called by BOTH the cashier "Send to Kitchen" flow (CartSidebar.tsx)
+   * and the automatic QR-order socket flow (useGlobalSocketSync.ts).
+   *
+   * Responsibilities:
+   *  - Expand combo sub-items across kitchen boundaries
+   *  - Group items by KitchenTypeCode / PrinterIP
+   *  - Print one KOT per kitchen group (TCP / Sunmi / fallback)
+   *  - Optionally print a KDS backup copy
+   *
+   * This method MUST NOT:
+   *  - Call any backend API
+   *  - Emit socket events
+   *  - Update React / Zustand state
+   *  - Navigate or display toasts
+   *
+   * @param orderId        The order identifier (used for print logging)
+   * @param orderContext   { orderType, tableNo, takeawayNo, section } – same shape used by CartSidebar
+   * @param items          Array of cart/order items with KitchenTypeCode and PrinterIP resolved
+   * @param isAdditional   true if some items in the cart were already SENT (additional KOT)
+   * @param waiterName     Staff name to print on the KOT
+   * @param skipDuplicateGuard  Pass true from the cashier manual flow to bypass the cache check
+   */
+  static async routeAndPrintOrderKOT(
+    orderId: string,
+    orderContext: { orderType?: string; tableNo?: string; takeawayNo?: string; section?: string },
+    items: any[],
+    isAdditional: boolean = false,
+    waiterName: string = "Staff",
+    skipDuplicateGuard: boolean = false
+  ): Promise<boolean> {
+    try {
+      // 1. Duplicate-print guard (QR socket path only; cashier path passes skipDuplicateGuard=true)
+      // Pass the raw items (pre-expansion) so the fingerprint reflects what the backend sent.
+      if (!skipDuplicateGuard && this.isDuplicatePrint(orderId, items)) {
+        return false;
+      }
+
+      // 2. Check enableKOT setting (same setting the cashier flow checks)
+      const { useGeneralSettingsStore } = await import("../stores/generalSettingsStore");
+      const { enableKOT, enableKDSPrint } = useGeneralSettingsStore.getState().settings;
+      if (!enableKOT) {
+        if (__DEV__) console.log("🖨️ [UniversalPrinter] KOT printing is disabled in General Settings.");
+        return false;
+      }
+
+      // 3. Expand combo sub-items that belong to a different kitchen
+      const expandedItems: any[] = [];
+      items.forEach((item: any) => {
+        expandedItems.push(item);
+        if (item.comboSelections && item.comboSelections.length > 0) {
+          item.comboSelections.forEach((g: any) => {
+            if (Array.isArray(g.items)) {
+              g.items.forEach((opt: any) => {
+                const optKitchenCode =
+                  opt.KitchenTypeCode || opt.kitchenCode || opt.kitchenTypeCode;
+                const parentKitchenCode =
+                  item.KitchenTypeCode || item.kitchenCode || item.kitchenTypeCode || "0";
+                if (optKitchenCode && optKitchenCode !== parentKitchenCode) {
+                  expandedItems.push({
+                    ...opt,
+                    id: opt.dishId,
+                    qty: item.quantity || item.qty || 1,
+                    price: 0,
+                    name: `${opt.name} (Combo - ${item.name})`,
+                    KitchenTypeCode: optKitchenCode,
+                    KitchenTypeName: opt.KitchenTypeName || opt.kitchenTypeName,
+                    PrinterIP: opt.PrinterIP || opt.printerIp,
+                  });
+                }
+              });
+            }
+          });
+        }
+      });
+
+      // 4. Group by KitchenTypeCode → one KOT per kitchen
+      const kitchenGroups: Record<string, any[]> = {};
+      expandedItems.forEach((item: any) => {
+        const kCode = item.KitchenTypeCode || "0";
+        if (!kitchenGroups[kCode]) kitchenGroups[kCode] = [];
+        kitchenGroups[kCode].push(item);
+      });
+
+      // 5. Print one KOT per kitchen group
+      const tableNo =
+        orderContext.orderType === "DINE_IN"
+          ? orderContext.tableNo
+          : `TW-${orderContext.takeawayNo}`;
+
+      for (const [kCode, groupItems] of Object.entries(kitchenGroups)) {
+        const printerIp = groupItems[0].PrinterIP;
+        const kotData = {
+          orderId,
+          orderNo: orderId,
+          tableNo,
+          waiterName,
+          items: groupItems,
+          kitchenName:
+            groupItems[0].KitchenTypeName || (kCode === "0" ? "KITCHEN" : kCode),
+        };
+        await this.printKOT(
+          kotData,
+          "SYSTEM",
+          isAdditional ? "ADDITIONAL" : "NEW",
+          printerIp
+        );
+      }
+
+      // 6. KDS backup copy (respects enableKDSPrint setting)
+      if (enableKDSPrint !== false) {
+        try {
+          const kdsData = {
+            orderId,
+            orderNo: orderId,
+            tableNo,
+            waiterName,
+            items,
+            kitchenName: "KDS",
+          };
+          await this.printKDSOrder(kdsData, "SYSTEM");
+        } catch (kdsErr) {
+          console.error("[UniversalPrinter] KDS backup print failed:", kdsErr);
+        }
+      }
+
+      return true;
+    } catch (err) {
+      console.error("[UniversalPrinter] routeAndPrintOrderKOT error:", err);
+      return false;
+    }
+  }
+
   static async detectAllPrinters(): Promise<PrinterInfo[]> {
     const printers: PrinterInfo[] = [];
     if (Platform.OS !== "android") return printers;
@@ -1210,12 +1411,14 @@ class UniversalPrinter {
     discountInfo?: DiscountInfo,
     preferredType?: PrinterType,
     isReprint: boolean = false,
+    skipPreview: boolean = false,
   ): Promise<boolean> {
     if (Platform.OS === "web") {
       try {
         const isOnline = await this.isBridgeOnline();
         if (!isOnline) {
           console.log("📡 [Web Print Bridge] Bridge is OFFLINE. Direct fallback to preview.");
+          if (skipPreview) return false;
           return await this.offerPDFFallback(saleData, outletId, t, discountInfo);
         }
 
@@ -1239,9 +1442,11 @@ class UniversalPrinter {
 
         // 🚀 Fallback: If Print Bridge failed or printer not detected on web, trigger iframe print preview immediately
         console.log("⚠️ [Web Receipt Print] Print Bridge queue failed. Falling back to iframe print preview.");
+        if (skipPreview) return false;
         return await this.offerPDFFallback(saleData, outletId, t, discountInfo);
       } catch (err) {
         console.warn("[Web Print Bridge] Receipt Queue failed, falling back to iframe print preview:", err);
+        if (skipPreview) return false;
         return await this.offerPDFFallback(saleData, outletId, t, discountInfo);
       }
     }
@@ -1324,6 +1529,10 @@ class UniversalPrinter {
               console.log("WiFi failed/timeout:", err);
             }
           }
+          if (skipPreview) {
+            console.log(`❌ LAN print failed for IP ${targetIp}. Silent failure requested.`);
+            return;
+          }
           Alert.alert(
             "Printer Connection Error",
             `Could not connect to the configured LAN/Wi-Fi printer at ${targetIp}. Opening print preview...`,
@@ -1348,14 +1557,109 @@ class UniversalPrinter {
 
         // Fallback to PDF/Web (Guaranteed)
         console.log("🔄 Fallback to PDF Preview");
+        if (skipPreview) {
+          console.log("❌ Built-in print failed. Silent failure requested.");
+          return;
+        }
         await this.offerPDFFallback(saleData, outletId, t, discountInfo);
       } catch (error) {
         console.log("SmartPrint error:", error);
+        if (skipPreview) {
+          console.log("❌ SmartPrint exception. Silent failure requested.");
+          return;
+        }
         await this.offerPDFFallback(saleData, outletId, t, discountInfo);
       }
     })();
 
     return true;
+  }
+
+  // ==================== AUTO RECEIPT PRINT PIPELINE ====================
+  /**
+   * printReceiptAuto
+   *
+   * Automatically prints receipt for online-paid QR orders on order_closed.
+   * Maps backend settlement DTO (header, items, payments) to saleData and discountInfo,
+   * then calls smartPrint with skipPreview=true to print silently.
+   */
+  static async printReceiptAuto(settlementData: {
+    header: any;
+    items: any[];
+    payments: any[];
+  }): Promise<boolean> {
+    try {
+      const { header, items, payments } = settlementData;
+      const orderId = header.OrderId || header.BillNo;
+
+      if (!orderId) {
+        console.warn("[UniversalPrinter] Cannot auto-print receipt: missing OrderId");
+        return false;
+      }
+
+      if (this.isDuplicateReceiptPrint(orderId)) {
+        return false;
+      }
+
+      const mappedItems = items.map((item: any) => ({
+        name: item.DishName || item.name,
+        price: Number(item.Price || 0),
+        qty: Number(item.Qty || item.qty || 1),
+        status: item.Status || "NORMAL",
+        discountAmount: Number(item.DiscountAmount || 0),
+        discountType: item.DiscountType || "fixed",
+        modifiers: item.modifiers || [],
+      }));
+
+      const isPercentage = header.DiscountType === "percentage";
+      const discountValue = isPercentage
+        ? Number(header.DiscountPercentage ?? 0)
+        : Number(header.DiscountAmount ?? 0);
+
+      const discountInfo = {
+        applied: Number(header.DiscountAmount ?? 0) > 0,
+        type: (header.DiscountType || "fixed") as "fixed" | "percentage",
+        value: discountValue,
+        amount: Number(header.DiscountAmount ?? 0),
+        subtotal: Number(header.SubTotal ?? 0),
+      };
+
+      const saleData = {
+        invoiceNumber: header.BillNo || orderId,
+        tableNo: header.TableNo ?? "",
+        total: Number(header.SysAmount || 0),
+        paymentMethod: header.PayMode || "CASH",
+        cashPaid: Number(header.SysAmount || 0),
+        change: 0,
+        items: mappedItems,
+        roundOff: Number(header.RoundedBy ?? 0),
+        date: header.SettlementDate || new Date(),
+        isReprint: false,
+        isCheckout: true,
+        // Sunmi template details
+        discountAmount: Number(header.DiscountAmount ?? 0),
+        discountType: header.DiscountType || null,
+        discountValue: discountValue,
+        subTotal: Number(header.SubTotal ?? 0),
+        serviceCharge: Number(header.ServiceCharge ?? 0),
+        payments: payments.map((p: any) => ({
+          payMode: p.payMode || p.payModeName,
+          payModeName: p.payModeName || p.payMode,
+          amount: Number(p.amount || 0),
+          referenceNo: p.referenceNo || ""
+        })),
+        waiterName: header.SER_NAME || "QR System"
+      };
+
+      const AsyncStorage = require("@react-native-async-storage/async-storage").default;
+      const userId = (await AsyncStorage.getItem("userId")) || "1";
+
+      console.log(`🖨️ [UniversalPrinter] Triggering silent receipt print for: ${orderId}`);
+      return await this.smartPrint(saleData, userId, {}, discountInfo, undefined, false, true);
+    } catch (err) {
+      console.error("[UniversalPrinter] printReceiptAuto error:", err);
+      return false;
+    }
   }
 
   /**

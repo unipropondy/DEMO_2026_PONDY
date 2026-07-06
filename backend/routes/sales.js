@@ -2333,6 +2333,140 @@ router.post("/save", async (req, res) => {
 });
 
 /* ================= VALIDATION ================= */
+router.get("/settlement/:id", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const cleanId = req.params.id;
+
+    // 1. Fetch SettlementHeader details
+    const headerResult = await pool.request()
+      .input("Id", sql.NVarChar(100), cleanId)
+      .query(`
+        SELECT TOP 1
+          sh.SettlementID,
+          sh.LastSettlementDate AS SettlementDate,
+          sh.BillNo AS OrderId,
+          sh.OrderType,
+          sh.TableNo,
+          sh.Section,
+          sh.CashierId,
+          sh.BillNo,
+          sh.SER_NAME,
+          sh.SubTotal,
+          ISNULL(sh.DiscountAmount, 0) as DiscountAmount,
+          sh.DiscountType as DiscountType,
+          ISNULL(sh.ServiceCharge, 0) as ServiceCharge,
+          ISNULL(sh.TotalTax, 0) as TotalTax,
+          sh.IsCancelled,
+          sh.RoundedBy,
+          ri.OrderId AS MasterOrderId,
+          ISNULL(ri.TotalDiscountAmount, 0) as TotalDiscountAmount,
+          ISNULL(ri.TotalLineItemDiscountAmount, 0) as TotalLineItemDiscountAmount,
+          ISNULL(ri.DiscountPercentage, 0) as DiscountPercentage,
+          sh.GuestName,
+          sh.Pax,
+          tm.entry_status AS TableEntryStatus
+        FROM SettlementHeader sh
+        LEFT JOIN RestaurantInvoice ri ON sh.SettlementID = ri.RestaurantBillId
+        LEFT JOIN TableMaster tm ON RTRIM(LTRIM(sh.TableNo)) = RTRIM(LTRIM(tm.TableNumber))
+        WHERE sh.SettlementID = TRY_CAST(@Id AS UNIQUEIDENTIFIER)
+           OR (TRY_CAST(@Id AS UNIQUEIDENTIFIER) IS NOT NULL AND ri.OrderId = TRY_CAST(@Id AS UNIQUEIDENTIFIER))
+           OR sh.BillNo = @Id
+      `);
+
+    const header = headerResult.recordset[0];
+    if (!header) {
+      return res.status(404).json({ error: "Settlement not found" });
+    }
+
+    const settlementId = header.SettlementID;
+    const masterOrderId = header.MasterOrderId;
+
+    // 2. Fetch Items
+    const itemsResult = await pool.request()
+      .input("SettlementId", sql.UniqueIdentifier, settlementId)
+      .query("SELECT * FROM SettlementItemDetail WHERE SettlementID = @SettlementId");
+    
+    const items = itemsResult.recordset || [];
+
+    if (items.length > 0 && masterOrderId) {
+      // Fetch modifiers
+      const modifiersResult = await pool.request()
+        .input("OrderId", sql.UniqueIdentifier, masterOrderId)
+        .query(`
+          SELECT OrderDetailId, DishId, ModifierId, ModifierName, Amount 
+          FROM Restaurantmodifierdetail 
+          WHERE OrderId = @OrderId
+          UNION
+          SELECT OrderDetailId, DishId, ModifierId, ModifierName, Amount 
+          FROM RestaurantmodifierdetailCur 
+          WHERE OrderId = @OrderId
+        `);
+      
+      const modifiers = modifiersResult.recordset || [];
+
+      // Group modifiers into their parent items
+      items.forEach(item => {
+        item.modifiers = modifiers
+          .filter(m => {
+            if (item.OrderDetailId && m.OrderDetailId) {
+              return String(m.OrderDetailId).toLowerCase() === String(item.OrderDetailId).toLowerCase();
+            }
+            return m.DishId && item.DishId && String(m.DishId).toLowerCase() === String(item.DishId).toLowerCase();
+          })
+          .map(m => ({
+            name: m.ModifierName,
+            ModifierName: m.ModifierName,
+            Amount: m.Amount,
+            ModifierId: m.ModifierId
+          }));
+      });
+    }
+
+    // 3. Fetch Payments
+    const paymentsResult = await pool.request()
+      .input("SettlementId", sql.UniqueIdentifier, settlementId)
+      .query(`
+        SELECT 
+          Paymode AS payMode,
+          SysAmount AS amount,
+          ManualAmount AS manualAmount,
+          SortageOrExces AS sortageOrExces,
+          ReceiptCount AS receiptCount,
+          IsCollected AS isCollected
+        FROM SettlementDetail
+        WHERE SettlementId = @SettlementId
+      `);
+
+    // Match payment descriptions for receipt printing
+    const paymodesRes = await pool.request().query("SELECT Position, PayMode, Description FROM [dbo].[Paymode]");
+    const activePaymodes = paymodesRes.recordset || [];
+
+    const payments = (paymentsResult.recordset || []).map(p => {
+      const pmInfo = activePaymodes.find(x => 
+        x.Position === Number(p.payMode) || 
+        String(x.PayMode).trim().toUpperCase() === String(p.payMode || "").trim().toUpperCase() ||
+        String(x.Description).trim().toUpperCase() === String(p.payMode || "").trim().toUpperCase()
+      );
+      return {
+        payMode: pmInfo ? String(pmInfo.PayMode).trim() : String(p.payMode || "CASH").trim(),
+        payModeName: pmInfo ? String(pmInfo.PayMode).trim() : String(p.payMode || "CASH").trim(),
+        amount: p.amount,
+        referenceNo: ""
+      };
+    });
+
+    res.json({
+      header,
+      items,
+      payments
+    });
+  } catch (err) {
+    console.error("❌ Fetch settlement error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/orders/check/:orderId", async (req, res) => {
   try {
     const pool = await poolPromise;
