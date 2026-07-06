@@ -953,30 +953,13 @@ export default function MenuScreen() {
         console.log("Split API Error", err);
       }
 
-      // COMBO ITEM: Open wizard customizer instead of standard cart addition if config exists
-      const isItCombo = dish.IsCombo === true || String(dish.IsCombo) === "1" || String(dish.IsCombo) === "true";
+      // COMBO ITEM: Open wizard customizer instead of standard cart addition
+      const isComboEnabled = useGeneralSettingsStore.getState().settings.enableCombo !== false;
+      const isItCombo = isComboEnabled && (dish.IsCombo === true || String(dish.IsCombo) === "1" || String(dish.IsCombo) === "true");
       if (isItCombo) {
-        setLoadingModifiers(true);
-        try {
-          const token = useAuthStore.getState().token;
-          const res = await fetch(`${API_URL}/api/combo/config/${dish.DishId}`, {
-            headers: {
-              ...(token ? { "Authorization": `Bearer ${token}` } : {})
-            }
-          });
-          if (res.ok) {
-            const payload = await res.json();
-            if (payload.success && payload.data && payload.data.groups && payload.data.groups.length > 0) {
-              setComboDish(dish);
-              setShowComboModal(true);
-              setLoadingModifiers(false);
-              return;
-            }
-          }
-        } catch (err) {
-          console.log("Combo config pre-fetch error:", err);
-        }
-        setLoadingModifiers(false);
+        setComboDish(dish);
+        setShowComboModal(true);
+        return;
       }
 
       const currentKitchen = kitchens.find(

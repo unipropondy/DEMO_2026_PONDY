@@ -426,6 +426,14 @@ router.post("/clear-cache", (req, res) => {
   console.log("⚡ [MenuCache] Cache INVALIDATION: All menu cache cleared");
   imageCache.clear();
   console.log("⚡ [ImageCache] Cache INVALIDATION: All image cache cleared");
+  try {
+    const comboRoutes = require("./combo");
+    if (comboRoutes && typeof comboRoutes.clearCache === "function") {
+      comboRoutes.clearCache();
+    }
+  } catch (err) {
+    console.error("Failed to clear combo cache:", err.message);
+  }
   res.json({ success: true, message: "Menu and image cache cleared successfully" });
 });
 

@@ -253,18 +253,20 @@ const OrderCard = React.memo(function OrderCard({ item, cardHeight, pulseAnim, g
                       <Text key={idx} style={styles.modifierText}>• {mod.ModifierName}</Text>
                     ))}
 
-                    {i.comboSelections && Array.isArray(i.comboSelections) && i.comboSelections.map((group: any, gIdx: number) => (
-                      <View key={`g-${gIdx}`} style={{ marginTop: 2, paddingLeft: 4 }}>
-                        <Text style={[styles.modifierText, { fontFamily: Fonts.bold, color: Theme.primary }]}>
-                          {group.groupName}:
-                        </Text>
-                        {group.items?.map((opt: any, oIdx: number) => (
-                          <Text key={`o-${oIdx}`} style={[styles.modifierText, { paddingLeft: 6 }]}>
-                            ↳ {opt.name}
+                    {i.comboSelections && Array.isArray(i.comboSelections) && i.comboSelections
+                      .filter((group: any) => group.items && group.items.length > 0)
+                      .map((group: any, gIdx: number) => (
+                        <View key={`g-${gIdx}`} style={{ marginTop: 2, paddingLeft: 4 }}>
+                          <Text style={[styles.modifierText, { fontFamily: Fonts.bold, color: Theme.primary }]}>
+                            {group.groupName}:
                           </Text>
-                        ))}
-                      </View>
-                    ))}
+                          {group.items?.map((opt: any, oIdx: number) => (
+                            <Text key={`o-${oIdx}`} style={[styles.modifierText, { paddingLeft: 6 }]}>
+                              ↳ {opt.name}
+                            </Text>
+                          ))}
+                        </View>
+                      ))}
 
                     {getTasteModifierText(i) ? (
                       <Text style={styles.modifierText}>{getTasteModifierText(i)}</Text>

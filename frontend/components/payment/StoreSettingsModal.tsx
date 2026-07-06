@@ -134,6 +134,10 @@ const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
           enableDirectProcessToPay: currentData.EnableDirectProcessToPay !== undefined ? currentData.EnableDirectProcessToPay : 0,
           customerSideDisplay: currentData.CustomerSideDisplay !== undefined ? currentData.CustomerSideDisplay : 1,
           enableGuestDetailsPopup: currentData.EnableGuestDetailsPopup !== undefined ? currentData.EnableGuestDetailsPopup : 1,
+          enableCashDrawer: currentData.EnableCashDrawer !== undefined ? currentData.EnableCashDrawer : 1,
+          SVCIdentification: currentData.SVCIdentification !== undefined ? currentData.SVCIdentification : 1,
+          enableKDSPrint: currentData.EnableKDSPrint !== undefined ? currentData.EnableKDSPrint : 1,
+          enableCombo: currentData.EnableCombo !== undefined ? currentData.EnableCombo : 1,
         }),
       });
 

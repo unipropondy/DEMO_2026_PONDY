@@ -63,6 +63,8 @@ export default function ComboCustomizer({
   const [config, setConfig] = useState<ComboConfig | null>(null);
   const [selections, setSelections] = useState<Record<string, string[]>>({});
   const [error, setError] = useState<string | null>(null);
+  const [dishModifiers, setDishModifiers] = useState<any[]>([]);
+  const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (visible && dish) {
@@ -71,6 +73,8 @@ export default function ComboCustomizer({
       setConfig(null);
       setSelections({});
       setError(null);
+      setDishModifiers([]);
+      setSelectedModifierIds([]);
     }
   }, [visible, dish?.DishId]);
 
@@ -78,22 +82,90 @@ export default function ComboCustomizer({
     if (!dish) return;
     setLoading(true);
     setError(null);
+    setDishModifiers([]);
+    setSelectedModifierIds([]);
     try {
       const token = useAuthStore.getState().token;
-      const res = await fetch(`${API_URL}/api/combo/config/${dish.DishId}`, {
-        headers: {
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+      
+      const [res, modRes] = await Promise.all([
+        fetch(`${API_URL}/api/combo/config/${dish.DishId}`, {
+          headers: {
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          }
+        }),
+        fetch(`${API_URL}/api/menu/modifiers/${dish.DishId}`).catch(() => null)
+      ]);
+
+      if (modRes && modRes.ok) {
+        const modData = await modRes.json();
+        if (Array.isArray(modData)) {
+          setDishModifiers(modData);
         }
-      });
+      }
+
       if (!res.ok) throw new Error("Failed to load combo options.");
       const payload = await res.json();
       if (payload.success && payload.data) {
-        setConfig(payload.data);
+        const rawGroups = payload.data.groups || [];
+        const normalizedGroups = rawGroups.map((g: any) => {
+          const parseBool = (v: any) => v === true || v === 1 || String(v) === "1" || String(v) === "true";
+          const isMulti = g.isMultiSelect !== undefined ? parseBool(g.isMultiSelect) : parseBool(g.IsMultiSelect);
+          let maxSelect = g.maxSelection !== undefined ? Number(g.maxSelection) : Number(g.MaxSelection || 1);
+          if (isMulti && maxSelect <= 1) {
+            maxSelect = 999;
+          }
+          const minSelect = g.minSelection !== undefined ? Number(g.minSelection) : Number(g.MinSelection || 0);
+          const comboGroupId = g.comboGroupId || g.ComboGroupId;
+          const groupName = g.groupName || g.GroupName;
+          const rawOptions = g.options || g.Options || [];
+
+          const normalizedOptions = rawOptions.map((o: any) => ({
+            mappingId: o.mappingId || o.MappingId,
+            dishId: o.dishId || o.DishId,
+            name: o.name || o.DishName || o.Name,
+            description: o.description || o.DishDescription || o.Description,
+            surcharge: o.surcharge !== undefined ? Number(o.surcharge) : Number(o.Surcharge || 0),
+            dishPrice: o.dishPrice !== undefined ? Number(o.dishPrice) : Number(o.DishPrice || 0),
+            isDefault: o.isDefault !== undefined ? parseBool(o.isDefault) : parseBool(o.IsDefault),
+            sortOrder: o.sortOrder !== undefined ? Number(o.sortOrder) : Number(o.SortOrder || 0),
+            KitchenTypeCode: o.KitchenTypeCode,
+            KitchenTypeName: o.KitchenTypeName,
+            PrinterIP: o.PrinterIP,
+          }));
+
+          return {
+            comboGroupId,
+            groupName,
+            displayOrder: g.displayOrder || g.DisplayOrder || 0,
+            minSelection: minSelect,
+            maxSelection: maxSelect,
+            isMultiSelect: isMulti,
+            options: normalizedOptions,
+          };
+        });
+
+        const normalizedConfig: ComboConfig = {
+          dishId: payload.data.dishId || payload.data.DishId,
+          name: payload.data.name || payload.data.Name,
+          basePrice: parseFloat(payload.data.basePrice || payload.data.BasePrice || 0),
+          description: payload.data.description || payload.data.Description,
+          groups: normalizedGroups,
+        };
+
+        setConfig(normalizedConfig);
         
         // Auto-select defaults
         const initialSelections: Record<string, string[]> = {};
-        payload.data.groups.forEach((group: ComboGroup) => {
-          const defaults = group.options.filter(o => o.isDefault).map(o => o.dishId);
+        normalizedGroups.forEach((group: ComboGroup) => {
+          let defaults = group.options.filter(o => o.isDefault).map(o => o.dishId);
+          // Defensive check: If single-select, restrict defaults to 1 item
+          if (!group.isMultiSelect || group.maxSelection === 1) {
+            defaults = defaults.slice(0, 1);
+          }
+          // If minSelection > 0, no defaults are configured, and options exist, auto-select the first option
+          if (defaults.length === 0 && group.minSelection > 0 && group.options && group.options.length > 0) {
+            defaults = [group.options[0].dishId];
+          }
           initialSelections[group.comboGroupId] = defaults;
         });
         setSelections(initialSelections);
@@ -109,6 +181,7 @@ export default function ComboCustomizer({
   };
 
   const handleSelectOption = (groupId: string, option: ComboOption, isMulti: boolean, maxSelect: number) => {
+    setError(null);
     setSelections(prev => {
       const current = prev[groupId] || [];
       if (current.includes(option.dishId)) {
@@ -139,17 +212,36 @@ export default function ComboCustomizer({
     });
   };
 
+  const handleToggleModifier = (modId: string) => {
+    setSelectedModifierIds(prev =>
+      prev.includes(modId)
+        ? prev.filter(id => id !== modId)
+        : [...prev, modId]
+    );
+  };
+
   const handleAddToCart = () => {
     if (!config || !dish) return;
 
     // Validate minimum selections
     for (const group of config.groups) {
       const selectedIds = selections[group.comboGroupId] || [];
-      if (selectedIds.length < group.minSelection) {
+      // Defensive check: If the group has no options in database, skip minimum validation
+      const effectiveMin = group.options && group.options.length > 0 ? group.minSelection : 0;
+      if (selectedIds.length < effectiveMin) {
         setError(`Please pick at least ${group.minSelection} choice(s) for "${group.groupName}"`);
         return;
       }
     }
+
+    // Build selected modifiers list
+    const chosenModifiers = dishModifiers
+      .filter(m => selectedModifierIds.includes(String(m.ModifierID || m.ModifierId || "")))
+      .map(m => ({
+        ModifierId: String(m.ModifierID || m.ModifierId || ""),
+        ModifierName: m.ModifierName,
+        Price: Number(m.Price || 0),
+      }));
 
     // Build the selection details payload with surcharge calculations
     const chosenSelections = config.groups.map(group => {
@@ -178,7 +270,8 @@ export default function ComboCustomizer({
       });
     });
 
-    const finalPrice = config.basePrice + totalSurcharge;
+    const modifierPriceTotal = chosenModifiers.reduce((sum, m) => sum + m.Price, 0);
+    const finalPrice = config.basePrice + totalSurcharge + modifierPriceTotal;
 
     addToCartGlobal({
       id: dish.DishId,
@@ -187,6 +280,7 @@ export default function ComboCustomizer({
       basePrice: config.basePrice,
       isCombo: true,
       comboSelections: chosenSelections,
+      modifiers: chosenModifiers,
       categoryName: kitchenName,
       KitchenTypeName: dish.KitchenTypeName || kitchenName,
       PrinterIP: dish.PrinterIP,
@@ -195,6 +289,35 @@ export default function ComboCustomizer({
       IsOpenItem: dish.IsOpenItem,
     } as any);
 
+    onClose();
+  };
+
+  const handleAddDirectly = () => {
+    if (!dish) return;
+
+    const chosenModifiers = dishModifiers
+      .filter(m => selectedModifierIds.includes(String(m.ModifierID || m.ModifierId || "")))
+      .map(m => ({
+        ModifierId: String(m.ModifierID || m.ModifierId || ""),
+        ModifierName: m.ModifierName,
+        Price: Number(m.Price || 0),
+      }));
+
+    const modifierPriceTotal = chosenModifiers.reduce((sum, m) => sum + m.Price, 0);
+    const finalPrice = (dish.Price || 0) + modifierPriceTotal;
+
+    addToCartGlobal({
+      id: dish.DishId,
+      name: dish.Name,
+      price: finalPrice,
+      modifiers: chosenModifiers,
+      categoryName: kitchenName,
+      KitchenTypeName: dish.KitchenTypeName || kitchenName,
+      PrinterIP: dish.PrinterIP,
+      KitchenTypeCode: dish.KitchenTypeCode || kitchenCode,
+      isServiceCharge: dish.isServiceCharge,
+      IsOpenItem: dish.IsOpenItem,
+    } as any);
     onClose();
   };
 
@@ -294,12 +417,64 @@ export default function ComboCustomizer({
                     currentTotal += (opt.surcharge || 0) + (opt.dishPrice || 0);
                   });
                 });
+ 
+                const chosenModifiers = dishModifiers.filter(m => selectedModifierIds.includes(String(m.ModifierID || m.ModifierId || "")));
+                const modifierPriceTotal = chosenModifiers.reduce((sum, m) => sum + Number(m.Price || 0), 0);
+                currentTotal += modifierPriceTotal;
 
                 return (
                   <View style={styles.footer}>
+                    {dishModifiers.length > 0 && (
+                      <View style={{ marginBottom: 20 }}>
+                        <Text style={[styles.groupTitle, { marginBottom: 12 }]}>Add Modifiers (Multiple Selection)</Text>
+                        <View style={{ gap: 8 }}>
+                          {dishModifiers.map(m => {
+                            const isSelected = selectedModifierIds.includes(String(m.ModifierID || m.ModifierId || ""));
+                            return (
+                              <TouchableOpacity
+                                key={m.ModifierID}
+                                style={[
+                                  styles.modifierRow,
+                                  isSelected && styles.modifierRowSelected
+                                ]}
+                                onPress={() => handleToggleModifier(String(m.ModifierID || m.ModifierId || ""))}
+                                activeOpacity={0.7}
+                              >
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                                  <Ionicons 
+                                    name={isSelected ? "checkbox" : "square-outline"} 
+                                    size={20} 
+                                    color={isSelected ? Theme.primary : "#7F8C8D"} 
+                                  />
+                                  <Text style={styles.modifierName}>{m.ModifierName}</Text>
+                                </View>
+                                {m.Price > 0 && (
+                                  <Text style={styles.modifierPrice}>+${Number(m.Price).toFixed(2)}</Text>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
+
+                    {error ? (
+                      <Text style={{ color: Theme.danger, textAlign: "center", marginBottom: 12, fontFamily: Fonts.medium, fontSize: 13 }}>
+                        {error}
+                      </Text>
+                    ) : null}
                     <TouchableOpacity style={styles.confirmButton} onPress={handleAddToCart}>
                       <Text style={styles.confirmButtonText}>
                         Add Combo to Cart - ${currentTotal.toFixed(2)}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.confirmButton, { backgroundColor: "#ECEFF1", marginTop: 10 }]} 
+                      onPress={handleAddDirectly}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.confirmButtonText, { color: "#37474F" }]}>
+                        Add Base Combo Directly (Skip Selections)
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -430,14 +605,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   optionCard: {
-    minWidth: 140,
-    flex: 1,
+    width: 125,
     backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
     borderColor: "#EAECEE",
     borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -455,16 +629,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
   },
   optionName: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: Fonts.semiBold,
     color: "#2C3E50",
     textAlign: "center",
   },
   optionSurcharge: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Fonts.bold,
     color: Theme.primary,
-    marginTop: 6,
+    marginTop: 4,
     backgroundColor: "#FFEEDB",
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -503,5 +677,29 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     fontSize: 16,
     letterSpacing: 0.5,
+  },
+  modifierRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#EAECEE",
+    borderRadius: 10,
+    backgroundColor: "#FAF9F6",
+  },
+  modifierRowSelected: {
+    borderColor: Theme.primary,
+    backgroundColor: "#FFF5EB",
+  },
+  modifierName: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+    color: "#2C3E50",
+  },
+  modifierPrice: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: Theme.primary,
   },
 });

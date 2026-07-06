@@ -99,6 +99,7 @@ export default function GeneralSettingsModal({
   const [enableCashDrawer, setEnableCashDrawer] = useState(settings.enableCashDrawer !== undefined ? settings.enableCashDrawer : true);
   const [SVCIdentification, setSVCIdentification] = useState(settings.SVCIdentification !== undefined ? settings.SVCIdentification : true);
   const [enableKDSPrint, setEnableKDSPrint] = useState(settings.enableKDSPrint !== undefined ? settings.enableKDSPrint : true);
+  const [enableCombo, setEnableCombo] = useState(settings.enableCombo !== undefined ? settings.enableCombo : true);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordValue, setPasswordValue] = useState("");
@@ -183,6 +184,7 @@ export default function GeneralSettingsModal({
       setEnableCashDrawer(settings.enableCashDrawer !== undefined ? settings.enableCashDrawer : true);
       setSVCIdentification(settings.SVCIdentification !== undefined ? settings.SVCIdentification : true);
       setEnableKDSPrint(settings.enableKDSPrint !== undefined ? settings.enableKDSPrint : true);
+      setEnableCombo(settings.enableCombo !== undefined ? settings.enableCombo : true);
       
       let initialCheckoutFlow = settings.enableCheckoutFlow;
       let initialDirectProcess = settings.enableDirectProcessToPay;
@@ -255,6 +257,7 @@ export default function GeneralSettingsModal({
       enableCashDrawer,
       SVCIdentification,
       enableKDSPrint,
+      enableCombo,
     });
     
     setIsSaving(false);
@@ -447,6 +450,20 @@ export default function GeneralSettingsModal({
                 <Text style={styles.settingDesc}>Show the PRINT button on every order card in KDS screen.</Text>
               </View>
               <CustomSwitch value={enableKDSPrint} onValueChange={setEnableKDSPrint} />
+            </View>
+
+            {/* CARD 11: Combo Feature Control */}
+            <View style={[styles.settingCard, enableCombo && styles.settingCardActive]}>
+              <View style={styles.cardLeft}>
+                <View style={styles.cardHeaderRow}>
+                  <View style={[styles.iconWrapper, enableCombo ? styles.iconWrapperActive : styles.iconWrapperInactive]}>
+                    <Ionicons name="fast-food-outline" size={16} color={enableCombo ? Theme.primary : Theme.textSecondary} />
+                  </View>
+                  <Text style={styles.settingTitle}>Combo Feature</Text>
+                </View>
+                <Text style={styles.settingDesc}>Enable combo menu items and selections wizard.</Text>
+              </View>
+              <CustomSwitch value={enableCombo} onValueChange={setEnableCombo} />
             </View>
           </ScrollView>
 

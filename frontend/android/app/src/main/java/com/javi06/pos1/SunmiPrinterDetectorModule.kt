@@ -2,7 +2,7 @@ package com.javi06.pos1
 
 import com.facebook.react.bridge.*
 import com.sunmi.printerx.PrinterSdk
-import com.sunmi.printerx.api.ResultCallback
+import com.sunmi.printerx.api.PrintResult
 
 class SunmiPrinterDetectorModule(private val reactContext: ReactApplicationContext) : 
     ReactContextBaseJavaModule(reactContext) {
@@ -26,7 +26,7 @@ class SunmiPrinterDetectorModule(private val reactContext: ReactApplicationConte
                 override fun onDefPrinter(printer: PrinterSdk.Printer?) {
                     if (printer != null) {
                         try {
-                            printer.cashDrawerApi().open(object : ResultCallback {
+                            printer.cashDrawerApi().open(object : PrintResult() {
                                 override fun onResult(code: Int, message: String?) {
                                     if (code == 0) {
                                         promise.resolve(true)
