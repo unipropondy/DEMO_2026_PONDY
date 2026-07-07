@@ -33,7 +33,7 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
-import { API_URL } from "./constants/Config";
+import { API_URL, setApiUrl } from "./constants/Config";
 import { Fonts } from "./constants/Fonts";
 import { socket } from "./constants/socket";
 import { Theme } from "./constants/theme";
@@ -121,12 +121,77 @@ export default function CustomerDisplayContent() {
 
   // 1. Initialize settings, socket listener & terminal room join
   useEffect(() => {
-    usePaymentSettingsStore.getState().fetchSettings();
-    useCompanySettingsStore.getState().fetchSettings("1");
+    // Inject custom fonts and vector icon font-faces on Web/Electron
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const styleId = 'customer-display-fonts-and-icons';
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.type = 'text/css';
+        style.appendChild(document.createTextNode(`
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+          
+          @font-face {
+            font-family: 'Ionicons';
+            src: url('https://unpkg.com/react-native-vector-icons@10.0.0/Fonts/Ionicons.ttf') format('truetype');
+          }
+
+          @font-face {
+            font-family: 'Inter_400Regular';
+            src: local('Inter');
+          }
+          @font-face {
+            font-family: 'Inter_500Medium';
+            src: local('Inter');
+          }
+          @font-face {
+            font-family: 'Inter_600SemiBold';
+            src: local('Inter');
+          }
+          @font-face {
+            font-family: 'Inter_700Bold';
+            src: local('Inter');
+          }
+          @font-face {
+            font-family: 'Inter_800ExtraBold';
+            src: local('Inter');
+          }
+          @font-face {
+            font-family: 'Inter_900Black';
+            src: local('Inter');
+          }
+        `));
+        document.head.appendChild(style);
+      }
+    }
+
+    const initSettings = () => {
+      usePaymentSettingsStore.getState().fetchSettings();
+      useCompanySettingsStore.getState().fetchSettings("1");
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      fetch('/api/config')
+        .then((r) => r.json())
+        .then((data) => {
+          const activeBackend = data?.backends?.find((b: any) => b.enabled);
+          if (activeBackend && activeBackend.url) {
+            console.log(`🖥️ [CustomerDisplay] Dynamically setting API_URL from print bridge config: ${activeBackend.url}`);
+            setApiUrl(activeBackend.url);
+          }
+          initSettings();
+        })
+        .catch((err) => {
+          console.warn('🖥️ [CustomerDisplay] Failed to fetch print bridge config, using default API_URL', err);
+          initSettings();
+        });
+    } else {
+      initSettings();
+    }
 
     const handleSync = (data: any) => {
       console.log(
-        "ðŸ–¥ï¸ [CustomerDisplay] Received sync event:",
+        "🖥️ [CustomerDisplay] Received sync event:",
         data.paymentSuccess ? "SUCCESS" : data.active ? "CART" : "IDLE",
       );
       setDisplayState(data);
