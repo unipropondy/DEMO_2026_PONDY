@@ -502,10 +502,11 @@ async function syncToProfessionalTables(
       const discVal = Number(item.discount || 0);
       let itemDiscount = 0;
       if (discVal > 0) {
+        const discountBasis = isCombo ? Number(item.basePrice || priceVal) : priceVal;
         if (resolvedDiscountType === "percentage") {
-          itemDiscount = priceVal * qtyVal * (discVal / 100);
+          itemDiscount = discountBasis * qtyVal * (discVal / 100);
         } else {
-          itemDiscount = discVal * qtyVal;
+          itemDiscount = Math.min(discVal, discountBasis) * qtyVal;
         }
       }
       const itemSubtotal = priceVal * qtyVal - itemDiscount;
@@ -937,6 +938,7 @@ router.post("/send", async (req, res) => {
             d.ModifiersJSON, d.Remarks as note, d.isTakeAway as isTakeaway,
             ISNULL(d.DiscountAmount, 0) as discount,
             ISNULL(d.DiscountType, NULL) as discountType,
+            CAST(ISNULL(dish.IsDiscountAllowed, 1) AS INT) as IsDiscountAllowed,
             ISNULL(ckt.KitchenTypeCode, '2') as KitchenTypeCode, 
             ISNULL(ISNULL(ckt.KitchenTypeName, cat.CategoryName), 'KITCHEN') as KitchenTypeName,
             pm.PrinterPath as PrinterIP
@@ -1107,6 +1109,7 @@ router.get("/cart/:tableId", async (req, res) => {
           d.ModifiersJSON, d.ComboDetailsJSON, d.Remarks as note, d.isTakeAway as isTakeaway,
           ISNULL(d.DiscountAmount, 0) as discount,
           ISNULL(d.DiscountType, NULL) as discountType,
+          CAST(ISNULL(dish.IsDiscountAllowed, 1) AS INT) as IsDiscountAllowed,
           d.CreatedOn as DateCreated,
           CASE d.StatusCode 
             WHEN 1 THEN 'NEW' WHEN 2 THEN 'SENT' WHEN 3 THEN 'READY' 

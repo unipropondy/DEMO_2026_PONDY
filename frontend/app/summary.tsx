@@ -31,6 +31,7 @@ import { useAuthStore } from "@/stores/authStore";
 import CancelOrderModal from "../components/CancelOrderModal";
 import VoidItemModal from "../components/VoidItemModal";
 import DiscountModal from "../components/DiscountModal";
+import ItemDiscountModal from "../components/ItemDiscountModal";
 import ServerSelectionModal from "../components/ServerSelectionModal";
 import UniversalPrinter from "../components/UniversalPrinter";
 import {
@@ -95,6 +96,7 @@ export default function SummaryScreen() {
 
   const [showDiscount, setShowDiscount] = useState(false);
   const [showGstModal, setShowGstModal] = useState(false);
+  const [showItemDiscount, setShowItemDiscount] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReasons, setCancelReasons] = useState<
     Array<{ CRCode: string; CRName: string }>
@@ -1032,6 +1034,8 @@ export default function SummaryScreen() {
     return loyaltyDiscountItems.length > 0 ? loyaltyDiscountItems : cart;
   }, [loyaltyDiscountItems, cart]);
 
+
+
   // 🖥️ CUSTOMER DISPLAY REAL-TIME SYNC
   useEffect(() => {
     if (context && finalItems && finalItems.length > 0) {
@@ -1075,6 +1079,8 @@ export default function SummaryScreen() {
       const isVoided = (item as any).status === "VOIDED";
       if (isVoided) return acc;
       
+      const isCombo = item.isCombo === true || String(item.isCombo) === "1" || item.isCombo === 1;
+      const discountBasis = isCombo ? (item.basePrice ?? item.price ?? 0) : (item.price ?? 0);
       const baseTotal = (item.price || 0) * item.qty;
       let itemDiscount = 0;
       const discAmt = Number(item.discountAmount ?? item.discount ?? 0);
@@ -1082,9 +1088,9 @@ export default function SummaryScreen() {
       
       if (discAmt > 0) {
         if (discType === 'percentage') {
-          itemDiscount = baseTotal * (discAmt / 100);
+          itemDiscount = (discountBasis * (discAmt / 100)) * item.qty;
         } else {
-          itemDiscount = discAmt * item.qty;
+          itemDiscount = Math.min(discAmt, discountBasis) * item.qty;
         }
       }
 
@@ -1296,6 +1302,39 @@ export default function SummaryScreen() {
               style={[
                 styles.actionBtn,
                 {
+                  backgroundColor: Theme.primaryLight,
+                  borderColor: Theme.primaryBorder,
+                  borderWidth: 1,
+                },
+                !isTablet &&
+                  isLandscape && { height: 32, paddingHorizontal: 8 },
+              ]}
+              onPress={() => {
+                setShowItemDiscount(true);
+              }}
+            >
+              <Ionicons
+                name="pricetag"
+                size={!isTablet && isLandscape ? 16 : 18}
+                color={Theme.primary}
+              />
+              {isLandscape && (
+                <Text
+                  style={[
+                    styles.actionBtnText,
+                    { color: Theme.primary },
+                    !isTablet && isLandscape && { fontSize: 10 },
+                  ]}
+                >
+                  Item Discount
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.actionBtn,
+                {
                   backgroundColor: Theme.warningBg,
                   borderColor: Theme.warningBorder,
                   borderWidth: 1,
@@ -1464,7 +1503,16 @@ export default function SummaryScreen() {
                         ))}
                     {isSC && settings.serviceChargePercentage > 0 && item.status !== "VOIDED" && (
                       <Text style={[styles.sub, { color: Theme.primary, fontFamily: Fonts.bold, marginTop: 4 }]}>
-                        Item Service Charge ({settings.serviceChargePercentage}%): {currencySymbol}{((((item.price || 0) * item.qty) - ((item.discountType === 'fixed' || (item.discountType == null && item.discountAmount > 0 && !item.discount)) ? (Number(item.discountAmount ?? item.discount ?? 0) * item.qty) : (((item.price || 0) * item.qty) * (Number(item.discountAmount ?? item.discount ?? 0) / 100)))) * (settings.serviceChargePercentage / 100)).toFixed(2)}
+                        Item Service Charge ({settings.serviceChargePercentage}%): {currencySymbol}{(() => {
+                          const isCombo = item.isCombo === true || String(item.isCombo) === "1" || item.isCombo === 1;
+                          const discountBasis = isCombo ? (item.basePrice ?? item.price ?? 0) : (item.price ?? 0);
+                          const discAmt = Number(item.discountAmount ?? item.discount ?? 0);
+                          const isFixed = item.discountType === 'fixed' || (item.discountType == null && item.discountAmount > 0 && !item.discount);
+                          const itemDiscount = discAmt > 0
+                            ? (isFixed ? (Math.min(discAmt, discountBasis) * item.qty) : ((discountBasis * (discAmt / 100)) * item.qty))
+                            : 0;
+                          return ((item.price || 0) * item.qty - itemDiscount) * (settings.serviceChargePercentage / 100);
+                        })().toFixed(2)}
                       </Text>
                     )}
                   </View>
@@ -1491,11 +1539,16 @@ export default function SummaryScreen() {
                       ]}
                     >
                       {currencySymbol}
-                      {((item.price || 0) * item.qty - (
-                        (item.discountType === 'fixed' || (item.discountType == null && item.discountAmount > 0 && !item.discount)) 
-                        ? (Number(item.discountAmount ?? item.discount ?? 0) * item.qty) 
-                        : ((item.price || 0) * item.qty * (Number(item.discountAmount ?? item.discount ?? 0) / 100))
-                      )).toFixed(2)}
+                      {(() => {
+                        const isCombo = item.isCombo === true || String(item.isCombo) === "1" || item.isCombo === 1;
+                        const discountBasis = isCombo ? (item.basePrice ?? item.price ?? 0) : (item.price ?? 0);
+                        const discAmt = Number(item.discountAmount ?? item.discount ?? 0);
+                        const isFixed = item.discountType === 'fixed' || (item.discountType == null && item.discountAmount > 0 && !item.discount);
+                        const itemDiscount = discAmt > 0
+                          ? (isFixed ? (Math.min(discAmt, discountBasis) * item.qty) : ((discountBasis * (discAmt / 100)) * item.qty))
+                          : 0;
+                        return ((item.price || 0) * item.qty - itemDiscount);
+                      })().toFixed(2)}
                     </Text>
                   </View>
 
@@ -2079,6 +2132,11 @@ export default function SummaryScreen() {
         visible={showDiscount}
         onClose={() => setShowDiscount(false)}
         currentTotal={subtotal}
+      />
+
+      <ItemDiscountModal
+        visible={showItemDiscount}
+        onClose={() => setShowItemDiscount(false)}
       />
 
       <CancelOrderModal

@@ -1363,7 +1363,24 @@ export default function SalesReport() {
       if (itemsRes.ok) {
         const data = await itemsRes.json();
         if (Array.isArray(data) && data.length > 0) {
-          setOrderDetails(data);
+          const parsedData = data.map((item: any) => {
+            let comboSelections = undefined;
+            const comboJson = item.ComboDetailsJSON || item.comboDetailsJSON;
+            if (comboJson) {
+              try {
+                const parsed = typeof comboJson === "string" ? JSON.parse(comboJson) : comboJson;
+                comboSelections = Array.isArray(parsed) ? parsed : parsed?.groups;
+              } catch (e) {
+                console.error("Error parsing ComboDetailsJSON:", e);
+              }
+            }
+            return {
+              ...item,
+              comboSelections,
+              isCombo: !!comboSelections && comboSelections.length > 0,
+            };
+          });
+          setOrderDetails(parsedData);
         } else {
           setOrderDetails([
             {
@@ -3084,6 +3101,27 @@ export default function SalesReport() {
                                   })}
                               </View>
                             )}
+                          {item.isCombo && item.comboSelections && Array.isArray(item.comboSelections) && (
+                            <View style={{ marginTop: 6, gap: 4, paddingLeft: 4 }}>
+                              {item.comboSelections
+                                .filter((group: any) => group.items && group.items.length > 0)
+                                .map((group: any, gIdx: number) => (
+                                  <View key={`g-${gIdx}`} style={{ marginTop: 2 }}>
+                                    <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: Theme.primary }}>
+                                      {group.groupName}:
+                                    </Text>
+                                    {(group.items || []).map((opt: any, oIdx: number) => {
+                                      const effectiveAdd = (parseFloat(opt.surcharge || 0) + parseFloat(opt.dishPrice || 0));
+                                      return (
+                                        <Text key={`o-${oIdx}`} style={{ fontSize: 11, color: Theme.textSecondary || "#666", paddingLeft: 8, marginTop: 1 }}>
+                                          ↳ {opt.name}{effectiveAdd > 0 ? ` (+$${effectiveAdd.toFixed(2)})` : ""}
+                                        </Text>
+                                      );
+                                    })}
+                                  </View>
+                                ))}
+                            </View>
+                          )}
                           {/* Unit price row — strikethrough if item has discount */}
                           {item.DiscountAmount > 0 ? (
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>

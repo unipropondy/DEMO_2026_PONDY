@@ -1270,6 +1270,7 @@ const confirmPayment = async () => {
         rewardRuleId: item.rewardRuleId || null,
         rewardDishId: item.rewardDishId || null,
         modifiers: item.modifiers || null,
+        comboSelections: item.comboSelections || null,
       })),
       subTotal: subtotal,
       taxAmount: displayedTax,
