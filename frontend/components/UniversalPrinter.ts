@@ -107,143 +107,6 @@ class UniversalPrinter {
     return false;
   }
 
-  // ==================== SHARED KITCHEN PRINT PIPELINE ====================
-  /**
-   * routeAndPrintOrderKOT
-   *
-   * Single source of truth for kitchen routing and printing.
-   * Called by BOTH the cashier "Send to Kitchen" flow (CartSidebar.tsx)
-   * and the automatic QR-order socket flow (useGlobalSocketSync.ts).
-   *
-   * Responsibilities:
-   *  - Expand combo sub-items across kitchen boundaries
-   *  - Group items by KitchenTypeCode / PrinterIP
-   *  - Print one KOT per kitchen group (TCP / Sunmi / fallback)
-   *  - Optionally print a KDS backup copy
-   *
-   * This method MUST NOT:
-   *  - Call any backend API
-   *  - Emit socket events
-   *  - Update React / Zustand state
-   *  - Navigate or display toasts
-   *
-   * @param orderId        The order identifier (used for print logging)
-   * @param orderContext   { orderType, tableNo, takeawayNo, section } – same shape used by CartSidebar
-   * @param items          Array of cart/order items with KitchenTypeCode and PrinterIP resolved
-   * @param isAdditional   true if some items in the cart were already SENT (additional KOT)
-   * @param waiterName     Staff name to print on the KOT
-   * @param skipDuplicateGuard  Pass true from the cashier manual flow to bypass the cache check
-   */
-  static async routeAndPrintOrderKOT(
-    orderId: string,
-    orderContext: { orderType?: string; tableNo?: string; takeawayNo?: string; section?: string },
-    items: any[],
-    isAdditional: boolean = false,
-    waiterName: string = "Staff",
-    skipDuplicateGuard: boolean = false
-  ): Promise<boolean> {
-    try {
-      // 1. Duplicate-print guard (QR socket path only; cashier path passes skipDuplicateGuard=true)
-      // Pass the raw items (pre-expansion) so the fingerprint reflects what the backend sent.
-      if (!skipDuplicateGuard && this.isDuplicatePrint(orderId, items)) {
-        return false;
-      }
-
-      // 2. Check enableKOT setting (same setting the cashier flow checks)
-      const { useGeneralSettingsStore } = await import("../stores/generalSettingsStore");
-      const { enableKOT, enableKDSPrint } = useGeneralSettingsStore.getState().settings;
-      if (!enableKOT) {
-        if (__DEV__) console.log("🖨️ [UniversalPrinter] KOT printing is disabled in General Settings.");
-        return false;
-      }
-
-      // 3. Expand combo sub-items that belong to a different kitchen
-      const expandedItems: any[] = [];
-      items.forEach((item: any) => {
-        expandedItems.push(item);
-        if (item.comboSelections && item.comboSelections.length > 0) {
-          item.comboSelections.forEach((g: any) => {
-            if (Array.isArray(g.items)) {
-              g.items.forEach((opt: any) => {
-                const optKitchenCode =
-                  opt.KitchenTypeCode || opt.kitchenCode || opt.kitchenTypeCode;
-                const parentKitchenCode =
-                  item.KitchenTypeCode || item.kitchenCode || item.kitchenTypeCode || "0";
-                if (optKitchenCode && optKitchenCode !== parentKitchenCode) {
-                  expandedItems.push({
-                    ...opt,
-                    id: opt.dishId,
-                    qty: item.quantity || item.qty || 1,
-                    price: 0,
-                    name: `${opt.name} (Combo - ${item.name})`,
-                    KitchenTypeCode: optKitchenCode,
-                    KitchenTypeName: opt.KitchenTypeName || opt.kitchenTypeName,
-                    PrinterIP: opt.PrinterIP || opt.printerIp,
-                  });
-                }
-              });
-            }
-          });
-        }
-      });
-
-      // 4. Group by KitchenTypeCode → one KOT per kitchen
-      const kitchenGroups: Record<string, any[]> = {};
-      expandedItems.forEach((item: any) => {
-        const kCode = item.KitchenTypeCode || "0";
-        if (!kitchenGroups[kCode]) kitchenGroups[kCode] = [];
-        kitchenGroups[kCode].push(item);
-      });
-
-      // 5. Print one KOT per kitchen group
-      const tableNo =
-        orderContext.orderType === "DINE_IN"
-          ? orderContext.tableNo
-          : `TW-${orderContext.takeawayNo}`;
-
-      for (const [kCode, groupItems] of Object.entries(kitchenGroups)) {
-        const printerIp = groupItems[0].PrinterIP;
-        const kotData = {
-          orderId,
-          orderNo: orderId,
-          tableNo,
-          waiterName,
-          items: groupItems,
-          kitchenName:
-            groupItems[0].KitchenTypeName || (kCode === "0" ? "KITCHEN" : kCode),
-        };
-        await this.printKOT(
-          kotData,
-          "SYSTEM",
-          isAdditional ? "ADDITIONAL" : "NEW",
-          printerIp
-        );
-      }
-
-      // 6. KDS backup copy (respects enableKDSPrint setting)
-      if (enableKDSPrint !== false) {
-        try {
-          const kdsData = {
-            orderId,
-            orderNo: orderId,
-            tableNo,
-            waiterName,
-            items,
-            kitchenName: "KDS",
-          };
-          await this.printKDSOrder(kdsData, "SYSTEM");
-        } catch (kdsErr) {
-          console.error("[UniversalPrinter] KDS backup print failed:", kdsErr);
-        }
-      }
-
-      return true;
-    } catch (err) {
-      console.error("[UniversalPrinter] routeAndPrintOrderKOT error:", err);
-      return false;
-    }
-  }
-
   static async detectAllPrinters(): Promise<PrinterInfo[]> {
     const printers: PrinterInfo[] = [];
     if (Platform.OS !== "android") return printers;
@@ -1411,14 +1274,12 @@ class UniversalPrinter {
     discountInfo?: DiscountInfo,
     preferredType?: PrinterType,
     isReprint: boolean = false,
-    skipPreview: boolean = false,
   ): Promise<boolean> {
     if (Platform.OS === "web") {
       try {
         const isOnline = await this.isBridgeOnline();
         if (!isOnline) {
           console.log("📡 [Web Print Bridge] Bridge is OFFLINE. Direct fallback to preview.");
-          if (skipPreview) return false;
           return await this.offerPDFFallback(saleData, outletId, t, discountInfo);
         }
 
@@ -1442,11 +1303,9 @@ class UniversalPrinter {
 
         // 🚀 Fallback: If Print Bridge failed or printer not detected on web, trigger iframe print preview immediately
         console.log("⚠️ [Web Receipt Print] Print Bridge queue failed. Falling back to iframe print preview.");
-        if (skipPreview) return false;
         return await this.offerPDFFallback(saleData, outletId, t, discountInfo);
       } catch (err) {
         console.warn("[Web Print Bridge] Receipt Queue failed, falling back to iframe print preview:", err);
-        if (skipPreview) return false;
         return await this.offerPDFFallback(saleData, outletId, t, discountInfo);
       }
     }
@@ -1529,10 +1388,6 @@ class UniversalPrinter {
               console.log("WiFi failed/timeout:", err);
             }
           }
-          if (skipPreview) {
-            console.log(`❌ LAN print failed for IP ${targetIp}. Silent failure requested.`);
-            return;
-          }
           Alert.alert(
             "Printer Connection Error",
             `Could not connect to the configured LAN/Wi-Fi printer at ${targetIp}. Opening print preview...`,
@@ -1557,109 +1412,14 @@ class UniversalPrinter {
 
         // Fallback to PDF/Web (Guaranteed)
         console.log("🔄 Fallback to PDF Preview");
-        if (skipPreview) {
-          console.log("❌ Built-in print failed. Silent failure requested.");
-          return;
-        }
         await this.offerPDFFallback(saleData, outletId, t, discountInfo);
       } catch (error) {
         console.log("SmartPrint error:", error);
-        if (skipPreview) {
-          console.log("❌ SmartPrint exception. Silent failure requested.");
-          return;
-        }
         await this.offerPDFFallback(saleData, outletId, t, discountInfo);
       }
     })();
 
     return true;
-  }
-
-  // ==================== AUTO RECEIPT PRINT PIPELINE ====================
-  /**
-   * printReceiptAuto
-   *
-   * Automatically prints receipt for online-paid QR orders on order_closed.
-   * Maps backend settlement DTO (header, items, payments) to saleData and discountInfo,
-   * then calls smartPrint with skipPreview=true to print silently.
-   */
-  static async printReceiptAuto(settlementData: {
-    header: any;
-    items: any[];
-    payments: any[];
-  }): Promise<boolean> {
-    try {
-      const { header, items, payments } = settlementData;
-      const orderId = header.OrderId || header.BillNo;
-
-      if (!orderId) {
-        console.warn("[UniversalPrinter] Cannot auto-print receipt: missing OrderId");
-        return false;
-      }
-
-      if (this.isDuplicateReceiptPrint(orderId)) {
-        return false;
-      }
-
-      const mappedItems = items.map((item: any) => ({
-        name: item.DishName || item.name,
-        price: Number(item.Price || 0),
-        qty: Number(item.Qty || item.qty || 1),
-        status: item.Status || "NORMAL",
-        discountAmount: Number(item.DiscountAmount || 0),
-        discountType: item.DiscountType || "fixed",
-        modifiers: item.modifiers || [],
-      }));
-
-      const isPercentage = header.DiscountType === "percentage";
-      const discountValue = isPercentage
-        ? Number(header.DiscountPercentage ?? 0)
-        : Number(header.DiscountAmount ?? 0);
-
-      const discountInfo = {
-        applied: Number(header.DiscountAmount ?? 0) > 0,
-        type: (header.DiscountType || "fixed") as "fixed" | "percentage",
-        value: discountValue,
-        amount: Number(header.DiscountAmount ?? 0),
-        subtotal: Number(header.SubTotal ?? 0),
-      };
-
-      const saleData = {
-        invoiceNumber: header.BillNo || orderId,
-        tableNo: header.TableNo ?? "",
-        total: Number(header.SysAmount || 0),
-        paymentMethod: header.PayMode || "CASH",
-        cashPaid: Number(header.SysAmount || 0),
-        change: 0,
-        items: mappedItems,
-        roundOff: Number(header.RoundedBy ?? 0),
-        date: header.SettlementDate || new Date(),
-        isReprint: false,
-        isCheckout: true,
-        // Sunmi template details
-        discountAmount: Number(header.DiscountAmount ?? 0),
-        discountType: header.DiscountType || null,
-        discountValue: discountValue,
-        subTotal: Number(header.SubTotal ?? 0),
-        serviceCharge: Number(header.ServiceCharge ?? 0),
-        payments: payments.map((p: any) => ({
-          payMode: p.payMode || p.payModeName,
-          payModeName: p.payModeName || p.payMode,
-          amount: Number(p.amount || 0),
-          referenceNo: p.referenceNo || ""
-        })),
-        waiterName: header.SER_NAME || "QR System"
-      };
-
-      const AsyncStorage = require("@react-native-async-storage/async-storage").default;
-      const userId = (await AsyncStorage.getItem("userId")) || "1";
-
-      console.log(`🖨️ [UniversalPrinter] Triggering silent receipt print for: ${orderId}`);
-      return await this.smartPrint(saleData, userId, {}, discountInfo, undefined, false, true);
-    } catch (err) {
-      console.error("[UniversalPrinter] printReceiptAuto error:", err);
-      return false;
-    }
   }
 
   /**
@@ -2059,7 +1819,8 @@ class UniversalPrinter {
     const effectiveSCPercentage = serviceChargeAmount > 0 && currentSubtotal > 0
       ? Math.round((serviceChargeAmount / currentSubtotal) * 100)
       : scPercentage;
-    const taxableAmount = currentSubtotal + serviceChargeAmount;
+    const takeawayCharge = parseFloat(String(saleData.takeawayCharge || 0)) || 0;
+    const taxableAmount = currentSubtotal + serviceChargeAmount + takeawayCharge;
     const gstAmountRaw = hasGST ? taxableAmount * (gstRate / 100) : 0;
     const gstAmount = Math.round(gstAmountRaw * 100) / 100;
     
@@ -2077,6 +1838,10 @@ class UniversalPrinter {
 
     if (hasSC) {
       text += this.formatTwoCols48(allItemsHaveSC ? "Service Charge:" : "Item Service Charge:", `${symbol}${serviceChargeAmount.toFixed(2)}`);
+    }
+
+    if (takeawayCharge > 0) {
+      text += this.formatTwoCols48("Takeaway Charge:", `${symbol}${takeawayCharge.toFixed(2)}`);
     }
 
     if (hasGST && gstAmount > 0) {
@@ -2209,6 +1974,178 @@ class UniversalPrinter {
   // ==================== UTILITIES ====================
   private static async checkAndroidPrintService(): Promise<boolean> {
     return Platform.OS === "android";
+  }
+
+  static async routeAndPrintOrderKOT(
+    orderId: string,
+    orderContext: { orderType?: string; tableNo?: string; takeawayNo?: string; section?: string },
+    items: any[],
+    isAdditional: boolean = false,
+    waiterName: string = "Staff",
+    skipDuplicateGuard: boolean = false
+  ): Promise<boolean> {
+    try {
+      // 1. Duplicate-print guard (QR socket path only; cashier path passes skipDuplicateGuard=true)
+      // Pass the raw items (pre-expansion) so the fingerprint reflects what the backend sent.
+      if (!skipDuplicateGuard && this.isDuplicatePrint(orderId, items)) {
+        return false;
+      }
+
+      // 2. Check enableKOT setting (same setting the cashier flow checks)
+      const { useGeneralSettingsStore } = await import("../stores/generalSettingsStore");
+      const { enableKOT, enableKDSPrint } = useGeneralSettingsStore.getState().settings;
+      if (!enableKOT) {
+        if (__DEV__) console.log("🖨️ [UniversalPrinter] KOT printing is disabled in General Settings.");
+        return false;
+      }
+
+      // 3. Expand combo sub-items that belong to a different kitchen
+      const expandedItems: any[] = [];
+      items.forEach((item: any) => {
+        expandedItems.push(item);
+        if (item.comboSelections && item.comboSelections.length > 0) {
+          item.comboSelections.forEach((g: any) => {
+            if (Array.isArray(g.items)) {
+              g.items.forEach((opt: any) => {
+                const optKitchenCode =
+                  opt.KitchenTypeCode || opt.kitchenCode || opt.kitchenTypeCode;
+                const parentKitchenCode =
+                  item.KitchenTypeCode || item.kitchenCode || item.kitchenTypeCode || "0";
+                if (optKitchenCode && optKitchenCode !== parentKitchenCode) {
+                  expandedItems.push({
+                    ...opt,
+                    id: opt.dishId,
+                    qty: item.quantity || item.qty || 1,
+                    price: 0,
+                    name: `${opt.name} (Combo - ${item.name})`,
+                    KitchenTypeCode: optKitchenCode,
+                    KitchenTypeName: opt.KitchenTypeName || opt.kitchenTypeName,
+                    PrinterIP: opt.PrinterIP || opt.printerIp,
+                  });
+                }
+              });
+            }
+          });
+        }
+      });
+
+      // 4. Group by KitchenTypeCode → one KOT per kitchen
+      const kitchenGroups: Record<string, any[]> = {};
+      expandedItems.forEach((item: any) => {
+        const kCode = item.KitchenTypeCode || "0";
+        if (!kitchenGroups[kCode]) kitchenGroups[kCode] = [];
+        kitchenGroups[kCode].push(item);
+      });
+
+      // 5. Print one KOT per kitchen group
+      const tableNo =
+        orderContext.orderType === "DINE_IN"
+          ? orderContext.tableNo
+          : `TW-${orderContext.takeawayNo}`;
+
+      for (const [kCode, groupItems] of Object.entries(kitchenGroups)) {
+        const printerIp = groupItems[0].PrinterIP;
+        const kotData = {
+          orderId,
+          orderNo: orderId,
+          tableNo,
+          waiterName,
+          items: groupItems,
+          kitchenName:
+            groupItems[0].KitchenTypeName || (kCode === "0" ? "KITCHEN" : kCode),
+        };
+        await this.printKOT(
+          kotData,
+          "SYSTEM",
+          isAdditional ? "ADDITIONAL" : "NEW",
+          printerIp
+        );
+      }
+
+      // 6. KDS backup copy (respects enableKDSPrint setting)
+      if (enableKDSPrint !== false) {
+        try {
+          const kdsData = {
+            orderId,
+            orderNo: orderId,
+            tableNo,
+            waiterName,
+            items,
+            kitchenName: "KDS",
+          };
+          await this.printKDSOrder(kdsData, "SYSTEM");
+        } catch (kdsErr) {
+          console.error("[UniversalPrinter] KDS backup print failed:", kdsErr);
+        }
+      }
+
+      return true;
+    } catch (err) {
+      console.error("[UniversalPrinter] routeAndPrintOrderKOT error:", err);
+      return false;
+    }
+  }
+
+  static async printReceiptAuto(settlementData: any): Promise<boolean> {
+    try {
+      const header = settlementData?.header || {};
+      const orderId = header.OrderId || header.SettlementID || "";
+      if (orderId && this.isDuplicateReceiptPrint(orderId)) {
+        return false;
+      }
+
+      const items = settlementData?.items || [];
+      const payments = settlementData?.payments || [];
+
+      const isPercentage = header.DiscountType === "percentage";
+      const discountValue = isPercentage
+        ? Number(header.DiscountPercentage ?? 0)
+        : Number(header.DiscountAmount ?? 0);
+
+      const discountInfo: DiscountInfo = {
+        applied: Number(header.DiscountAmount ?? 0) > 0,
+        type: (header.DiscountType || "fixed") as "fixed" | "percentage",
+        value: discountValue,
+        amount: Number(header.DiscountAmount ?? 0),
+      };
+
+      const saleData = {
+        invoiceNumber: header.BillNo || header.SettlementID,
+        tableNo: header.TableNo || "TAKEAWAY",
+        total: Number(header.SysAmount ?? 0),
+        paymentMethod: header.PayMode || "CASH",
+        cashPaid: Number(header.SysAmount ?? 0),
+        change: 0,
+        items: items.map((i: any) => ({
+          name: i.DishName || i.Description,
+          price: Number(i.Price || i.PricePerUnit || 0),
+          qty: Number(i.Qty || i.Quantity || 1),
+          status: i.Status || "NORMAL",
+          discountAmount: Number(i.DiscountAmount || 0),
+          discountType: i.DiscountType || "fixed",
+          modifiers: i.modifiers || [],
+        })),
+        payments: payments.map((p: any) => ({
+          payMode: p.PayModeName || p.Remarks || "CASH",
+          payModeName: p.PayModeName || p.Remarks || "CASH",
+          amount: Number(p.Amount ?? 0),
+          referenceNo: p.ReferenceNo || ""
+        })),
+        roundOff: Number(header.RoundedBy ?? 0),
+        date: header.LastSettlementDate || new Date(),
+        discountAmount: Number(header.DiscountAmount ?? 0),
+        discountType: header.DiscountType || null,
+        discountValue: discountValue,
+        subTotal: Number(header.SubTotal ?? 0),
+        serviceCharge: Number(header.ServiceCharge ?? 0),
+        takeawayCharge: Number(header.TakeawayCharge ?? 0),
+      };
+
+      return await this.smartPrint(saleData, "1", {}, discountInfo);
+    } catch (err) {
+      console.error("[UniversalPrinter] printReceiptAuto failed:", err);
+      return false;
+    }
   }
 
   static async testAllPrinters(): Promise<void> {

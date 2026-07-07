@@ -1406,7 +1406,7 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
       createdAt: Date.now(),
     });
 
-    // 2. Start Printers immediately (No waiting) — delegated to shared pipeline
+    // 2. Start Printers immediately (No waiting)
     (async () => {
       const isAdditional = cart.some((i: any) => isItemSent(i));
       await UniversalPrinter.routeAndPrintOrderKOT(

@@ -222,6 +222,7 @@ router.get("/all", async (req, res) => {
             sh.DiscountType as DiscountType,
             ISNULL(sh.ServiceCharge, 0) as ServiceCharge,
             ISNULL(sh.TotalTax, 0) as TotalTax,
+            ISNULL(sh.TakeawayCharge, 0) as TakeawayCharge,
             ISNULL(sts.ReceiptCount, 0) as ReceiptCount,
             ISNULL(sh.VoidItemQty, 0) as VoidQty,
             ISNULL(sh.VoidItemAmount, 0) as VoidAmount,
@@ -268,6 +269,7 @@ router.get("/all", async (req, res) => {
             NULL AS DiscountType,
             0 AS ServiceCharge,
             0 AS TotalTax,
+            0 AS TakeawayCharge,
             1 AS ReceiptCount,
             0 AS VoidQty,
             0 AS VoidAmount,
@@ -489,6 +491,43 @@ router.get("/range", async (req, res) => {
         AND sh.LastSettlementDate <= DATEADD(hour, 36, CAST(@End AS DATETIME))
       `);
     res.json(result.recordset[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/settlement/:id", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const orderId = req.params.id;
+
+    // Fetch the header
+    const headerResult = await pool.request()
+      .input("OrderId", sql.UniqueIdentifier, orderId)
+      .query("SELECT TOP 1 * FROM SettlementHeader WHERE OrderId = @OrderId OR SettlementID = @OrderId");
+    
+    if (headerResult.recordset.length === 0) {
+      return res.status(404).json({ error: "Settlement not found" });
+    }
+
+    const header = headerResult.recordset[0];
+    const settlementId = header.SettlementID;
+
+    // Fetch the items
+    const itemsResult = await pool.request()
+      .input("SettlementID", sql.UniqueIdentifier, settlementId)
+      .query("SELECT * FROM SettlementItemDetail WHERE SettlementID = @SettlementID");
+
+    // Fetch the payments
+    const paymentsResult = await pool.request()
+      .input("SettlementID", sql.UniqueIdentifier, settlementId)
+      .query("SELECT * FROM PaymentDetailCur WHERE SettlementId = @SettlementID UNION SELECT * FROM PaymentDetail WHERE SettlementId = @SettlementID");
+
+    res.json({
+      header,
+      items: itemsResult.recordset || [],
+      payments: paymentsResult.recordset || []
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1037,6 +1076,7 @@ router.get("/day-end-summary", async (req, res) => {
           SUM(ISNULL(sh.DiscountAmount, 0)) as TotalDiscount,
           SUM(ISNULL(sh.ServiceCharge, 0)) as TotalServiceCharge,
           SUM(ISNULL(sh.RoundedBy, 0)) as TotalRoundOff,
+          SUM(ISNULL(sh.TakeawayCharge, 0)) as TotalTakeawayCharge,
           COUNT(sh.SettlementID) as TotalBills,
           SUM(ISNULL(sh.VoidItemQty, 0)) as VoidQty,
           SUM(ISNULL(sh.VoidItemAmount, 0)) as VoidAmount,
@@ -1050,7 +1090,7 @@ router.get("/day-end-summary", async (req, res) => {
  
     const analysis = analysisRes.recordset[0] || { 
       BaseSales: 0, TotalSales: 0, TotalTax: 0, TotalDiscount: 0, TotalServiceCharge: 0, 
-      TotalRoundOff: 0, TotalBills: 0, VoidQty: 0, VoidAmount: 0
+      TotalRoundOff: 0, TotalTakeawayCharge: 0, TotalBills: 0, VoidQty: 0, VoidAmount: 0
     };
 
     const totalSales = analysis.TotalSales || 0;
@@ -1213,6 +1253,7 @@ router.get("/day-end-summary", async (req, res) => {
         totalTax: analysis.TotalTax || 0,
         totalDiscount: analysis.TotalDiscount || 0,
         totalServiceCharge: analysis.TotalServiceCharge || 0,
+        takeawayCharge: analysis.TotalTakeawayCharge || 0,
         roundOff: analysis.TotalRoundOff || 0,
         netTotal: totalSales, 
         billCount,
@@ -1559,6 +1600,7 @@ router.post("/save", async (req, res) => {
       .input("VoidItemAmount", sql.Money, voidAmount)
       .input("RoundedBy", sql.Money, roundOff || 0)
       .input("ServiceCharge", sql.Money, req.body.serviceCharge || 0)
+      .input("TakeawayCharge", sql.Decimal(18, 2), req.body.takeawayCharge || 0)
       .input("PayModeCode", sql.Int, payModeCode)
       .input("DailySeq", sql.Int, dailySequence || 0)
       .input("InvoiceOrderId", sql.UniqueIdentifier, guidOrderId)
@@ -1577,12 +1619,12 @@ router.post("/save", async (req, res) => {
           SettlementID, LastSettlementDate, LastDayEndDate, SubTotal, TotalTax, DiscountAmount, DiscountType, 
           BillNo, OrderType, TableNo, Section, MemberId, CashierID, BusinessUnitId, 
           SysAmount, ManualAmount, CreatedBy, CreatedOn, SER_NAME, MobileNo, 
-          VoidItemQty, VoidItemAmount, RoundedBy, ServiceCharge, GuestName, Pax
+          VoidItemQty, VoidItemAmount, RoundedBy, ServiceCharge, GuestName, Pax, TakeawayCharge
         ) VALUES (
           @SettlementID, GETDATE(), GETDATE(), @SubTotal, @TotalTax, @DiscountAmount, @DiscountType, 
           @BillNo, @OrderType, @TableNo, @Section, @MemberId, @CashierID, @BusinessUnitId, 
           @SysAmount, @ManualAmount, @CreatedBy, GETDATE(), @SER_NAME, @MobileNo, 
-          @VoidItemQty, @VoidItemAmount, @RoundedBy, @ServiceCharge, @GuestName, @Pax
+          @VoidItemQty, @VoidItemAmount, @RoundedBy, @ServiceCharge, @GuestName, @Pax, @TakeawayCharge
         );
 
         -- 2. Insert into RestaurantInvoice (Perfect Sync)
@@ -2044,6 +2086,7 @@ router.post("/save", async (req, res) => {
             .input("RoundedBy", sql.Money, roundOff || 0)
             .input("isTakeaway", sql.Bit, (orderType === "TAKEAWAY" || !tableId || tableId === "undefined" || tableId === "null" || String(tableId).startsWith("TAKEAWAY")) ? 1 : 0)
             .input("ServiceCharge", sql.Decimal(18, 2), req.body.serviceCharge || 0)
+            .input("TakeawayCharge", sql.Decimal(18, 2), req.body.takeawayCharge || 0)
             .query(`
               DECLARE @Section INT = 4;
               DECLARE @PriorityCode INT = NULL;
@@ -2052,12 +2095,12 @@ router.post("/save", async (req, res) => {
               FROM RestaurantOrderCur r
               LEFT JOIN TableMaster t ON r.Tableno = t.TableNumber
               WHERE r.OrderNumber = @orderNo;
-
+ 
               IF @Section = 1 SET @PriorityCode = 1
               ELSE IF @Section = 2 SET @PriorityCode = 2
               ELSE IF @Section = 3 SET @PriorityCode = 3
               ELSE IF @Section = 4 SET @PriorityCode = 4
-
+ 
               -- Ensure parent order has the correct final TotalAmount, RoundedBy, and Discounts in Cur before moving
               UPDATE RestaurantOrderCur 
               SET TotalAmount = @totalAmt,
@@ -2071,43 +2114,44 @@ router.post("/save", async (req, res) => {
                   DiscountRemarks = @DiscountRemarks,
                   IsTakeAway = @isTakeaway,
                   ServiceCharge = @ServiceCharge,
+                  TakeawayCharge = @TakeawayCharge,
                   isGuestMeal = ISNULL((SELECT TOP 1 isGuestMeal FROM [dbo].[Discount] WHERE DiscountId = @DiscountId), 0)
               WHERE OrderNumber = @orderNo;
-
+ 
               -- Move Header (History) - For Parent Order
               IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('RestaurantOrder') AND name = 'TotalAmount')
               BEGIN
                  INSERT INTO RestaurantOrder (
                    OrderId, OrderNumber, OrderDateTime, Tableno, StatusCode, CreatedBy, CreatedOn, MobileNo, BusinessUnitId, isOrderClosed, PriorityCode,
-                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, TimeBilled, ServiceCharge
+                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, TimeBilled, ServiceCharge, TakeawayCharge
                  )
                  SELECT 
                    OrderId, OrderNumber, OrderDateTime, Tableno, 3, CreatedBy, CreatedOn, MobileNo, BusinessUnitId, 1, ISNULL(PriorityCode, @PriorityCode),
-                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, GETDATE(), ServiceCharge
+                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, GETDATE(), ServiceCharge, TakeawayCharge
                  FROM RestaurantOrderCur WHERE OrderNumber = @orderNo;
               END
               ELSE
               BEGIN
                  INSERT INTO RestaurantOrder (
                    OrderId, OrderNumber, OrderDateTime, Tableno, StatusCode, CreatedBy, CreatedOn, MobileNo, BusinessUnitId, isOrderClosed, PriorityCode, TotalAmount,
-                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, TimeBilled, ServiceCharge
+                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, TimeBilled, ServiceCharge, TakeawayCharge
                  )
                  SELECT 
                    OrderId, OrderNumber, OrderDateTime, Tableno, 3, CreatedBy, CreatedOn, MobileNo, BusinessUnitId, 1, ISNULL(PriorityCode, @PriorityCode), TotalAmount,
-                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, GETDATE(), ServiceCharge
+                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, GETDATE(), ServiceCharge, TakeawayCharge
                  FROM RestaurantOrderCur WHERE OrderNumber = @orderNo;
               END
-
+ 
               -- Move Header (History) - For Child Merged Orders (so they aren't considered 'missing' bills)
               IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('RestaurantOrder') AND name = 'TotalAmount')
               BEGIN
                  INSERT INTO RestaurantOrder (
                    OrderId, OrderNumber, OrderDateTime, Tableno, StatusCode, CreatedBy, CreatedOn, MobileNo, BusinessUnitId, isOrderClosed, PriorityCode,
-                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, TimeBilled, ServiceCharge
+                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, TimeBilled, ServiceCharge, TakeawayCharge
                  )
                  SELECT 
                    r.OrderId, r.OrderNumber, r.OrderDateTime, r.Tableno, 3, r.CreatedBy, r.CreatedOn, r.MobileNo, r.BusinessUnitId, 1, ISNULL(r.PriorityCode, @PriorityCode),
-                   r.TotalLineItemAmount, r.TotalLineItemDiscountAmount, r.DiscountAmount, r.DiscountPercentage, r.TotalDiscountAmount, r.RoundedBy, r.isGuestMeal, r.DiscountId, r.DiscountRemarks, r.IsTakeAway, GETDATE(), r.ServiceCharge
+                   r.TotalLineItemAmount, r.TotalLineItemDiscountAmount, r.DiscountAmount, r.DiscountPercentage, r.TotalDiscountAmount, r.RoundedBy, r.isGuestMeal, r.DiscountId, r.DiscountRemarks, r.IsTakeAway, GETDATE(), r.ServiceCharge, r.TakeawayCharge
                  FROM RestaurantOrderCur r
                  INNER JOIN OrderMergeHistory omh ON r.OrderId = omh.ChildOrderId
                  WHERE omh.ParentOrderId = (SELECT TOP 1 OrderId FROM RestaurantOrderCur WHERE OrderNumber = @orderNo)
@@ -2117,11 +2161,11 @@ router.post("/save", async (req, res) => {
               BEGIN
                  INSERT INTO RestaurantOrder (
                    OrderId, OrderNumber, OrderDateTime, Tableno, StatusCode, CreatedBy, CreatedOn, MobileNo, BusinessUnitId, isOrderClosed, PriorityCode, TotalAmount,
-                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, TimeBilled, ServiceCharge
+                   TotalLineItemAmount, TotalLineItemDiscountAmount, DiscountAmount, DiscountPercentage, TotalDiscountAmount, RoundedBy, isGuestMeal, DiscountId, DiscountRemarks, IsTakeAway, TimeBilled, ServiceCharge, TakeawayCharge
                  )
                  SELECT 
                    r.OrderId, r.OrderNumber, r.OrderDateTime, r.Tableno, 3, r.CreatedBy, r.CreatedOn, r.MobileNo, r.BusinessUnitId, 1, ISNULL(r.PriorityCode, @PriorityCode), 0,
-                   r.TotalLineItemAmount, r.TotalLineItemDiscountAmount, r.DiscountAmount, r.DiscountPercentage, r.TotalDiscountAmount, r.RoundedBy, r.isGuestMeal, r.DiscountId, r.DiscountRemarks, r.IsTakeAway, GETDATE(), r.ServiceCharge
+                   r.TotalLineItemAmount, r.TotalLineItemDiscountAmount, r.DiscountAmount, r.DiscountPercentage, r.TotalDiscountAmount, r.RoundedBy, r.isGuestMeal, r.DiscountId, r.DiscountRemarks, r.IsTakeAway, GETDATE(), r.ServiceCharge, r.TakeawayCharge
                  FROM RestaurantOrderCur r
                  INNER JOIN OrderMergeHistory omh ON r.OrderId = omh.ChildOrderId
                  WHERE omh.ParentOrderId = (SELECT TOP 1 OrderId FROM RestaurantOrderCur WHERE OrderNumber = @orderNo)
@@ -2333,140 +2377,6 @@ router.post("/save", async (req, res) => {
 });
 
 /* ================= VALIDATION ================= */
-router.get("/settlement/:id", async (req, res) => {
-  try {
-    const pool = await poolPromise;
-    const cleanId = req.params.id;
-
-    // 1. Fetch SettlementHeader details
-    const headerResult = await pool.request()
-      .input("Id", sql.NVarChar(100), cleanId)
-      .query(`
-        SELECT TOP 1
-          sh.SettlementID,
-          sh.LastSettlementDate AS SettlementDate,
-          sh.BillNo AS OrderId,
-          sh.OrderType,
-          sh.TableNo,
-          sh.Section,
-          sh.CashierId,
-          sh.BillNo,
-          sh.SER_NAME,
-          sh.SubTotal,
-          ISNULL(sh.DiscountAmount, 0) as DiscountAmount,
-          sh.DiscountType as DiscountType,
-          ISNULL(sh.ServiceCharge, 0) as ServiceCharge,
-          ISNULL(sh.TotalTax, 0) as TotalTax,
-          sh.IsCancelled,
-          sh.RoundedBy,
-          ri.OrderId AS MasterOrderId,
-          ISNULL(ri.TotalDiscountAmount, 0) as TotalDiscountAmount,
-          ISNULL(ri.TotalLineItemDiscountAmount, 0) as TotalLineItemDiscountAmount,
-          ISNULL(ri.DiscountPercentage, 0) as DiscountPercentage,
-          sh.GuestName,
-          sh.Pax,
-          tm.entry_status AS TableEntryStatus
-        FROM SettlementHeader sh
-        LEFT JOIN RestaurantInvoice ri ON sh.SettlementID = ri.RestaurantBillId
-        LEFT JOIN TableMaster tm ON RTRIM(LTRIM(sh.TableNo)) = RTRIM(LTRIM(tm.TableNumber))
-        WHERE sh.SettlementID = TRY_CAST(@Id AS UNIQUEIDENTIFIER)
-           OR (TRY_CAST(@Id AS UNIQUEIDENTIFIER) IS NOT NULL AND ri.OrderId = TRY_CAST(@Id AS UNIQUEIDENTIFIER))
-           OR sh.BillNo = @Id
-      `);
-
-    const header = headerResult.recordset[0];
-    if (!header) {
-      return res.status(404).json({ error: "Settlement not found" });
-    }
-
-    const settlementId = header.SettlementID;
-    const masterOrderId = header.MasterOrderId;
-
-    // 2. Fetch Items
-    const itemsResult = await pool.request()
-      .input("SettlementId", sql.UniqueIdentifier, settlementId)
-      .query("SELECT * FROM SettlementItemDetail WHERE SettlementID = @SettlementId");
-    
-    const items = itemsResult.recordset || [];
-
-    if (items.length > 0 && masterOrderId) {
-      // Fetch modifiers
-      const modifiersResult = await pool.request()
-        .input("OrderId", sql.UniqueIdentifier, masterOrderId)
-        .query(`
-          SELECT OrderDetailId, DishId, ModifierId, ModifierName, Amount 
-          FROM Restaurantmodifierdetail 
-          WHERE OrderId = @OrderId
-          UNION
-          SELECT OrderDetailId, DishId, ModifierId, ModifierName, Amount 
-          FROM RestaurantmodifierdetailCur 
-          WHERE OrderId = @OrderId
-        `);
-      
-      const modifiers = modifiersResult.recordset || [];
-
-      // Group modifiers into their parent items
-      items.forEach(item => {
-        item.modifiers = modifiers
-          .filter(m => {
-            if (item.OrderDetailId && m.OrderDetailId) {
-              return String(m.OrderDetailId).toLowerCase() === String(item.OrderDetailId).toLowerCase();
-            }
-            return m.DishId && item.DishId && String(m.DishId).toLowerCase() === String(item.DishId).toLowerCase();
-          })
-          .map(m => ({
-            name: m.ModifierName,
-            ModifierName: m.ModifierName,
-            Amount: m.Amount,
-            ModifierId: m.ModifierId
-          }));
-      });
-    }
-
-    // 3. Fetch Payments
-    const paymentsResult = await pool.request()
-      .input("SettlementId", sql.UniqueIdentifier, settlementId)
-      .query(`
-        SELECT 
-          Paymode AS payMode,
-          SysAmount AS amount,
-          ManualAmount AS manualAmount,
-          SortageOrExces AS sortageOrExces,
-          ReceiptCount AS receiptCount,
-          IsCollected AS isCollected
-        FROM SettlementDetail
-        WHERE SettlementId = @SettlementId
-      `);
-
-    // Match payment descriptions for receipt printing
-    const paymodesRes = await pool.request().query("SELECT Position, PayMode, Description FROM [dbo].[Paymode]");
-    const activePaymodes = paymodesRes.recordset || [];
-
-    const payments = (paymentsResult.recordset || []).map(p => {
-      const pmInfo = activePaymodes.find(x => 
-        x.Position === Number(p.payMode) || 
-        String(x.PayMode).trim().toUpperCase() === String(p.payMode || "").trim().toUpperCase() ||
-        String(x.Description).trim().toUpperCase() === String(p.payMode || "").trim().toUpperCase()
-      );
-      return {
-        payMode: pmInfo ? String(pmInfo.PayMode).trim() : String(p.payMode || "CASH").trim(),
-        payModeName: pmInfo ? String(pmInfo.PayMode).trim() : String(p.payMode || "CASH").trim(),
-        amount: p.amount,
-        referenceNo: ""
-      };
-    });
-
-    res.json({
-      header,
-      items,
-      payments
-    });
-  } catch (err) {
-    console.error("❌ Fetch settlement error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 router.get("/orders/check/:orderId", async (req, res) => {
   try {
     const pool = await poolPromise;

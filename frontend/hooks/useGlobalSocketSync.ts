@@ -63,14 +63,10 @@ export function useGlobalSocketSync() {
       if (__DEV__) {
         console.log("📦 [Socket-Global] New order:", payload.orderId);
       }
-      // Always update the KDS / active-orders UI regardless of order source
       appendOrder(payload.orderId, payload.context, payload.items, payload.createdAt);
       markItemsSent(payload.orderId);
 
       // --- QR Auto-Print ---
-      // entryStatus === 'q' means this order originated from the QR POS (not the cashier).
-      // The cashier flow already prints via CartSidebar → routeAndPrintOrderKOT.
-      // skipDuplicateGuard=false so reconnect floods are blocked by the cache.
       const isQrOrder =
         payload?.context?.entryStatus === "q" ||
         payload?.entryStatus === "q" ||
@@ -82,8 +78,6 @@ export function useGlobalSocketSync() {
         }
         const items = payload.items ?? [];
         const context = payload.context ?? {};
-        // Determine isAdditional: true when the payload explicitly marks it,
-        // or when some items already have status SENT from prior rounds.
         const isAdditional =
           payload.isAdditional === true ||
           items.some((i: any) => i.status === "SENT");
@@ -94,12 +88,11 @@ export function useGlobalSocketSync() {
           items,
           isAdditional,
           context.waiterName || context.userName || "QR Order",
-          false // let the deduplication cache guard against reconnect floods
-        ).then((printed) => {
+        ).then((printed: boolean) => {
           if (__DEV__ && printed) {
             console.log("✅ [Socket-Global] QR KOT printed for order:", payload.orderId);
           }
-        }).catch((err) => {
+        }).catch((err: any) => {
           console.error("[Socket-Global] QR auto-print failed:", err);
         });
       }
@@ -250,13 +243,12 @@ export function useGlobalSocketSync() {
       }
     };
 
-    // --- 5.5 ORDER CLOSED (KDS WIPE ONLY) ---
-    const handleOrderClosed = (data: { tableId: string; tableNo: string; orderId?: string; section: string }) => {
+    // --- 5.5 ORDER CLOSED (PAYMENT WIPE) ---
+    const handleOrderClosed = (data: { tableId: string; tableNo: string; section: string }) => {
       const { tableId, tableNo, section } = data;
       if (__DEV__) {
         console.log(`🧹 [Socket-Global] Order Closed for Table: ${tableId} (${tableNo}). Wiping KDS...`);
       }
-
       const store = useActiveOrdersStore.getState();
       const activeOrders = store.activeOrders;
       
@@ -282,8 +274,6 @@ export function useGlobalSocketSync() {
     };
 
     // --- 5.6 QR PAYMENT CONFIRMED (AUTO RECEIPT PRINT) ---
-    // Fires from backend /payment-status when PAYMENT_STATUS=1 (online payment confirmed).
-    // This is the correct moment: same time as KOT, NOT after items are served.
     const handleQrPaymentConfirmed = (data: { tableId: string; tableNo: string; orderId: string }) => {
       const { orderId } = data;
       if (__DEV__) {
@@ -307,16 +297,16 @@ export function useGlobalSocketSync() {
             return;
           }
           UniversalPrinter.printReceiptAuto(settlementData)
-            .then((printed) => {
+            .then((printed: boolean) => {
               if (__DEV__ && printed) {
                 console.log(`✅ [Socket-Global] Auto-receipt printed for QR Order: ${orderId}`);
               }
             })
-            .catch((err) => {
+            .catch((err: any) => {
               console.error("❌ [Socket-Global] Auto-receipt print failed:", err);
             });
         })
-        .catch((err) => {
+        .catch((err: any) => {
           console.error(`❌ [Socket-Global] Failed to fetch settlement for QR receipt print:`, err);
         });
     };
