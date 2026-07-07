@@ -49,11 +49,12 @@ router.get("/list", async (req, res) => {
         d.Description,
         d.DishGroupId,
         d.IsActive,
-        ISNULL(d.isServiceCharge, 1) AS IsServiceCharge
+        ISNULL(d.isServiceCharge, 1) AS IsServiceCharge,
+        ISNULL(d.SordCode, 0) AS SordCode
       FROM DishMaster d WITH (NOLOCK)
       WHERE d.IsCombo = 1
         AND d.IsActive = 1
-      ORDER BY d.Name ASC
+      ORDER BY ISNULL(d.SordCode, 0) ASC, d.Name ASC
     `);
 
     setCache("combo_list", result.recordset);

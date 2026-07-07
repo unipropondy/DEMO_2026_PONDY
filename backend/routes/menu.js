@@ -118,7 +118,8 @@ router.get("/dishes/all", async (req, res) => {
         ISNULL(d.IsCombo, 0) AS IsCombo,
         ISNULL(ckt.KitchenTypeCode, '2') as KitchenTypeCode,
         ISNULL(ISNULL(ckt.KitchenTypeName, cat.CategoryName), 'KITCHEN') as KitchenTypeName,
-        pm.PrinterPath AS PrinterIP
+        pm.PrinterPath AS PrinterIP,
+        ISNULL(d.SordCode, 0) AS SordCode
       FROM DishMaster d
       LEFT JOIN DishGroupMaster dgm ON d.DishGroupId = dgm.DishGroupId
       LEFT JOIN CategoryMaster cat ON dgm.CategoryId = cat.CategoryId
@@ -127,7 +128,7 @@ router.get("/dishes/all", async (req, res) => {
         SELECT *, ROW_NUMBER() OVER(PARTITION BY KitchenTypeValue ORDER BY PrinterId) as rn 
         FROM PrintMaster WHERE IsActive = 1 AND PrinterType = 2
       ) pm ON CAST(ckt.KitchenTypeCode AS INT) = pm.KitchenTypeValue AND pm.rn = 1
-      WHERE d.IsActive = 1 ORDER BY d.Name ASC
+      WHERE d.IsActive = 1 ORDER BY ISNULL(d.SordCode, 0) ASC, d.Name ASC
     `);
     setCache(cacheKey, result.recordset);
     res.json(result.recordset);
@@ -161,7 +162,8 @@ router.get("/dishes/group/:DishGroupId", async (req, res) => {
               ISNULL(d.IsCombo, 0) AS IsCombo,
               ISNULL(ckt.KitchenTypeCode, '2') AS KitchenTypeCode,
               ISNULL(ISNULL(ckt.KitchenTypeName, cat.CategoryName), 'KITCHEN') AS KitchenTypeName,
-              pm.PrinterPath AS PrinterIP
+              pm.PrinterPath AS PrinterIP,
+              ISNULL(d.SordCode, 0) AS SordCode
           FROM DishMaster d
  
           LEFT JOIN DishGroupMaster dgm
@@ -195,7 +197,7 @@ router.get("/dishes/group/:DishGroupId", async (req, res) => {
                 OR dmap.DishGroupId = @DishGroupId
               )
  
-          ORDER BY d.Name ASC
+          ORDER BY ISNULL(d.SordCode, 0) ASC, d.Name ASC
       `);
     setCache(cacheKey, result.recordset);
     res.json(result.recordset);
