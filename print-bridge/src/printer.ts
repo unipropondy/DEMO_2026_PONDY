@@ -82,16 +82,17 @@ export function checkPrinterReachable(ip: string, port: number = 9100, timeoutMs
  * Supports both base64 binary encoding and standard UTF-8 string encoding with tag translation.
  */
 export async function sendToPrinter(ip: string, port: number, content: string, jobId: string | number): Promise<void> {
+  const targetPort = port || 9100;
   const checkStart = Date.now();
-  const isReachable = await checkPrinterReachable(ip, port, 750);
+  const isReachable = await checkPrinterReachable(ip, targetPort, 750);
   const latency = Date.now() - checkStart;
 
   if (!isReachable) {
-    console.log(`\n[Printer Check]\nIP: ${ip}\nPort: ${port}\nReachable: NO\nReason: Timeout\n\n[Print]\nStatus: FAILED\nError: Printer unreachable\n`);
+    console.log(`\n[Printer Check]\nIP: ${ip}\nPort: ${targetPort}\nReachable: NO\nReason: Timeout\n\n[Print]\nStatus: FAILED\nError: Printer unreachable\n`);
     throw new Error('Printer unreachable');
   }
 
-  console.log(`\n[Printer Check]\nIP: ${ip}\nPort: ${port}\nReachable: YES\nLatency: ${latency}ms\n`);
+  console.log(`\n[Printer Check]\nIP: ${ip}\nPort: ${targetPort}\nReachable: YES\nLatency: ${latency}ms\n`);
 
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
@@ -114,7 +115,7 @@ export async function sendToPrinter(ip: string, port: number, content: string, j
 
     console.log(`\n[Print]\nStarted...\n`);
 
-    client.connect(port, ip, () => {
+    client.connect(targetPort, ip, () => {
       client.write(payload, () => {
         client.end();
       });
