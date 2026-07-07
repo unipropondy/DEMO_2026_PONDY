@@ -129,8 +129,6 @@ export default function CustomerDisplayContent() {
         style.id = styleId;
         style.type = 'text/css';
         style.appendChild(document.createTextNode(`
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-          
           @font-face {
             font-family: 'Ionicons';
             src: url('https://unpkg.com/react-native-vector-icons@10.0.0/Fonts/Ionicons.ttf') format('truetype');
@@ -138,27 +136,27 @@ export default function CustomerDisplayContent() {
 
           @font-face {
             font-family: 'Inter_400Regular';
-            src: local('Inter');
+            src: url('https://unpkg.com/@fontsource/inter@5.0.1/files/inter-latin-400-normal.woff2') format('woff2');
           }
           @font-face {
             font-family: 'Inter_500Medium';
-            src: local('Inter');
+            src: url('https://unpkg.com/@fontsource/inter@5.0.1/files/inter-latin-500-normal.woff2') format('woff2');
           }
           @font-face {
             font-family: 'Inter_600SemiBold';
-            src: local('Inter');
+            src: url('https://unpkg.com/@fontsource/inter@5.0.1/files/inter-latin-600-normal.woff2') format('woff2');
           }
           @font-face {
             font-family: 'Inter_700Bold';
-            src: local('Inter');
+            src: url('https://unpkg.com/@fontsource/inter@5.0.1/files/inter-latin-700-normal.woff2') format('woff2');
           }
           @font-face {
             font-family: 'Inter_800ExtraBold';
-            src: local('Inter');
+            src: url('https://unpkg.com/@fontsource/inter@5.0.1/files/inter-latin-800-normal.woff2') format('woff2');
           }
           @font-face {
             font-family: 'Inter_900Black';
-            src: local('Inter');
+            src: url('https://unpkg.com/@fontsource/inter@5.0.1/files/inter-latin-900-normal.woff2') format('woff2');
           }
         `));
         document.head.appendChild(style);
