@@ -124,50 +124,73 @@ export default function DayEndScreen() {
     }).format(amount);
   };
 
-  const handleDayEnd = () => {
-    Alert.alert(
-      "Confirm Day End",
-      "Are you sure you want to close the day? This will finalize all transactions and prepare for the next business day.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Confirm", 
-          style: "destructive",
-          onPress: async () => {
-            setLoading(true);
-            try {
-              const res = await fetch(`${API_URL}/api/settlement/day-end`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  username: user?.userName || "admin"
-                })
-              });
-              const data = await res.json();
-              if (res.ok && data.success) {
-                // Clear selected business date from AsyncStorage to reset
-                await AsyncStorage.removeItem("selected_business_date");
-                Alert.alert("Success", "Day ended successfully. Report generated.", [
-                  {
-                    text: "OK",
-                    onPress: () => {
-                      router.replace("/(tabs)/category"); // Go back to Category
-                    }
-                  }
-                ]);
-              } else {
-                Alert.alert("Error", data.error || "Failed to complete Day End.");
+  const executeDayEnd = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/settlement/day-end`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: user?.userName || "admin"
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Clear selected business date from AsyncStorage to reset
+        await AsyncStorage.removeItem("selected_business_date");
+        if (Platform.OS === 'web') {
+          alert("Day ended successfully. Report generated.");
+          router.replace("/(tabs)/category"); // Go back to Category
+        } else {
+          Alert.alert("Success", "Day ended successfully. Report generated.", [
+            {
+              text: "OK",
+              onPress: () => {
+                router.replace("/(tabs)/category"); // Go back to Category
               }
-            } catch (err) {
-              console.error("Day End Error:", err);
-              Alert.alert("Error", "Network error while completing Day End.");
-            } finally {
-              setLoading(false);
             }
-          }
+          ]);
         }
-      ]
-    );
+      } else {
+        if (Platform.OS === 'web') {
+          alert(data.error || "Failed to complete Day End.");
+        } else {
+          Alert.alert("Error", data.error || "Failed to complete Day End.");
+        }
+      }
+    } catch (err) {
+      console.error("Day End Error:", err);
+      if (Platform.OS === 'web') {
+        alert("Network error while completing Day End.");
+      } else {
+        Alert.alert("Error", "Network error while completing Day End.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDayEnd = () => {
+    const msg = "Are you sure you want to close the day? This will finalize all transactions and prepare for the next business day.";
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm(msg);
+      if (confirm) {
+        executeDayEnd();
+      }
+    } else {
+      Alert.alert(
+        "Confirm Day End",
+        msg,
+        [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "Confirm", 
+            style: "destructive",
+            onPress: executeDayEnd
+          }
+        ]
+      );
+    }
   };
 
   if (loading) {
