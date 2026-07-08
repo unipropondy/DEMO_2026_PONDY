@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   ScrollView,
   ActivityIndicator,
   Alert,
@@ -43,6 +44,7 @@ export default function DayEndScreen() {
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<"DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "CUSTOM">("DAILY");
   const [dateRange, setDateRange] = useState({
     start: getSingaporeDateString(),
@@ -171,26 +173,7 @@ export default function DayEndScreen() {
   };
 
   const handleDayEnd = () => {
-    const msg = "Are you sure you want to close the day? This will finalize all transactions and prepare for the next business day.";
-    if (Platform.OS === 'web') {
-      const confirm = window.confirm(msg);
-      if (confirm) {
-        executeDayEnd();
-      }
-    } else {
-      Alert.alert(
-        "Confirm Day End",
-        msg,
-        [
-          { text: "Cancel", style: "cancel" },
-          { 
-            text: "Confirm", 
-            style: "destructive",
-            onPress: executeDayEnd
-          }
-        ]
-      );
-    }
+    setShowConfirmModal(true);
   };
 
   if (loading) {
@@ -333,6 +316,114 @@ export default function DayEndScreen() {
               </TouchableOpacity>
             </Modal>
           ) : null}
+
+          {/* CUSTOM CONFIRM DAY END MODAL */}
+          <Modal
+            visible={showConfirmModal}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowConfirmModal(false)}
+          >
+            <TouchableOpacity 
+              style={{
+                flex: 1,
+                backgroundColor: "rgba(0,0,0,0.6)",
+                justifyContent: "center",
+                alignItems: "center",
+                padding: 20
+              }}
+              activeOpacity={1}
+              onPress={() => setShowConfirmModal(false)}
+            >
+              <TouchableWithoutFeedback>
+                <View 
+                  style={{
+                    width: "100%",
+                    maxWidth: 420,
+                    backgroundColor: Theme.bgCard || "#ffffff",
+                    borderRadius: 24,
+                    padding: 24,
+                    alignItems: "center",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 12,
+                    elevation: 5
+                  }}
+                >
+                  <View style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 28,
+                    backgroundColor: "#fee2e2",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginBottom: 16
+                  }}>
+                    <Ionicons name="warning-outline" size={28} color="#ef4444" />
+                  </View>
+
+                  <Text style={{
+                    fontFamily: Fonts.black,
+                    fontSize: 20,
+                    color: Theme.textPrimary || "#1c2d42",
+                    marginBottom: 10,
+                    textAlign: "center"
+                  }}>
+                    Confirm Day End
+                  </Text>
+
+                  <Text style={{
+                    fontFamily: Fonts.medium,
+                    fontSize: 14,
+                    color: Theme.textSecondary || "#556e8a",
+                    textAlign: "center",
+                    lineHeight: 20,
+                    marginBottom: 24
+                  }}>
+                    Are you sure you want to close the day? This will finalize all transactions and prepare for the next business day.
+                  </Text>
+
+                  <View style={{ flexDirection: "row", gap: 12, width: "100%" }}>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        height: 48,
+                        borderRadius: 14,
+                        backgroundColor: Theme.bgMuted || "#f1f5f9",
+                        justifyContent: "center",
+                        alignItems: "center"
+                      }}
+                      onPress={() => setShowConfirmModal(false)}
+                    >
+                      <Text style={{ fontFamily: Fonts.bold, fontSize: 15, color: Theme.textPrimary || "#1c2d42" }}>
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        height: 48,
+                        borderRadius: 14,
+                        backgroundColor: "#ef4444",
+                        justifyContent: "center",
+                        alignItems: "center"
+                      }}
+                      onPress={() => {
+                        setShowConfirmModal(false);
+                        executeDayEnd();
+                      }}
+                    >
+                      <Text style={{ fontFamily: Fonts.bold, fontSize: 15, color: "#fff" }}>
+                        Confirm
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </TouchableOpacity>
+          </Modal>
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
