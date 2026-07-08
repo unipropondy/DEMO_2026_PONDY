@@ -3,6 +3,7 @@ import { Fonts } from "@/constants/Fonts";
 import { Theme } from "@/constants/theme";
 import { useAuthStore } from "@/stores/authStore";
 import { useGeneralSettingsStore } from "../../stores/generalSettingsStore";
+import { useToast } from "../../components/Toast";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import * as Print from "expo-print";
@@ -548,6 +549,7 @@ export default function SettlementScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const enableCashDrawer = useGeneralSettingsStore(state => state.settings.enableCashDrawer);
+  const { showToast } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [terminals, setTerminals] = useState<any[]>([]);
@@ -572,33 +574,26 @@ export default function SettlementScreen() {
       if (res.ok && data.success) {
         const AsyncStorage = require("@react-native-async-storage/async-storage").default;
         await AsyncStorage.removeItem("selected_business_date");
-        if (Platform.OS === 'web') {
-          alert("Day ended successfully. Report generated.");
-          router.replace("/(tabs)/category"); // Go back to Category
-        } else {
-          Alert.alert("Success", "Day ended successfully. Report generated.", [
-            {
-              text: "OK",
-              onPress: () => {
-                router.replace("/(tabs)/category"); // Go back to Category
-              }
-            }
-          ]);
-        }
+        showToast({
+          type: "success",
+          message: "Day Ended Successfully",
+          subtitle: "Report generated and business day closed."
+        });
+        router.replace("/(tabs)/category"); // Go back to Category
       } else {
-        if (Platform.OS === 'web') {
-          alert(data.error || "Failed to complete Day End.");
-        } else {
-          Alert.alert("Error", data.error || "Failed to complete Day End.");
-        }
+        showToast({
+          type: "error",
+          message: "Day End Failed",
+          subtitle: data.error || "Failed to complete Day End."
+        });
       }
     } catch (err) {
       console.error("Day End Error:", err);
-      if (Platform.OS === 'web') {
-        alert("Network error while completing Day End.");
-      } else {
-        Alert.alert("Error", "Network error while completing Day End.");
-      }
+      showToast({
+        type: "error",
+        message: "Network Error",
+        subtitle: "Failed to connect to the server."
+      });
     } finally {
       setLoading(false);
     }
