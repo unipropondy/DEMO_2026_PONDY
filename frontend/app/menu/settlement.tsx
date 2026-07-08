@@ -1541,7 +1541,7 @@ const loadDishes = async () => {
                   }}
                   onPress={handleDayEnd}
                 >
-                  <Ionicons name="power-outline" size={16} color="#fff" />
+                  <Ionicons name="moon-outline" size={16} color="#fff" />
                   <Text style={{ color: "#fff", fontFamily: Fonts.black, fontSize: 12 }}>Day End</Text>
                 </TouchableOpacity>
               </View>
@@ -1661,8 +1661,8 @@ const loadDishes = async () => {
                 }}
                 onPress={handleDayEnd}
               >
-                <Ionicons name="power-outline" size={18} color="#fff" />
-                <Text style={{ color: "#fff", fontSize: 13, fontFamily: Fonts.black }}>Perform Day End</Text>
+                <Ionicons name="moon-outline" size={18} color="#fff" />
+                <Text style={{ color: "#fff", fontSize: 13, fontFamily: Fonts.black }}>Day End</Text>
               </TouchableOpacity>
             </View>
           )}
