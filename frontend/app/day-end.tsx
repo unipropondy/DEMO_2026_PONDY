@@ -140,7 +140,7 @@ export default function DayEndScreen() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  username: user?.userName || user?.username || "admin"
+                  username: user?.userName || "admin"
                 })
               });
               const data = await res.json();
