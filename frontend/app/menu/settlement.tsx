@@ -1520,13 +1520,31 @@ const loadDishes = async () => {
             <Text style={styles.headerTitle}>Settlement</Text>
 
             {!isTablet && (
-              <TouchableOpacity
-                style={[styles.confirmBtn, { marginLeft: 'auto', paddingVertical: 6, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-                onPress={handlePrintReport}
-              >
-                <Ionicons name="print-outline" size={16} color="#fff" />
-                <Text style={[styles.confirmBtnText, { fontSize: 12 }]}>Print</Text>
-              </TouchableOpacity>
+              <View style={{ marginLeft: 'auto', flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { paddingVertical: 6, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                  onPress={handlePrintReport}
+                >
+                  <Ionicons name="print-outline" size={16} color="#fff" />
+                  <Text style={[styles.confirmBtnText, { fontSize: 12 }]}>Print</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: "#ef4444",
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                  onPress={handleDayEnd}
+                >
+                  <Ionicons name="power-outline" size={16} color="#fff" />
+                  <Text style={{ color: "#fff", fontFamily: Fonts.black, fontSize: 12 }}>Day End</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
 
@@ -1615,13 +1633,36 @@ const loadDishes = async () => {
           </View>
 
           {isTablet && (
-            <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
               <TouchableOpacity
                 style={[styles.confirmBtn, { paddingVertical: 8, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
                 onPress={handlePrintReport}
               >
                 <Ionicons name="print-outline" size={18} color="#fff" />
                 <Text style={styles.confirmBtnText}>Print Report</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#ef4444",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  paddingVertical: 8,
+                  paddingHorizontal: 16,
+                  borderRadius: 10,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 3,
+                  elevation: 2,
+                  height: 38
+                }}
+                onPress={handleDayEnd}
+              >
+                <Ionicons name="power-outline" size={18} color="#fff" />
+                <Text style={{ color: "#fff", fontSize: 13, fontFamily: Fonts.black }}>Perform Day End</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1929,36 +1970,12 @@ const loadDishes = async () => {
                 <View style={{ flexDirection: "row", paddingVertical: 10, paddingHorizontal: 12, backgroundColor: "#F9FAFB", borderTopWidth: 1, borderTopColor: "#E5E7EB", alignItems: "center" }}>
                   <View style={{ flex: 2, alignItems: 'flex-end', paddingRight: 15 }}>
                     <Text style={{ fontFamily: Fonts.black, fontSize: 13, color: Theme.textSecondary }}>NET AMOUNT</Text>
-                  </View>
+</View>
                   <Text style={{ flex: 2, textAlign: "right", fontFamily: Fonts.black, fontSize: 14, color: (totalCashIn - totalCashOutSum) >= 0 ? Theme.success : Theme.danger }}>
                     {formatCurrency(totalCashIn - totalCashOutSum)}
                   </Text>
                 </View>
               </View>
-
-              {/* Perform Day End Button */}
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "#ef4444",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 10,
-                  height: 52,
-                  borderRadius: 14,
-                  marginTop: 20,
-                  marginBottom: 20,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 4,
-                  elevation: 3
-                }}
-                onPress={handleDayEnd}
-              >
-                <Ionicons name="power-outline" size={20} color="#fff" />
-                <Text style={{ color: "#fff", fontSize: 16, fontFamily: Fonts.black }}>Perform Day End</Text>
-              </TouchableOpacity>
             </View>
           </ScrollView>
         )}
