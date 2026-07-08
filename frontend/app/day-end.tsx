@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Theme } from "@/constants/theme";
 import { Fonts } from "@/constants/Fonts";
 import { API_URL } from "@/constants/Config";
@@ -132,10 +133,37 @@ export default function DayEndScreen() {
         { 
           text: "Confirm", 
           style: "destructive",
-          onPress: () => {
-            // Logic for Day End would go here (e.g. archiving or resetting)
-            Alert.alert("Success", "Day ended successfully. Report generated.");
-            router.replace("/login");
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const res = await fetch(`${API_URL}/api/settlement/day-end`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  username: user?.userName || user?.username || "admin"
+                })
+              });
+              const data = await res.json();
+              if (res.ok && data.success) {
+                // Clear selected business date from AsyncStorage to reset
+                await AsyncStorage.removeItem("selected_business_date");
+                Alert.alert("Success", "Day ended successfully. Report generated.", [
+                  {
+                    text: "OK",
+                    onPress: () => {
+                      router.replace("/(tabs)/category"); // Go back to Category
+                    }
+                  }
+                ]);
+              } else {
+                Alert.alert("Error", data.error || "Failed to complete Day End.");
+              }
+            } catch (err) {
+              console.error("Day End Error:", err);
+              Alert.alert("Error", "Network error while completing Day End.");
+            } finally {
+              setLoading(false);
+            }
           }
         }
       ]

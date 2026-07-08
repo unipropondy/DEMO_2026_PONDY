@@ -536,6 +536,22 @@ async function initDB(pool) {
     // 19. dishOrderItemShare updates
     await runQuery("dishOrderItemShare - TargetAmount", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[dishOrderItemShare]') AND name = 'TargetAmount') ALTER TABLE [dbo].[dishOrderItemShare] ADD TargetAmount DECIMAL(18, 2) DEFAULT 0");
 
+    // 19.1 Create DateEntry table for Day Start/Day End tracking
+    await runQuery("Create DateEntry table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[DateEntry]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[DateEntry](
+              [DateEntryId] [uniqueidentifier] NOT NULL PRIMARY KEY DEFAULT NEWID(),
+              [username] [varchar](30) NULL,
+              [StartDate] [date] NOT NULL,
+              [CreatedBy] [varchar](30) NULL,
+              [CreatedDate] [datetime] DEFAULT GETDATE(),
+              [UpdateBy] [varchar](30) NULL,
+              [UpdateDate] [datetime] NULL
+          )
+      END
+    `);
+
     // 20. Create CashDrawerRemarks table
     await runQuery("Create CashDrawerRemarks table", `
       IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[CashDrawerRemarks]') AND type in (N'U'))

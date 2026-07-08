@@ -429,26 +429,39 @@ export default function Category() {
   const [isSavingGuest, setIsSavingGuest] = useState(false);
   const [selectedBusinessDate, setSelectedBusinessDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [showBusinessCalendar, setShowBusinessCalendar] = useState(false);
+  const [isDayStarted, setIsDayStarted] = useState(false);
+  const [activeBusinessDay, setActiveBusinessDay] = useState<string | null>(null);
+  const [isStartingDay, setIsStartingDay] = useState(false);
 
-  useEffect(() => {
-    const loadBusinessDate = async () => {
-      try {
+  const checkActiveBusinessDay = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/settlement/active-day`);
+      const data = await res.json();
+      if (data.success && data.active && data.startDate) {
+        setIsDayStarted(true);
+        setActiveBusinessDay(data.startDate);
+        setSelectedBusinessDate(data.startDate);
+        await AsyncStorage.setItem("selected_business_date", data.startDate);
+      } else {
+        setIsDayStarted(false);
+        setActiveBusinessDay(null);
         const savedDate = await AsyncStorage.getItem("selected_business_date");
         if (savedDate) {
           setSelectedBusinessDate(savedDate);
         } else {
-          const today = new Date().toISOString().split("T")[0];
-          setSelectedBusinessDate(today);
-          await AsyncStorage.setItem("selected_business_date", today);
+          setSelectedBusinessDate(new Date().toISOString().split("T")[0]);
         }
-      } catch (err) {
-        console.error("Failed to load business date:", err);
       }
-    };
-    loadBusinessDate();
+    } catch (err) {
+      console.error("Failed to check active business day:", err);
+    }
+  };
+
+  useEffect(() => {
+    checkActiveBusinessDay();
   }, []);
 
-  const handleSaveBusinessDate = async () => {
+  const handleStartDay = async () => {
     if (!selectedBusinessDate) {
       showToast({
         type: "warning",
@@ -457,20 +470,43 @@ export default function Category() {
       });
       return;
     }
+    
+    setIsStartingDay(true);
     try {
-      await AsyncStorage.setItem("selected_business_date", selectedBusinessDate);
-      showToast({
-        type: "success",
-        message: "Date Saved",
-        subtitle: `Business date set to ${formatDateToDMY(selectedBusinessDate)}.`,
+      const res = await fetch(`${API_URL}/api/settlement/day-start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startDate: selectedBusinessDate,
+          username: user?.userName || user?.username || "admin"
+        })
       });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await AsyncStorage.setItem("selected_business_date", selectedBusinessDate);
+        setIsDayStarted(true);
+        setActiveBusinessDay(selectedBusinessDate);
+        showToast({
+          type: "success",
+          message: "Day Started",
+          subtitle: `Business day successfully started for ${formatDateToDMY(selectedBusinessDate)}.`,
+        });
+      } else {
+        showToast({
+          type: "error",
+          message: "Day Start Failed",
+          subtitle: data.error || "Could not start business day.",
+        });
+      }
     } catch (err) {
-      console.error("Failed to save business date:", err);
+      console.error("Failed to start day:", err);
       showToast({
         type: "error",
-        message: "Save Failed",
-        subtitle: "Could not save the business date.",
+        message: "Network Error",
+        subtitle: "Failed to connect to the server.",
       });
+    } finally {
+      setIsStartingDay(false);
     }
   };
 
@@ -586,6 +622,7 @@ export default function Category() {
   // ——— Route guard: redirect to login if not authenticated ———
   useFocusEffect(
     React.useCallback(() => {
+      checkActiveBusinessDay();
       const { user: currentUser, loginDate, logout } = useAuthStore.getState();
       if (!currentUser) {
         router.replace("/login");
@@ -1079,11 +1116,11 @@ export default function Category() {
 
   const handleTablePress = React.useCallback(
     async (item: TableItem, tableData: any, isCheckoutAction?: boolean) => {
-      if (!selectedBusinessDate) {
+      if (!isDayStarted) {
         showToast({
           type: "warning",
-          message: "Date Not Set",
-          subtitle: "Please select and save the business date first.",
+          message: "Day Not Started",
+          subtitle: "Please select a date and click Start Day first.",
         });
         return;
       }
@@ -1472,8 +1509,8 @@ export default function Category() {
           </View>
         </ScrollView>
 
-        {/* DATE PICKER (AUTO-SAVE) */}
-        <View style={{ marginHorizontal: 8 }}>
+        {/* DATE PICKER & DAY START BUTTON */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 8 }}>
           <TouchableOpacity
             style={{
               flexDirection: "row",
@@ -1485,13 +1522,33 @@ export default function Category() {
               paddingHorizontal: 16,
               paddingVertical: 7,
               gap: 10,
+              opacity: isDayStarted ? 0.7 : 1,
             }}
+            disabled={isDayStarted}
             onPress={() => setShowBusinessCalendar(true)}
           >
             <Text style={{ fontFamily: Fonts.bold, fontSize: 15, color: "#1c2d42" }}>
               {selectedBusinessDate ? formatDateToDMY(selectedBusinessDate) : "dd-mm-yyyy"}
             </Text>
             <Ionicons name="calendar-outline" size={18} color="#556e8a" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              backgroundColor: isDayStarted ? "#22c55e" : (Theme.primary || "#fd7e14"),
+              borderRadius: 20,
+              paddingHorizontal: 14,
+              paddingVertical: 7,
+              justifyContent: "center",
+              alignItems: "center",
+              opacity: isStartingDay ? 0.7 : 1,
+            }}
+            disabled={isDayStarted || isStartingDay}
+            onPress={handleStartDay}
+          >
+            <Text style={{ fontFamily: Fonts.bold, fontSize: 14, color: "#fff" }}>
+              {isDayStarted ? "Day Started" : "Start Day"}
+            </Text>
           </TouchableOpacity>
         </View>
 
