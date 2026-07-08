@@ -427,7 +427,7 @@ export default function Category() {
   const [guestNameInput, setGuestNameInput] = useState("");
   const [guestPaxInput, setGuestPaxInput] = useState("");
   const [isSavingGuest, setIsSavingGuest] = useState(false);
-  const [selectedBusinessDate, setSelectedBusinessDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [selectedBusinessDate, setSelectedBusinessDate] = useState<string | null>(null);
   const [showBusinessCalendar, setShowBusinessCalendar] = useState(false);
   const [isDayStarted, setIsDayStarted] = useState(false);
   const [activeBusinessDay, setActiveBusinessDay] = useState<string | null>(null);
@@ -445,12 +445,7 @@ export default function Category() {
       } else {
         setIsDayStarted(false);
         setActiveBusinessDay(null);
-        const savedDate = await AsyncStorage.getItem("selected_business_date");
-        if (savedDate) {
-          setSelectedBusinessDate(savedDate);
-        } else {
-          setSelectedBusinessDate(new Date().toISOString().split("T")[0]);
-        }
+        setSelectedBusinessDate(null);
       }
     } catch (err) {
       console.error("Failed to check active business day:", err);
