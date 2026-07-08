@@ -1472,42 +1472,26 @@ export default function Category() {
           </View>
         </ScrollView>
 
-        {/* DATE PICKER & SAVE BUTTON */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginHorizontal: 8 }}>
+        {/* DATE PICKER (AUTO-SAVE) */}
+        <View style={{ marginHorizontal: 8 }}>
           <TouchableOpacity
             style={{
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: Theme.bgInput || "#FFF",
+              backgroundColor: "#f5eee6",
               borderWidth: 1,
-              borderColor: Theme.border,
-              borderRadius: 8,
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              gap: 8,
+              borderColor: "#e5dec9",
+              borderRadius: 20,
+              paddingHorizontal: 16,
+              paddingVertical: 7,
+              gap: 10,
             }}
             onPress={() => setShowBusinessCalendar(true)}
           >
-            <Text style={{ fontFamily: Fonts.medium, fontSize: 14, color: selectedBusinessDate ? Theme.textPrimary : Theme.textMuted }}>
+            <Text style={{ fontFamily: Fonts.bold, fontSize: 15, color: "#1c2d42" }}>
               {selectedBusinessDate ? formatDateToDMY(selectedBusinessDate) : "dd-mm-yyyy"}
             </Text>
-            <Ionicons name="calendar-outline" size={16} color={Theme.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{
-              backgroundColor: Theme.primary || "#fd7e14",
-              borderRadius: 8,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-            onPress={handleSaveBusinessDate}
-          >
-            <Text style={{ fontFamily: Fonts.bold, fontSize: 14, color: "#fff" }}>
-              Save
-            </Text>
+            <Ionicons name="calendar-outline" size={18} color="#556e8a" />
           </TouchableOpacity>
         </View>
 
@@ -2544,9 +2528,19 @@ export default function Category() {
                 </View>
                 <CalendarPicker
                   selectedDate={selectedBusinessDate || new Date().toISOString().split("T")[0]}
-                  onDateChange={(date) => {
+                  onDateChange={async (date) => {
                     setSelectedBusinessDate(date);
                     setShowBusinessCalendar(false);
+                    try {
+                      await AsyncStorage.setItem("selected_business_date", date);
+                      showToast({
+                        type: "success",
+                        message: "Date Saved",
+                        subtitle: `Business date set to ${formatDateToDMY(date)}.`,
+                      });
+                    } catch (err) {
+                      console.error("Failed to auto-save date:", err);
+                    }
                   }}
                   onlyAllowToday={true}
                 />
