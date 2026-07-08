@@ -282,6 +282,12 @@ export default function SalesReport() {
   }, []);
 
   useEffect(() => {
+    if (activeBusinessDate && selectedDate !== activeBusinessDate) {
+      setSelectedDate(activeBusinessDate);
+    }
+  }, [activeBusinessDate, selectedDate]);
+
+  useEffect(() => {
     const saveState = async () => {
       try {
         await AsyncStorage.setItem("sales_selected_filter", selectedFilter);
@@ -344,6 +350,23 @@ export default function SalesReport() {
   const fetchData = async () => {
     try {
       if (sales.length === 0) setLoading(true);
+
+      try {
+        const res = await fetch(`${API_URL}/api/settlement/active-day`);
+        const data = await res.json();
+        if (data.success && data.active && data.startDate) {
+          setActiveBusinessDate(data.startDate);
+          if (selectedDate === todayDate && selectedDate !== data.startDate) {
+            setSelectedDate(data.startDate);
+            return;
+          }
+        } else {
+          setActiveBusinessDate(null);
+        }
+      } catch (err) {
+        console.error("Failed to fetch active business day in fetchData:", err);
+      }
+
       await Promise.all([fetchSales(), fetchSummary(), fetchPaymentMethods()]);
     } catch (error) {
       console.error("Error:", error);
@@ -919,8 +942,9 @@ export default function SalesReport() {
 
     if (selectedFilter === "DAILY") {
       result = sales.filter((s) => {
-        if (!s.SettlementDate) return false;
-        const itemDate = getSingaporeDateString(parseDatabaseDate(s.SettlementDate));
+        const dateToUse = s.BusinessDate || s.SettlementDate;
+        if (!dateToUse) return false;
+        const itemDate = getSingaporeDateString(parseDatabaseDate(dateToUse));
         return itemDate === selectedDate;
       });
     } else if (selectedFilter === "WEEKLY") {
@@ -938,8 +962,9 @@ export default function SalesReport() {
       const endStr = selectedDate;
 
       result = sales.filter((s) => {
-        if (!s.SettlementDate) return false;
-        const saleDateStr = getSingaporeDateString(parseDatabaseDate(s.SettlementDate));
+        const dateToUse = s.BusinessDate || s.SettlementDate;
+        if (!dateToUse) return false;
+        const saleDateStr = getSingaporeDateString(parseDatabaseDate(dateToUse));
         return saleDateStr >= startStr && saleDateStr <= endStr;
       });
     } else if (selectedFilter === "MONTHLY") {
@@ -952,8 +977,9 @@ export default function SalesReport() {
       const endStr = `${parts[0]}-${parts[1]}-${String(lastDay).padStart(2, "0")}`;
 
       result = sales.filter((s) => {
-        if (!s.SettlementDate) return false;
-        const saleDateStr = getSingaporeDateString(parseDatabaseDate(s.SettlementDate));
+        const dateToUse = s.BusinessDate || s.SettlementDate;
+        if (!dateToUse) return false;
+        const saleDateStr = getSingaporeDateString(parseDatabaseDate(dateToUse));
         return saleDateStr >= startStr && saleDateStr <= endStr;
       });
     } else if (selectedFilter === "YEARLY") {
@@ -965,14 +991,16 @@ export default function SalesReport() {
       const endStr = selectedDate;
 
       result = sales.filter((s) => {
-        if (!s.SettlementDate) return false;
-        const saleDateStr = getSingaporeDateString(parseDatabaseDate(s.SettlementDate));
+        const dateToUse = s.BusinessDate || s.SettlementDate;
+        if (!dateToUse) return false;
+        const saleDateStr = getSingaporeDateString(parseDatabaseDate(dateToUse));
         return saleDateStr >= startStr && saleDateStr <= endStr;
       });
     } else if (selectedFilter === "CUSTOM" && rangeStart && rangeEnd) {
       result = sales.filter((s) => {
-        if (!s.SettlementDate) return false;
-        const saleDateStr = getSingaporeDateString(parseDatabaseDate(s.SettlementDate));
+        const dateToUse = s.BusinessDate || s.SettlementDate;
+        if (!dateToUse) return false;
+        const saleDateStr = getSingaporeDateString(parseDatabaseDate(dateToUse));
         return saleDateStr >= rangeStart && saleDateStr <= rangeEnd;
       });
     }

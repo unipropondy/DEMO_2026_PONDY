@@ -2,8 +2,32 @@ const express = require("express");
 const router = express.Router();
 const { authenticateToken } = require("../middleware/auth");
 router.use(authenticateToken);
-const sql = require("mssql");
+
 const { poolPromise } = require("../config/db");
+
+router.use(async (req, res, next) => {
+  try {
+    const pool = await poolPromise;
+    const activeDayRes = await pool.request().query("SELECT TOP 1 StartDate FROM DateEntry ORDER BY CreatedDate DESC");
+    if (activeDayRes.recordset.length > 0) {
+      const activeStartDate = activeDayRes.recordset[0].StartDate;
+      const formattedStartDate = activeStartDate instanceof Date 
+        ? activeStartDate.toISOString().split("T")[0] 
+        : activeStartDate;
+      
+      if (formattedStartDate) {
+        req.query.startDate = formattedStartDate;
+        req.query.endDate = formattedStartDate;
+        req.query.date = formattedStartDate;
+      }
+    }
+  } catch (err) {
+    console.error("Error in sales report active date middleware:", err);
+  }
+  next();
+});
+
+const sql = require("mssql");
 const { runInTransaction } = require("../utils/transactionHelper");
 const { getActiveOrganization } = require("../utils/organizationHelper");
 const { processSplitPayments } = require("../services/payment.service");
@@ -73,11 +97,23 @@ const getReportDateRange = (req) => {
   return { start, end };
 };
 
-const getReportDateWhereSql = (filter = "daily", saleDateColumn = "sh.LastSettlementDate", date = null, startDate = null, endDate = null) => {
-  // If saleDateColumn is sh.LastSettlementDate, use the business start_date with fallback
-  if (saleDateColumn === "sh.LastSettlementDate") {
-    saleDateColumn = "COALESCE(sh.start_date, CAST(sh.LastSettlementDate AS DATE))";
+const resolveBusinessDateColumn = (col) => {
+  const cleanCol = String(col).trim();
+  if (cleanCol.includes("LastSettlementDate")) {
+    const prefix = cleanCol.includes(".") ? cleanCol.split(".")[0] + "." : "";
+    return `${prefix}start_date`;
   }
+  if (cleanCol.includes("ptd.CreatedDate") || cleanCol.includes("ptd.CreatedOn")) {
+    return `ptd.CreatedDate`;
+  }
+  if (cleanCol === "InvoiceDate") {
+    return `start_date`;
+  }
+  return cleanCol;
+};
+
+const getReportDateWhereSql = (filter = "daily", saleDateColumn = "sh.LastSettlementDate", date = null, startDate = null, endDate = null) => {
+  saleDateColumn = resolveBusinessDateColumn(saleDateColumn);
 
   if (String(filter).toLowerCase() === "custom" && startDate && endDate) {
     return getReportDateWhereSqlForRange(startDate, endDate, saleDateColumn);
@@ -100,9 +136,7 @@ const getReportDateWhereSql = (filter = "daily", saleDateColumn = "sh.LastSettle
 };
 
 const getReportDateWhereSqlForRange = (startDateStr, endDateStr, saleDateColumn = "sh.LastSettlementDate") => {
-  if (saleDateColumn === "sh.LastSettlementDate") {
-    saleDateColumn = "COALESCE(sh.start_date, CAST(sh.LastSettlementDate AS DATE))";
-  }
+  saleDateColumn = resolveBusinessDateColumn(saleDateColumn);
   const sgtStart = `CAST('${startDateStr}' AS DATE)`;
   const sgtEnd = `CAST('${endDateStr}' AS DATE)`;
   return `CAST(${saleDateColumn} AS DATE) >= ${sgtStart} AND CAST(${saleDateColumn} AS DATE) <= ${sgtEnd}`;
@@ -209,60 +243,62 @@ router.get("/all", async (req, res) => {
       const cctWhere = getReportDateWhereSqlForRange(startDate, endDate, "cct.CreatedDate");
       queryStr = `
         SELECT * FROM (
-          SELECT 
-            sh.SettlementID, 
-            sh.LastSettlementDate AS SettlementDate, 
-            sh.BillNo AS OrderId, 
-            sh.OrderType,
-            sh.TableNo, 
-            sh.Section, 
-            sh.CashierId, 
-            sh.BillNo, 
-            sh.SER_NAME,
-            ${normalizeReportPayModeSql("sts.PayMode")} as PayMode,
-            ISNULL(sts.SysAmount, sh.SysAmount) as SysAmount,
-            ISNULL(sts.ManualAmount, sh.ManualAmount) as ManualAmount,
-            sh.SubTotal as SubTotal,
-            ISNULL(sh.DiscountAmount, 0) as DiscountAmount,
-            sh.DiscountType as DiscountType,
-            ISNULL(sh.ServiceCharge, 0) as ServiceCharge,
-            ISNULL(sh.TotalTax, 0) as TotalTax,
-            ISNULL(sh.TakeawayCharge, 0) as TakeawayCharge,
-            ISNULL(sts.ReceiptCount, 0) as ReceiptCount,
-            ISNULL(sh.VoidItemQty, 0) as VoidQty,
-            ISNULL(sh.VoidItemAmount, 0) as VoidAmount,
-            sh.IsCancelled,
-            sh.CancellationReason,
-            sh.CancelledDate as CancelledDate,
-            sh.CancelledByUserName,
-            ri.OrderId AS MasterOrderId,
-            ISNULL(ri.TotalDiscountAmount, 0) as TotalDiscountAmount,
-            ISNULL(ri.TotalLineItemDiscountAmount, 0) as TotalLineItemDiscountAmount,
-            sh.RoundedBy as RoundedBy,
-            ISNULL(ri.DiscountPercentage, 0) as DiscountPercentage,
-            ISNULL(cct_sale.OutstandingAmount, 0) AS OutstandingAmount,
-            COALESCE(mm.Name, ccm.Name, mm_sale.Name, ccm_sale.Name) AS CustomerName,
-            sh.GuestName as GuestName,
-            sh.Pax as Pax
-          FROM SettlementHeader sh
-          LEFT JOIN SettlementTotalSales sts ON sh.SettlementID = sts.SettlementID
-          LEFT JOIN RestaurantInvoice ri ON sh.SettlementID = ri.RestaurantBillId
-          LEFT JOIN CustomerCreditTransactions cct_sale ON sh.SettlementID = cct_sale.SettlementId AND cct_sale.TransactionType = 'CREDIT_SALE'
-          LEFT JOIN MemberMaster mm ON sh.MemberId = mm.MemberId
-          LEFT JOIN CreditCustomerMaster ccm ON sh.MemberId = ccm.CustomerId
-          LEFT JOIN MemberMaster mm_sale ON cct_sale.MemberId = mm_sale.MemberId
-          LEFT JOIN CreditCustomerMaster ccm_sale ON cct_sale.MemberId = ccm_sale.CustomerId
-          WHERE ${shWhere}
-
-          UNION ALL
-
-          SELECT 
-            cct.TransactionId AS SettlementID,
-            cct.CreatedDate AS SettlementDate,
-            CASE WHEN mm.MemberId IS NOT NULL THEN 'Member Payment Collected' ELSE 'Credit Payment Collected' END AS OrderId,
-            'LEDGER' AS OrderType,
-            'LEDGER' AS TableNo,
-            COALESCE(mm.Name, m.Name, 'Customer') AS Section,
+           SELECT 
+             sh.SettlementID, 
+             sh.LastSettlementDate AS SettlementDate, 
+             COALESCE(sh.start_date, CAST(sh.LastSettlementDate AS DATE)) AS BusinessDate,
+             sh.BillNo AS OrderId, 
+             sh.OrderType,
+             sh.TableNo, 
+             sh.Section, 
+             sh.CashierId, 
+             sh.BillNo, 
+             sh.SER_NAME,
+             ${normalizeReportPayModeSql("sts.PayMode")} as PayMode,
+             ISNULL(sts.SysAmount, sh.SysAmount) as SysAmount,
+             ISNULL(sts.ManualAmount, sh.ManualAmount) as ManualAmount,
+             sh.SubTotal as SubTotal,
+             ISNULL(sh.DiscountAmount, 0) as DiscountAmount,
+             sh.DiscountType as DiscountType,
+             ISNULL(sh.ServiceCharge, 0) as ServiceCharge,
+             ISNULL(sh.TotalTax, 0) as TotalTax,
+             ISNULL(sh.TakeawayCharge, 0) as TakeawayCharge,
+             ISNULL(sts.ReceiptCount, 0) as ReceiptCount,
+             ISNULL(sh.VoidItemQty, 0) as VoidQty,
+             ISNULL(sh.VoidItemAmount, 0) as VoidAmount,
+             sh.IsCancelled,
+             sh.CancellationReason,
+             sh.CancelledDate as CancelledDate,
+             sh.CancelledByUserName,
+             ri.OrderId AS MasterOrderId,
+             ISNULL(ri.TotalDiscountAmount, 0) as TotalDiscountAmount,
+             ISNULL(ri.TotalLineItemDiscountAmount, 0) as TotalLineItemDiscountAmount,
+             sh.RoundedBy as RoundedBy,
+             ISNULL(ri.DiscountPercentage, 0) as DiscountPercentage,
+             ISNULL(cct_sale.OutstandingAmount, 0) AS OutstandingAmount,
+             COALESCE(mm.Name, ccm.Name, mm_sale.Name, ccm_sale.Name) AS CustomerName,
+             sh.GuestName as GuestName,
+             sh.Pax as Pax
+           FROM SettlementHeader sh
+           LEFT JOIN SettlementTotalSales sts ON sh.SettlementID = sts.SettlementID
+           LEFT JOIN RestaurantInvoice ri ON sh.SettlementID = ri.RestaurantBillId
+           LEFT JOIN CustomerCreditTransactions cct_sale ON sh.SettlementID = cct_sale.SettlementId AND cct_sale.TransactionType = 'CREDIT_SALE'
+           LEFT JOIN MemberMaster mm ON sh.MemberId = mm.MemberId
+           LEFT JOIN CreditCustomerMaster ccm ON sh.MemberId = ccm.CustomerId
+           LEFT JOIN MemberMaster mm_sale ON cct_sale.MemberId = mm_sale.MemberId
+           LEFT JOIN CreditCustomerMaster ccm_sale ON cct_sale.MemberId = ccm_sale.CustomerId
+           WHERE ${shWhere}
+ 
+           UNION ALL
+ 
+           SELECT 
+             cct.TransactionId AS SettlementID,
+             cct.CreatedDate AS SettlementDate,
+             CAST(cct.CreatedDate AS DATE) AS BusinessDate,
+             CASE WHEN mm.MemberId IS NOT NULL THEN 'Member Payment Collected' ELSE 'Credit Payment Collected' END AS OrderId,
+             'LEDGER' AS OrderType,
+             'LEDGER' AS TableNo,
+             COALESCE(mm.Name, m.Name, 'Customer') AS Section,
             CAST(cct.CreatedBy AS VARCHAR(50)) AS CashierId,
             cct.Remarks AS BillNo,
             'Cashier' AS SER_NAME,
@@ -301,59 +337,61 @@ router.get("/all", async (req, res) => {
     } else {
       queryStr = `
         SELECT TOP 200 * FROM (
-          SELECT 
-            sh.SettlementID, 
-            sh.LastSettlementDate AS SettlementDate, 
-            sh.BillNo AS OrderId, 
-            sh.OrderType,
-            sh.TableNo, 
-            sh.Section, 
-            sh.CashierId, 
-            sh.BillNo, 
-            sh.SER_NAME,
-            ${normalizeReportPayModeSql("sts.PayMode")} as PayMode,
-            ISNULL(sts.SysAmount, sh.SysAmount) as SysAmount,
-            ISNULL(sts.ManualAmount, sh.ManualAmount) as ManualAmount,
-            sh.SubTotal as SubTotal,
-            ISNULL(sh.DiscountAmount, 0) as DiscountAmount,
-            sh.DiscountType as DiscountType,
-            ISNULL(sh.ServiceCharge, 0) as ServiceCharge,
-            ISNULL(sh.TotalTax, 0) as TotalTax,
-            ISNULL(sts.ReceiptCount, 0) as ReceiptCount,
-            ISNULL(sh.VoidItemQty, 0) as VoidQty,
-            ISNULL(sh.VoidItemAmount, 0) as VoidAmount,
-            sh.IsCancelled,
-            sh.CancellationReason,
-            sh.CancelledDate as CancelledDate,
-            sh.CancelledByUserName,
-            ri.OrderId AS MasterOrderId,
-            ISNULL(ri.TotalDiscountAmount, 0) as TotalDiscountAmount,
-            ISNULL(ri.TotalLineItemDiscountAmount, 0) as TotalLineItemDiscountAmount,
-            sh.RoundedBy as RoundedBy,
-            ISNULL(ri.DiscountPercentage, 0) as DiscountPercentage,
-            ISNULL(cct_sale.OutstandingAmount, 0) AS OutstandingAmount,
-            COALESCE(mm.Name, ccm.Name, mm_sale.Name, ccm_sale.Name) AS CustomerName,
-            sh.GuestName as GuestName,
-            sh.Pax as Pax
-          FROM SettlementHeader sh
-          LEFT JOIN SettlementTotalSales sts ON sh.SettlementID = sts.SettlementID
-          LEFT JOIN RestaurantInvoice ri ON sh.SettlementID = ri.RestaurantBillId
-          LEFT JOIN CustomerCreditTransactions cct_sale ON sh.SettlementID = cct_sale.SettlementId AND cct_sale.TransactionType = 'CREDIT_SALE'
-          LEFT JOIN MemberMaster mm ON sh.MemberId = mm.MemberId
-          LEFT JOIN CreditCustomerMaster ccm ON sh.MemberId = ccm.CustomerId
-          LEFT JOIN MemberMaster mm_sale ON cct_sale.MemberId = mm_sale.MemberId
-          LEFT JOIN CreditCustomerMaster ccm_sale ON cct_sale.MemberId = ccm_sale.CustomerId
-
-          UNION ALL
-
-          SELECT 
-            cct.TransactionId AS SettlementID,
-            cct.CreatedDate AS SettlementDate,
-            CASE WHEN mm.MemberId IS NOT NULL THEN 'Member Payment Collected' ELSE 'Credit Payment Collected' END AS OrderId,
-            'LEDGER' AS OrderType,
-            'LEDGER' AS TableNo,
-            COALESCE(mm.Name, m.Name, 'Customer') AS Section,
-            CAST(cct.CreatedBy AS VARCHAR(50)) AS CashierId,
+           SELECT 
+             sh.SettlementID, 
+             sh.LastSettlementDate AS SettlementDate, 
+             COALESCE(sh.start_date, CAST(sh.LastSettlementDate AS DATE)) AS BusinessDate,
+             sh.BillNo AS OrderId, 
+             sh.OrderType,
+             sh.TableNo, 
+             sh.Section, 
+             sh.CashierId, 
+             sh.BillNo, 
+             sh.SER_NAME,
+             ${normalizeReportPayModeSql("sts.PayMode")} as PayMode,
+             ISNULL(sts.SysAmount, sh.SysAmount) as SysAmount,
+             ISNULL(sts.ManualAmount, sh.ManualAmount) as ManualAmount,
+             sh.SubTotal as SubTotal,
+             ISNULL(sh.DiscountAmount, 0) as DiscountAmount,
+             sh.DiscountType as DiscountType,
+             ISNULL(sh.ServiceCharge, 0) as ServiceCharge,
+             ISNULL(sh.TotalTax, 0) as TotalTax,
+             ISNULL(sts.ReceiptCount, 0) as ReceiptCount,
+             ISNULL(sh.VoidItemQty, 0) as VoidQty,
+             ISNULL(sh.VoidItemAmount, 0) as VoidAmount,
+             sh.IsCancelled,
+             sh.CancellationReason,
+             sh.CancelledDate as CancelledDate,
+             sh.CancelledByUserName,
+             ri.OrderId AS MasterOrderId,
+             ISNULL(ri.TotalDiscountAmount, 0) as TotalDiscountAmount,
+             ISNULL(ri.TotalLineItemDiscountAmount, 0) as TotalLineItemDiscountAmount,
+             sh.RoundedBy as RoundedBy,
+             ISNULL(ri.DiscountPercentage, 0) as DiscountPercentage,
+             ISNULL(cct_sale.OutstandingAmount, 0) AS OutstandingAmount,
+             COALESCE(mm.Name, ccm.Name, mm_sale.Name, ccm_sale.Name) AS CustomerName,
+             sh.GuestName as GuestName,
+             sh.Pax as Pax
+           FROM SettlementHeader sh
+           LEFT JOIN SettlementTotalSales sts ON sh.SettlementID = sts.SettlementID
+           LEFT JOIN RestaurantInvoice ri ON sh.SettlementID = ri.RestaurantBillId
+           LEFT JOIN CustomerCreditTransactions cct_sale ON sh.SettlementID = cct_sale.SettlementId AND cct_sale.TransactionType = 'CREDIT_SALE'
+           LEFT JOIN MemberMaster mm ON sh.MemberId = mm.MemberId
+           LEFT JOIN CreditCustomerMaster ccm ON sh.MemberId = ccm.CustomerId
+           LEFT JOIN MemberMaster mm_sale ON cct_sale.MemberId = mm_sale.MemberId
+           LEFT JOIN CreditCustomerMaster ccm_sale ON cct_sale.MemberId = ccm_sale.CustomerId
+ 
+           UNION ALL
+ 
+           SELECT 
+             cct.TransactionId AS SettlementID,
+             cct.CreatedDate AS SettlementDate,
+             CAST(cct.CreatedDate AS DATE) AS BusinessDate,
+             CASE WHEN mm.MemberId IS NOT NULL THEN 'Member Payment Collected' ELSE 'Credit Payment Collected' END AS OrderId,
+             'LEDGER' AS OrderType,
+             'LEDGER' AS TableNo,
+             COALESCE(mm.Name, m.Name, 'Customer') AS Section,
+             CAST(cct.CreatedBy AS VARCHAR(50)) AS CashierId,
             cct.Remarks AS BillNo,
             'Cashier' AS SER_NAME,
             cct.PaymentMethod AS PayMode,
@@ -729,13 +767,13 @@ router.get("/category", async (req, res) => {
             SUM(CAST(ISNULL(rod.TotalDetailLineAmount, 0) AS decimal(18, 2))) AS totalAmount
           FROM RestaurantOrderDetail rod
           INNER JOIN (
-            SELECT OrderId, RestaurantBillId, InvoiceDate 
+            SELECT OrderId, RestaurantBillId, InvoiceDate, start_date 
             FROM (
-              SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY CreatedOn DESC) as rn
+              SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, start_date, ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY CreatedOn DESC) as rn
               FROM (
-                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoice WHERE StatusCode = 5
+                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, start_date FROM RestaurantInvoice WHERE StatusCode = 5
                 UNION ALL
-                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoicecur WHERE StatusCode = 5
+                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, start_date FROM RestaurantInvoicecur WHERE StatusCode = 5
               ) CombinedInvoices
             ) DeduplicatedInvoices
             WHERE rn = 1
@@ -743,7 +781,7 @@ router.get("/category", async (req, res) => {
           LEFT JOIN DishMaster d ON rod.DishId = d.DishId
           LEFT JOIN DishGroupMaster dg ON d.DishGroupId = dg.DishGroupId
           LEFT JOIN CategoryMaster cm ON dg.CategoryId = cm.CategoryId
-          WHERE ${legacyDateWhereSql.replace(/InvoiceDate/g, 'ri.InvoiceDate')}
+          WHERE ${legacyDateWhereSql.replace(/start_date/g, 'ri.start_date')}
             AND NOT EXISTS (
               SELECT 1 FROM SettlementHeader sh_dup 
               WHERE sh_dup.SettlementID = ri.RestaurantBillId
@@ -761,7 +799,7 @@ router.get("/category", async (req, res) => {
           LEFT JOIN DishMaster d ON rod.DishId = d.DishId
           LEFT JOIN DishGroupMaster dg ON d.DishGroupId = dg.DishGroupId
           LEFT JOIN CategoryMaster cm ON dg.CategoryId = cm.CategoryId
-          WHERE ${appDateWhereSql.replace(/sh\.OrderDate|sh\.LastSettlementDate/g, 'ro.OrderDateTime')}
+          WHERE ${appDateWhereSql.replace(/sh\.start_date/g, 'ro.start_date')}
             AND ISNULL(ro.StatusCode, 0) = 3
             AND NOT EXISTS (
               SELECT 1 FROM SettlementHeader sh_dup 
@@ -830,13 +868,13 @@ router.get("/dish", async (req, res) => {
             SUM(CAST(ISNULL(rod.TotalDetailLineAmount, 0) AS decimal(18, 2))) AS totalAmount
           FROM RestaurantOrderDetail rod
           INNER JOIN (
-            SELECT OrderId, RestaurantBillId, InvoiceDate 
+            SELECT OrderId, RestaurantBillId, InvoiceDate, start_date 
             FROM (
-              SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY CreatedOn DESC) as rn
+              SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, start_date, ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY CreatedOn DESC) as rn
               FROM (
-                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoice WHERE StatusCode = 5
+                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, start_date FROM RestaurantInvoice WHERE StatusCode = 5
                 UNION ALL
-                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn FROM RestaurantInvoicecur WHERE StatusCode = 5
+                SELECT OrderId, RestaurantBillId, InvoiceDate, CreatedOn, start_date FROM RestaurantInvoicecur WHERE StatusCode = 5
               ) CombinedInvoices
             ) DeduplicatedInvoices
             WHERE rn = 1
@@ -844,7 +882,7 @@ router.get("/dish", async (req, res) => {
           LEFT JOIN DishMaster d ON rod.DishId = d.DishId
           LEFT JOIN DishGroupMaster dg ON d.DishGroupId = dg.DishGroupId
           LEFT JOIN CategoryMaster cm ON dg.CategoryId = cm.CategoryId
-          WHERE ${legacyDateWhereSql.replace(/InvoiceDate/g, 'ri.InvoiceDate')}
+          WHERE ${legacyDateWhereSql.replace(/start_date/g, 'ri.start_date')}
             AND NOT EXISTS (
               SELECT 1 FROM SettlementHeader sh_dup 
               WHERE sh_dup.SettlementID = ri.RestaurantBillId
@@ -867,7 +905,7 @@ router.get("/dish", async (req, res) => {
           LEFT JOIN DishMaster d ON rod.DishId = d.DishId
           LEFT JOIN DishGroupMaster dg ON d.DishGroupId = dg.DishGroupId
           LEFT JOIN CategoryMaster cm ON dg.CategoryId = cm.CategoryId
-          WHERE ${appDateWhereSql.replace(/sh\.OrderDate|sh\.LastSettlementDate/g, 'ro.OrderDateTime')}
+          WHERE ${appDateWhereSql.replace(/sh\.start_date/g, 'ro.start_date')}
             AND ISNULL(ro.StatusCode, 0) = 3
             AND NOT EXISTS (
               SELECT 1 FROM SettlementHeader sh_dup 
