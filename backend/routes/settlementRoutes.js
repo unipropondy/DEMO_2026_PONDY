@@ -802,18 +802,7 @@ router.post('/artist-cashbox', authenticateToken, async (req, res) => {
       const activeStartDate = activeDayRes.recordset[0].StartDate;
       const formattedStartDate = activeStartDate instanceof Date ? activeStartDate.toISOString().split("T")[0] : activeStartDate;
 
-      console.log('[CASHBOX] STEP 1: Inserting ArtistCashBox...');
-      // 1. Insert into ArtistCashBox
-      const result = await transaction.request()
-        .input('ArtistName', sql.VarChar, ArtistName)
-        .input('Amount', sql.Decimal(18, 2), Amount)
-        .input('startDate', sql.Date, formattedStartDate)
-        .query(`
-          INSERT INTO ArtistCashBox
-          (ArtistName, Amount, SettlementDate, CreatedDate, start_date)
-          OUTPUT inserted.*
-          VALUES (@ArtistName, @Amount, GETDATE(), GETDATE(), @startDate)
-        `);
+      console.log('[CASHBOX] STEP 1: Skip ArtistCashBox table insert...');
       console.log('[CASHBOX] STEP 1 OK');
 
       console.log('[CASHBOX] STEP 2: Looking up DishMaster...');
@@ -954,7 +943,7 @@ router.post('/artist-cashbox', authenticateToken, async (req, res) => {
 
       res.json({
         success: true,
-        data: result.recordset[0]
+        settlementId
       });
 
     } catch (innerErr) {
