@@ -29,7 +29,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { useToast } from "../../components/Toast";
-import { formatToSingaporeTime } from "../../utils/timezoneHelper";
+import { formatToSingaporeTime, getSingaporeDateString } from "../../utils/timezoneHelper";
 
 import StoreSettingsModal from "@/components/payment/StoreSettingsModal";
 import GeneralSettingsModal from "@/components/settings/GeneralSettingsModal";
@@ -2579,7 +2579,7 @@ export default function Category() {
                   </TouchableOpacity>
                 </View>
                 <CalendarPicker
-                  selectedDate={selectedBusinessDate || new Date().toISOString().split("T")[0]}
+                  selectedDate={selectedBusinessDate || getSingaporeDateString()}
                   onDateChange={async (date) => {
                     setSelectedBusinessDate(date);
                     setShowBusinessCalendar(false);

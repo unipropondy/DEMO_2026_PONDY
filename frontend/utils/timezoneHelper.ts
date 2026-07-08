@@ -2,10 +2,10 @@
  * Timezone utilities to enforce Asia/Singapore (SGT, UTC+8) timezone in the frontend.
  */
 
-// Helper to shift a Date to Singapore Time (UTC+8) minus 2 hours (UTC+6) so we can format it as UTC
+// Helper to shift a Date to Singapore Time (UTC+8) so we can format it as UTC
 function toSgtDate(date: Date): Date {
-  // Enforce 2 hours before SGT (UTC+6)
-  return new Date(date.getTime() + 6 * 60 * 60 * 1000);
+  // SGT is UTC+8
+  return new Date(date.getTime() + 8 * 60 * 60 * 1000);
 }
 
 export function getSingaporeDateString(date: Date = new Date()): string {
@@ -73,13 +73,13 @@ export function parseDatabaseDate(dateInput: Date | string | number): Date {
 
   let str = String(dateInput).trim();
   if (str.endsWith('Z')) {
-    str = str.slice(0, -1) + '+06:00';
+    str = str.slice(0, -1) + '+08:00';
   } else if (str.endsWith('+00:00')) {
-    str = str.slice(0, -6) + '+06:00';
+    str = str.slice(0, -6) + '+08:00';
   } else if (!str.includes('+') && !str.includes('-') && str.includes('T')) {
-    str = str + '+06:00';
+    str = str + '+08:00';
   } else if (!str.includes('T') && str.includes(' ')) {
-    str = str.replace(' ', 'T') + '+06:00';
+    str = str.replace(' ', 'T') + '+08:00';
   }
 
   const parsed = new Date(str);
