@@ -1995,7 +1995,29 @@ export default function Category() {
                 <Text style={styles.menuItemText}>Cash Drawer</Text>
               </TouchableOpacity>
 
-
+              {canAccessDayEnd() && (
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setIsMenuVisible(false);
+                    router.push("/day-end");
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.menuIconContainer,
+                      { backgroundColor: Theme.warning + "10" },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="calendar-clock"
+                      size={18}
+                      color={Theme.warning}
+                    />
+                  </View>
+                  <Text style={styles.menuItemText}>Day End</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Settings Dropdown */}
               {(canAccessStoreSettings() || canAccessReceiptSettings()) && (
