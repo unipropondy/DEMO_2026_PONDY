@@ -738,8 +738,8 @@ const [paymentMessage, setPaymentMessage] = useState("");
     if (isLedgerCollection) return 0;
     if (!discount?.applied) return 0;
     if (discount.type === "percentage")
-      return (subtotal * discount.value) / 100;
-    return splitItems ? 0 : discount.value;
+      return Math.min((subtotal * discount.value) / 100, subtotal);
+    return splitItems ? 0 : Math.min(discount.value, subtotal);
   }, [discount, subtotal, splitItems, isLedgerCollection]);
 
   // Service Charge & GST: SC on net, GST on (net + SC)

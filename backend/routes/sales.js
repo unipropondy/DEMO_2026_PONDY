@@ -2070,6 +2070,20 @@ router.post("/save", async (req, res) => {
         }
       }
 
+      // 🆕 PROMO CODE AMOUNT DEDUCTION
+      if (discountRemarks && discountRemarks.startsWith("Promo:") && orderDiscountAmount > 0) {
+        const promoCode = discountRemarks.substring(6).trim();
+        console.log(`[SAVE SALE] Deducting Promo Code amount for code: ${promoCode}, Amount: ${orderDiscountAmount}`);
+        await transaction.request()
+          .input("PromoCode", sql.NVarChar(100), promoCode)
+          .input("DeductAmount", sql.Decimal(18, 2), orderDiscountAmount)
+          .query(`
+            UPDATE MemberMaster 
+            SET Promoamount = CASE WHEN Promoamount - @DeductAmount < 0 THEN 0 ELSE Promoamount - @DeductAmount END 
+            WHERE Promocode = @PromoCode AND IsActive = 1
+          `);
+      }
+
       // 🚀 PROFESSIONAL ARCHIVE: Move from Cur to History (Only run if not split, or if split has no remaining items)
       if (displayOrderId && (!isSplit || !hasRemaining)) {
         try {
@@ -2117,7 +2131,7 @@ router.post("/save", async (req, res) => {
                   TakeawayCharge = @TakeawayCharge,
                   isGuestMeal = ISNULL((SELECT TOP 1 isGuestMeal FROM [dbo].[Discount] WHERE DiscountId = @DiscountId), 0)
               WHERE OrderNumber = @orderNo;
- 
+
               -- Move Header (History) - For Parent Order
               IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('RestaurantOrder') AND name = 'TotalAmount')
               BEGIN
