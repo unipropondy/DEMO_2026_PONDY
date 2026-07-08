@@ -438,6 +438,15 @@ export default function DayEndScreen() {
             </View>
           </View>
 
+          {/* Day End Trigger Button */}
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: "#ef4444", marginBottom: 20 }]}
+            onPress={handleDayEnd}
+          >
+            <Ionicons name="power-outline" size={20} color="#fff" />
+            <Text style={styles.actionBtnText}>Perform Day End</Text>
+          </TouchableOpacity>
+
           <View style={{ height: 40 }} />
         </ScrollView>
       </SafeAreaView>
