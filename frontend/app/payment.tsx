@@ -695,10 +695,13 @@ const [paymentMessage, setPaymentMessage] = useState("");
         const discAmt = Number(item.discountAmount ?? item.discount ?? 0);
         const discType = item.discountType || "percentage";
         if (discAmt > 0) {
-          if (discType === "percentage") {
-            itemDiscount = baseTotal * (discAmt / 100);
+          const isCombo = item.isCombo === true || String(item.isCombo) === "1" || item.isCombo === 1;
+          const discountBasis = isCombo ? (item.basePrice ?? item.price ?? 0) : (item.price ?? 0);
+          const isFixed = discType === "fixed" || (discType === "percentage" && !item.discount && item.discountAmount > 0);
+          if (isFixed) {
+            itemDiscount = Math.min(discAmt, discountBasis) * (item.qty || 0);
           } else {
-            itemDiscount = discAmt * (item.qty || 0);
+            itemDiscount = baseTotal * (discAmt / 100);
           }
         }
         const itemSubtotal = baseTotal - itemDiscount;
@@ -1977,14 +1980,13 @@ const confirmPayment = async () => {
     const baseTotal = (item.price || 0) * item.qty;
     const discountVal = Number(item.discountAmount ?? item.discount ?? 0);
     const discountType = item.discountType || "percentage";
+    const isCombo = item.isCombo === true || String(item.isCombo) === "1" || item.isCombo === 1;
+    const discountBasis = isCombo ? (item.basePrice ?? item.price ?? 0) : (item.price ?? 0);
+    const isFixed = discountType === "fixed" || (discountType === "percentage" && !item.discount && item.discountAmount > 0);
 
-    const itemDiscount =
-      discountType === "fixed" ||
-      (discountType === "percentage" &&
-        !item.discount &&
-        item.discountAmount > 0)
-        ? discountVal * item.qty
-        : baseTotal * (discountVal / 100);
+    const itemDiscount = isFixed
+      ? Math.min(discountVal, discountBasis) * item.qty
+      : baseTotal * (discountVal / 100);
 
     const finalPrice = baseTotal - itemDiscount;
 
@@ -2089,11 +2091,8 @@ const confirmPayment = async () => {
               </Text>
               <View style={styles.itemDiscountBadge}>
                 <Text style={styles.itemDiscountBadgeText}>
-                  {discountType === "fixed" ||
-                  (discountType === "percentage" &&
-                    !item.discount &&
-                    item.discountAmount > 0)
-                    ? `-${currencySymbol}${discountVal.toFixed(2)}`
+                  {isFixed
+                    ? `-${currencySymbol}${Math.min(discountVal, discountBasis).toFixed(2)}`
                     : `-${discountVal}%`}
                 </Text>
               </View>

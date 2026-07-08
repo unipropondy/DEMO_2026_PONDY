@@ -169,6 +169,7 @@ export default function SalesReport() {
   const [summary, setSummary] = useState<any>(null);
   const todayDate = getSingaporeDateString();
   const [selectedDate, setSelectedDate] = useState(todayDate);
+  const [activeBusinessDate, setActiveBusinessDate] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterType>("DAILY");
   const [, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -236,6 +237,12 @@ export default function SalesReport() {
         const savedTypes = await AsyncStorage.getItem("sales_order_types");
         const savedSort = await AsyncStorage.getItem("sales_sort_order");
         const savedDownloadFilter = await AsyncStorage.getItem("sales_download_filter");
+        const savedBusinessDate = await AsyncStorage.getItem("selected_business_date");
+
+        if (savedBusinessDate) {
+          setSelectedDate(savedBusinessDate);
+          setActiveBusinessDate(savedBusinessDate);
+        }
 
         if (
           savedFilter &&
@@ -252,8 +259,22 @@ export default function SalesReport() {
         if (savedModes) setActivePaymentModes(JSON.parse(savedModes));
         if (savedTypes) setActiveOrderTypes(JSON.parse(savedTypes));
         if (savedSort) setSortOrder(savedSort as "NEWEST" | "HIGHEST");
-      } catch (e) {
 
+        try {
+          const res = await fetch(`${API_URL}/api/settlement/active-day`);
+          const data = await res.json();
+          if (data.success && data.active && data.startDate) {
+            setSelectedDate(data.startDate);
+            setActiveBusinessDate(data.startDate);
+            await AsyncStorage.setItem("selected_business_date", data.startDate);
+          } else {
+            setActiveBusinessDate(null);
+            await AsyncStorage.removeItem("selected_business_date");
+          }
+        } catch (err) {
+          console.error("Failed to fetch active business day:", err);
+        }
+      } catch (e) {
         console.error("Load state error:", e);
       }
     };
@@ -3942,13 +3963,13 @@ export default function SalesReport() {
                   />
                   <TouchableOpacity
                     onPress={() => {
-                      const today = new Date().toISOString().split("T")[0];
+                      const defaultDate = activeBusinessDate || new Date().toISOString().split("T")[0];
                       if (pickerMode === "SINGLE") {
-                        setSelectedDate(today);
+                        setSelectedDate(defaultDate);
                       } else if (pickerMode === "START") {
-                        setRangeStart(today);
+                        setRangeStart(defaultDate);
                       } else {
-                        setRangeEnd(today);
+                        setRangeEnd(defaultDate);
                       }
                       setShowDatePicker(false);
                     }}

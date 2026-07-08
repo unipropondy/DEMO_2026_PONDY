@@ -74,8 +74,11 @@ const getReportDateRange = (req) => {
 };
 
 const getReportDateWhereSql = (filter = "daily", saleDateColumn = "sh.LastSettlementDate", date = null, startDate = null, endDate = null) => {
-  // Completely for Singapore timezone (SGT, UTC+8).
-  // Database stores local SGT timestamps natively (via GETDATE() or local server time).
+  // If saleDateColumn is sh.LastSettlementDate, use the business start_date with fallback
+  if (saleDateColumn === "sh.LastSettlementDate") {
+    saleDateColumn = "COALESCE(sh.start_date, CAST(sh.LastSettlementDate AS DATE))";
+  }
+
   if (String(filter).toLowerCase() === "custom" && startDate && endDate) {
     return getReportDateWhereSqlForRange(startDate, endDate, saleDateColumn);
   }
@@ -85,22 +88,24 @@ const getReportDateWhereSql = (filter = "daily", saleDateColumn = "sh.LastSettle
 
   switch (String(filter).toLowerCase()) {
     case "weekly":
-      return `${saleDateColumn} >= DATEADD(DAY, -6, CAST(${safeTargetDate} AS DATETIME)) AND ${saleDateColumn} < DATEADD(DAY, 1, CAST(${safeTargetDate} AS DATETIME))`;
+      return `CAST(${saleDateColumn} AS DATE) >= DATEADD(DAY, -6, ${safeTargetDate}) AND CAST(${saleDateColumn} AS DATE) <= ${safeTargetDate}`;
     case "monthly":
-      return `MONTH(CAST(${saleDateColumn} AS DATETIME)) = MONTH(${safeTargetDate}) AND YEAR(CAST(${saleDateColumn} AS DATETIME)) = YEAR(${safeTargetDate})`;
+      return `MONTH(CAST(${saleDateColumn} AS DATE)) = MONTH(${safeTargetDate}) AND YEAR(CAST(${saleDateColumn} AS DATE)) = YEAR(${safeTargetDate})`;
     case "yearly":
-      return `${saleDateColumn} >= DATEADD(YEAR, -1, CAST(${safeTargetDate} AS DATETIME)) AND ${saleDateColumn} < DATEADD(DAY, 1, CAST(${safeTargetDate} AS DATETIME))`;
+      return `CAST(${saleDateColumn} AS DATE) >= DATEADD(YEAR, -1, ${safeTargetDate}) AND CAST(${saleDateColumn} AS DATE) <= ${safeTargetDate}`;
     case "daily":
     default:
-      const sgtStart = `CAST(${safeTargetDate} AS DATETIME)`;
-      return `${saleDateColumn} >= ${sgtStart} AND ${saleDateColumn} < DATEADD(DAY, 1, ${sgtStart})`;
+      return `CAST(${saleDateColumn} AS DATE) = ${safeTargetDate}`;
   }
 };
 
 const getReportDateWhereSqlForRange = (startDateStr, endDateStr, saleDateColumn = "sh.LastSettlementDate") => {
-  const sgtStart = `CAST('${startDateStr}' AS DATETIME)`;
-  const sgtEnd = `DATEADD(DAY, 1, CAST('${endDateStr}' AS DATETIME))`;
-  return `${saleDateColumn} >= ${sgtStart} AND ${saleDateColumn} < ${sgtEnd}`;
+  if (saleDateColumn === "sh.LastSettlementDate") {
+    saleDateColumn = "COALESCE(sh.start_date, CAST(sh.LastSettlementDate AS DATE))";
+  }
+  const sgtStart = `CAST('${startDateStr}' AS DATE)`;
+  const sgtEnd = `CAST('${endDateStr}' AS DATE)`;
+  return `CAST(${saleDateColumn} AS DATE) >= ${sgtStart} AND CAST(${saleDateColumn} AS DATE) <= ${sgtEnd}`;
 };
 
 const normalizeReportFilter = (filter = "daily") => {

@@ -447,7 +447,10 @@ class SunmiPrinterService {
         const discAmt = Number(item.discountAmount ?? item.discount ?? 0);
         if (discAmt > 0) {
           const discType = item.discountType || "percentage";
-          const discStr = discType === "percentage" ? `-${discAmt}%` : `-${symbol}${discAmt.toFixed(2)}`;
+          const isCombo = item.isCombo === true || String(item.isCombo) === "1" || item.isCombo === 1;
+          const discountBasis = isCombo ? (item.basePrice ?? item.price ?? 0) : (item.price ?? 0);
+          const effectiveDisc = discType === "percentage" ? discAmt : Math.min(discAmt, discountBasis);
+          const discStr = discType === "percentage" ? `-${discAmt}%` : `-${symbol}${effectiveDisc.toFixed(2)}`;
           await SunmiModule.printText(formatter.left(`    Discount: ${discStr}`));
         }
       }

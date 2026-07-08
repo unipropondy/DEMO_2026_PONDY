@@ -23,12 +23,8 @@ async function fetchFullReportData(startDateStr, endDateStr, pool) {
   const companySettings = await getCompanySettings();
 
   // 1. Fetch combined sales list (same logic as /all endpoint)
-  // Note: sh.LastSettlementDate in database stores local SGT timestamps natively.
-  // We use the same date range format: LastSettlementDate >= start AND LastSettlementDate < end_day_plus_1
-  const sgtStart = `CAST('${startDateStr}' AS DATETIME)`;
-  const sgtEnd = `DATEADD(DAY, 1, CAST('${endDateStr}' AS DATETIME))`;
-  const shWhere = `sh.LastSettlementDate >= ${sgtStart} AND sh.LastSettlementDate < ${sgtEnd}`;
-  const cctWhere = `cct.CreatedDate >= ${sgtStart} AND cct.CreatedDate < ${sgtEnd}`;
+  const shWhere = `CAST(COALESCE(sh.start_date, CAST(sh.LastSettlementDate AS DATE)) AS DATE) >= CAST('${startDateStr}' AS DATE) AND CAST(COALESCE(sh.start_date, CAST(sh.LastSettlementDate AS DATE)) AS DATE) <= CAST('${endDateStr}' AS DATE)`;
+  const cctWhere = `CAST(cct.CreatedDate AS DATE) >= CAST('${startDateStr}' AS DATE) AND CAST(cct.CreatedDate AS DATE) <= CAST('${endDateStr}' AS DATE)`;
 
   const salesQuery = `
     SELECT 
