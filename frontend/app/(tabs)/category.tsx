@@ -1228,7 +1228,7 @@ export default function Category() {
 
       await proceedWithTable(item, tableData);
     },
-    [activeTab, router, isWaiter, enableGuestDetailsPopup, selectedBusinessDate],
+    [activeTab, router, isWaiter, enableGuestDetailsPopup, selectedBusinessDate, isDayStarted],
   );
 
   const proceedWithTable = async (item: TableItem, tableData: any) => {
