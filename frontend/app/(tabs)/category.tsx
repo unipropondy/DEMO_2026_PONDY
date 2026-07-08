@@ -17,10 +17,13 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   useWindowDimensions,
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import CalendarPicker from "@/components/CalendarPicker";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -424,6 +427,59 @@ export default function Category() {
   const [guestNameInput, setGuestNameInput] = useState("");
   const [guestPaxInput, setGuestPaxInput] = useState("");
   const [isSavingGuest, setIsSavingGuest] = useState(false);
+  const [selectedBusinessDate, setSelectedBusinessDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [showBusinessCalendar, setShowBusinessCalendar] = useState(false);
+
+  useEffect(() => {
+    const loadBusinessDate = async () => {
+      try {
+        const savedDate = await AsyncStorage.getItem("selected_business_date");
+        if (savedDate) {
+          setSelectedBusinessDate(savedDate);
+        } else {
+          const today = new Date().toISOString().split("T")[0];
+          setSelectedBusinessDate(today);
+          await AsyncStorage.setItem("selected_business_date", today);
+        }
+      } catch (err) {
+        console.error("Failed to load business date:", err);
+      }
+    };
+    loadBusinessDate();
+  }, []);
+
+  const handleSaveBusinessDate = async () => {
+    if (!selectedBusinessDate) {
+      showToast({
+        type: "warning",
+        message: "No Date Selected",
+        subtitle: "Please select a date from the calendar first.",
+      });
+      return;
+    }
+    try {
+      await AsyncStorage.setItem("selected_business_date", selectedBusinessDate);
+      showToast({
+        type: "success",
+        message: "Date Saved",
+        subtitle: `Business date set to ${formatDateToDMY(selectedBusinessDate)}.`,
+      });
+    } catch (err) {
+      console.error("Failed to save business date:", err);
+      showToast({
+        type: "error",
+        message: "Save Failed",
+        subtitle: "Could not save the business date.",
+      });
+    }
+  };
+
+  const formatDateToDMY = (dateStr: string) => {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-");
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  };
 
   // Removed global 'tables' selector for performance
   const getLockedName = useTableStatusStore((s: any) => s.getLockedName);
@@ -1023,6 +1079,15 @@ export default function Category() {
 
   const handleTablePress = React.useCallback(
     async (item: TableItem, tableData: any, isCheckoutAction?: boolean) => {
+      if (!selectedBusinessDate) {
+        showToast({
+          type: "warning",
+          message: "Date Not Set",
+          subtitle: "Please select and save the business date first.",
+        });
+        return;
+      }
+
       // 🌹 PAID QR TABLE: Block entry — table is paid and waiting for kitchen to serve
       const tablePaymentStatus = (tableData as any)?.paymentStatus !== undefined
         ? Number((tableData as any).paymentStatus)
@@ -1126,7 +1191,7 @@ export default function Category() {
 
       await proceedWithTable(item, tableData);
     },
-    [activeTab, router, isWaiter, enableGuestDetailsPopup],
+    [activeTab, router, isWaiter, enableGuestDetailsPopup, selectedBusinessDate],
   );
 
   const proceedWithTable = async (item: TableItem, tableData: any) => {
@@ -1406,6 +1471,45 @@ export default function Category() {
             })}
           </View>
         </ScrollView>
+
+        {/* DATE PICKER & SAVE BUTTON */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginHorizontal: 8 }}>
+          <TouchableOpacity
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: Theme.bgInput || "#FFF",
+              borderWidth: 1,
+              borderColor: Theme.border,
+              borderRadius: 8,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              gap: 8,
+            }}
+            onPress={() => setShowBusinessCalendar(true)}
+          >
+            <Text style={{ fontFamily: Fonts.medium, fontSize: 14, color: selectedBusinessDate ? Theme.textPrimary : Theme.textMuted }}>
+              {selectedBusinessDate ? formatDateToDMY(selectedBusinessDate) : "dd-mm-yyyy"}
+            </Text>
+            <Ionicons name="calendar-outline" size={16} color={Theme.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              backgroundColor: Theme.primary || "#fd7e14",
+              borderRadius: 8,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+            onPress={handleSaveBusinessDate}
+          >
+            <Text style={{ fontFamily: Fonts.bold, fontSize: 14, color: "#fff" }}>
+              Save
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* RIGHT — Action Buttons */}
         <View style={[styles.navRightGroup, { gap: isTablet ? 8 : 6 }]}>
@@ -2393,6 +2497,64 @@ export default function Category() {
           <Ionicons name="sparkles" size={24} color="#fff" />
         </TouchableOpacity>
       )}
+
+      {/* Calendar Modal for Business Date */}
+      <Modal
+        visible={showBusinessCalendar}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowBusinessCalendar(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowBusinessCalendar(false)}>
+          <View style={styles.centerOverlay}>
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: Theme.bgCard,
+                  padding: 20,
+                  borderRadius: Theme.radiusLg,
+                  width: 350,
+                  elevation: 10,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 12,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 15,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontFamily: Fonts.bold,
+                      color: Theme.textPrimary,
+                    }}
+                  >
+                    Select Business Date
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowBusinessCalendar(false)}>
+                    <Ionicons name="close" size={24} color={Theme.textPrimary} />
+                  </TouchableOpacity>
+                </View>
+                <CalendarPicker
+                  selectedDate={selectedBusinessDate || new Date().toISOString().split("T")[0]}
+                  onDateChange={(date) => {
+                    setSelectedBusinessDate(date);
+                    setShowBusinessCalendar(false);
+                  }}
+                  onlyAllowToday={true}
+                />
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 }
