@@ -610,7 +610,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#EAECEE",
     borderRadius: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "center",
@@ -633,6 +633,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     color: "#2C3E50",
     textAlign: "center",
+    paddingHorizontal: 12,
   },
   optionSurcharge: {
     fontSize: 11,
@@ -650,8 +651,9 @@ const styles = StyleSheet.create({
   },
   checkmarkWrap: {
     position: "absolute",
-    top: 6,
-    right: 6,
+    top: -9,
+    right: -9,
+    zIndex: 10,
   },
   footer: {
     marginTop: 15,
