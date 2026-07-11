@@ -9,12 +9,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { API_URL } from "../constants/Config";
 import { Fonts } from "../constants/Fonts";
 import { Theme } from "../constants/theme";
-import { API_URL } from "../constants/Config";
-import { addToCartGlobal } from "../stores/cartStore";
 import { useAuthStore } from "../stores/authStore";
-
+import { addToCartGlobal } from "../stores/cartStore";
 
 interface ComboOption {
   mappingId: string;
@@ -64,7 +63,7 @@ export default function ComboCustomizer({
   const [selections, setSelections] = useState<Record<string, string[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [dishModifiers, setDishModifiers] = useState<any[]>([]);
-  const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([]);
+  const [selectedModifierQuantities, setSelectedModifierQuantities] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (visible && dish) {
@@ -74,7 +73,7 @@ export default function ComboCustomizer({
       setSelections({});
       setError(null);
       setDishModifiers([]);
-      setSelectedModifierIds([]);
+      setSelectedModifierQuantities({});
     }
   }, [visible, dish?.DishId]);
 
@@ -83,17 +82,17 @@ export default function ComboCustomizer({
     setLoading(true);
     setError(null);
     setDishModifiers([]);
-    setSelectedModifierIds([]);
+    setSelectedModifierQuantities({});
     try {
       const token = useAuthStore.getState().token;
-      
+
       const [res, modRes] = await Promise.all([
         fetch(`${API_URL}/api/combo/config/${dish.DishId}`, {
           headers: {
-            ...(token ? { "Authorization": `Bearer ${token}` } : {})
-          }
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
         }),
-        fetch(`${API_URL}/api/menu/modifiers/${dish.DishId}`).catch(() => null)
+        fetch(`${API_URL}/api/menu/modifiers/${dish.DishId}`).catch(() => null),
       ]);
 
       if (modRes && modRes.ok) {
@@ -108,13 +107,23 @@ export default function ComboCustomizer({
       if (payload.success && payload.data) {
         const rawGroups = payload.data.groups || [];
         const normalizedGroups = rawGroups.map((g: any) => {
-          const parseBool = (v: any) => v === true || v === 1 || String(v) === "1" || String(v) === "true";
-          const isMulti = g.isMultiSelect !== undefined ? parseBool(g.isMultiSelect) : parseBool(g.IsMultiSelect);
-          let maxSelect = g.maxSelection !== undefined ? Number(g.maxSelection) : Number(g.MaxSelection || 1);
+          const parseBool = (v: any) =>
+            v === true || v === 1 || String(v) === "1" || String(v) === "true";
+          const isMulti =
+            g.isMultiSelect !== undefined
+              ? parseBool(g.isMultiSelect)
+              : parseBool(g.IsMultiSelect);
+          let maxSelect =
+            g.maxSelection !== undefined
+              ? Number(g.maxSelection)
+              : Number(g.MaxSelection || 1);
           if (isMulti && maxSelect <= 1) {
             maxSelect = 999;
           }
-          const minSelect = g.minSelection !== undefined ? Number(g.minSelection) : Number(g.MinSelection || 0);
+          const minSelect =
+            g.minSelection !== undefined
+              ? Number(g.minSelection)
+              : Number(g.MinSelection || 0);
           const comboGroupId = g.comboGroupId || g.ComboGroupId;
           const groupName = g.groupName || g.GroupName;
           const rawOptions = g.options || g.Options || [];
@@ -124,10 +133,22 @@ export default function ComboCustomizer({
             dishId: o.dishId || o.DishId,
             name: o.name || o.DishName || o.Name,
             description: o.description || o.DishDescription || o.Description,
-            surcharge: o.surcharge !== undefined ? Number(o.surcharge) : Number(o.Surcharge || 0),
-            dishPrice: o.dishPrice !== undefined ? Number(o.dishPrice) : Number(o.DishPrice || 0),
-            isDefault: o.isDefault !== undefined ? parseBool(o.isDefault) : parseBool(o.IsDefault),
-            sortOrder: o.sortOrder !== undefined ? Number(o.sortOrder) : Number(o.SortOrder || 0),
+            surcharge:
+              o.surcharge !== undefined
+                ? Number(o.surcharge)
+                : Number(o.Surcharge || 0),
+            dishPrice:
+              o.dishPrice !== undefined
+                ? Number(o.dishPrice)
+                : Number(o.DishPrice || 0),
+            isDefault:
+              o.isDefault !== undefined
+                ? parseBool(o.isDefault)
+                : parseBool(o.IsDefault),
+            sortOrder:
+              o.sortOrder !== undefined
+                ? Number(o.sortOrder)
+                : Number(o.SortOrder || 0),
             KitchenTypeCode: o.KitchenTypeCode,
             KitchenTypeName: o.KitchenTypeName,
             PrinterIP: o.PrinterIP,
@@ -147,23 +168,32 @@ export default function ComboCustomizer({
         const normalizedConfig: ComboConfig = {
           dishId: payload.data.dishId || payload.data.DishId,
           name: payload.data.name || payload.data.Name,
-          basePrice: parseFloat(payload.data.basePrice || payload.data.BasePrice || 0),
+          basePrice: parseFloat(
+            payload.data.basePrice || payload.data.BasePrice || 0,
+          ),
           description: payload.data.description || payload.data.Description,
           groups: normalizedGroups,
         };
 
         setConfig(normalizedConfig);
-        
+
         // Auto-select defaults
         const initialSelections: Record<string, string[]> = {};
         normalizedGroups.forEach((group: ComboGroup) => {
-          let defaults = group.options.filter(o => o.isDefault).map(o => o.dishId);
+          let defaults = group.options
+            .filter((o) => o.isDefault)
+            .map((o) => o.dishId);
           // Defensive check: If single-select, restrict defaults to 1 item
           if (!group.isMultiSelect || group.maxSelection === 1) {
             defaults = defaults.slice(0, 1);
           }
           // If minSelection > 0, no defaults are configured, and options exist, auto-select the first option
-          if (defaults.length === 0 && group.minSelection > 0 && group.options && group.options.length > 0) {
+          if (
+            defaults.length === 0 &&
+            group.minSelection > 0 &&
+            group.options &&
+            group.options.length > 0
+          ) {
             defaults = [group.options[0].dishId];
           }
           initialSelections[group.comboGroupId] = defaults;
@@ -180,15 +210,20 @@ export default function ComboCustomizer({
     }
   };
 
-  const handleSelectOption = (groupId: string, option: ComboOption, isMulti: boolean, maxSelect: number) => {
+  const handleSelectOption = (
+    groupId: string,
+    option: ComboOption,
+    isMulti: boolean,
+    maxSelect: number,
+  ) => {
     setError(null);
-    setSelections(prev => {
+    setSelections((prev) => {
       const current = prev[groupId] || [];
       if (current.includes(option.dishId)) {
         // Toggle off
         return {
           ...prev,
-          [groupId]: current.filter(id => id !== option.dishId)
+          [groupId]: current.filter((id) => id !== option.dishId),
         };
       } else {
         // Toggle on
@@ -199,25 +234,96 @@ export default function ComboCustomizer({
           }
           return {
             ...prev,
-            [groupId]: [...current, option.dishId]
+            [groupId]: [...current, option.dishId],
           };
         } else {
           // Single select: replace active choice
           return {
             ...prev,
-            [groupId]: [option.dishId]
+            [groupId]: [option.dishId],
           };
         }
       }
     });
   };
 
-  const handleToggleModifier = (modId: string) => {
-    setSelectedModifierIds(prev =>
-      prev.includes(modId)
-        ? prev.filter(id => id !== modId)
-        : [...prev, modId]
-    );
+  // Group modifiers dynamically
+  const groupedModifiers = React.useMemo(() => {
+    const groupsMap: Record<string, {
+      groupId: string;
+      groupName: string;
+      minSelect: number;
+      maxSelect: number;
+      multiselect: boolean;
+      items: any[];
+    }> = {};
+
+    dishModifiers.forEach((m) => {
+      const gId = m.ModifierGroupId || "general";
+      const gName = m.ModifierGroupName || "General Modifiers";
+      const minS = m.MinSelectionCount !== undefined ? Number(m.MinSelectionCount) : 0;
+      const maxS = m.MaxSelectionCount !== undefined ? Number(m.MaxSelectionCount) : 0;
+      const multi = m.MultiselectAllow === 1 || m.MultiselectAllow === true || m.MultiselectAllow === "1" || m.MultiselectAllow === "true";
+
+      if (!groupsMap[gId]) {
+        groupsMap[gId] = {
+          groupId: gId,
+          groupName: gName,
+          minSelect: minS,
+          maxSelect: maxS,
+          multiselect: multi,
+          items: [],
+        };
+      }
+      if (!groupsMap[gId].items.some(x => String(x.ModifierID) === String(m.ModifierID))) {
+        groupsMap[gId].items.push(m);
+      }
+    });
+
+    return Object.values(groupsMap);
+  }, [dishModifiers]);
+
+  const handleToggleModifier = (mod: any, gId: string) => {
+    const key = `${mod.ModifierID}_${gId}`;
+    
+    const group = groupedModifiers.find(g => g.groupId === gId);
+    const maxSelect = group ? group.maxSelect : 0;
+    const multiselect = group ? group.multiselect : false;
+
+    const groupSelectedCount = Object.entries(selectedModifierQuantities)
+      .filter(([k]) => k.endsWith(`_${gId}`))
+      .reduce((sum, [, qty]) => sum + qty, 0);
+
+    setSelectedModifierQuantities((prev) => {
+      const currentQty = prev[key] || 0;
+      const isSelected = currentQty > 0;
+
+      if (isSelected) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      } else {
+        if (maxSelect > 0 && groupSelectedCount >= maxSelect) {
+          if (maxSelect === 1) {
+            // Radio button behavior: clear other selections in this group and select this one
+            const next: Record<string, number> = {};
+            Object.entries(prev).forEach(([k, val]) => {
+              if (!k.endsWith(`_${gId}`)) {
+                next[k] = val;
+              }
+            });
+            next[key] = 1;
+            return next;
+          }
+          // Max count > 1: block additional selections
+          return prev;
+        }
+        return {
+          ...prev,
+          [key]: 1,
+        };
+      }
+    });
   };
 
   const handleAddToCart = () => {
@@ -227,30 +333,56 @@ export default function ComboCustomizer({
     for (const group of config.groups) {
       const selectedIds = selections[group.comboGroupId] || [];
       // Defensive check: If the group has no options in database, skip minimum validation
-      const effectiveMin = group.options && group.options.length > 0 ? group.minSelection : 0;
+      const effectiveMin =
+        group.options && group.options.length > 0 ? group.minSelection : 0;
       if (selectedIds.length < effectiveMin) {
-        setError(`Please pick at least ${group.minSelection} choice(s) for "${group.groupName}"`);
+        setError(
+          `Please pick at least ${group.minSelection} choice(s) for "${group.groupName}"`,
+        );
         return;
       }
     }
 
+    // Validate modifier groups minimum selections
+    for (const group of groupedModifiers) {
+      if (group.minSelect > 0) {
+        const groupSelectedCount = Object.entries(selectedModifierQuantities)
+          .filter(([k]) => k.endsWith(`_${group.groupId}`))
+          .reduce((sum, [, qty]) => sum + qty, 0);
+
+        if (groupSelectedCount < group.minSelect) {
+          setError(`Please select at least ${group.minSelect} option(s) for modifier group "${group.groupName}"`);
+          return;
+        }
+      }
+    }
+
     // Build selected modifiers list
-    const chosenModifiers = dishModifiers
-      .filter(m => selectedModifierIds.includes(String(m.ModifierID || m.ModifierId || "")))
-      .map(m => ({
-        ModifierId: String(m.ModifierID || m.ModifierId || ""),
-        ModifierName: m.ModifierName,
-        Price: Number(m.Price || 0),
-      }));
+    const chosenModifiers: any[] = [];
+    Object.entries(selectedModifierQuantities).forEach(([key, qty]) => {
+      if (qty <= 0) return;
+      const [modId] = key.split("_");
+      const m = dishModifiers.find((x) => String(x.ModifierID) === String(modId));
+      if (m) {
+        chosenModifiers.push({
+          ModifierId: String(m.ModifierID || m.ModifierId || ""),
+          ModifierName: m.ModifierName,
+          Price: Number(m.Price || 0),
+          qty: qty,
+        });
+      }
+    });
 
     // Build the selection details payload with surcharge calculations
-    const chosenSelections = config.groups.map(group => {
+    const chosenSelections = config.groups.map((group) => {
       const selectedIds = selections[group.comboGroupId] || [];
-      const selectedOptions = group.options.filter(o => selectedIds.includes(o.dishId));
+      const selectedOptions = group.options.filter((o) =>
+        selectedIds.includes(o.dishId),
+      );
       return {
         groupId: group.comboGroupId,
         groupName: group.groupName,
-        items: selectedOptions.map(o => ({
+        items: selectedOptions.map((o) => ({
           dishId: o.dishId,
           name: o.name,
           surcharge: o.surcharge,
@@ -258,19 +390,22 @@ export default function ComboCustomizer({
           KitchenTypeCode: (o as any).KitchenTypeCode,
           KitchenTypeName: (o as any).KitchenTypeName,
           PrinterIP: (o as any).PrinterIP,
-        }))
+        })),
       };
     });
 
     // Sum surcharges and dish prices
     let totalSurcharge = 0;
-    chosenSelections.forEach(grp => {
-      grp.items.forEach(opt => {
+    chosenSelections.forEach((grp) => {
+      grp.items.forEach((opt) => {
         totalSurcharge += opt.surcharge + (opt.dishPrice || 0);
       });
     });
 
-    const modifierPriceTotal = chosenModifiers.reduce((sum, m) => sum + m.Price, 0);
+    const modifierPriceTotal = chosenModifiers.reduce(
+      (sum, m) => sum + m.Price,
+      0,
+    );
     const finalPrice = config.basePrice + totalSurcharge + modifierPriceTotal;
 
     addToCartGlobal({
@@ -295,15 +430,25 @@ export default function ComboCustomizer({
   const handleAddDirectly = () => {
     if (!dish) return;
 
-    const chosenModifiers = dishModifiers
-      .filter(m => selectedModifierIds.includes(String(m.ModifierID || m.ModifierId || "")))
-      .map(m => ({
-        ModifierId: String(m.ModifierID || m.ModifierId || ""),
-        ModifierName: m.ModifierName,
-        Price: Number(m.Price || 0),
-      }));
+    const chosenModifiers: any[] = [];
+    Object.entries(selectedModifierQuantities).forEach(([key, qty]) => {
+      if (qty <= 0) return;
+      const [modId] = key.split("_");
+      const m = dishModifiers.find((x) => String(x.ModifierID) === String(modId));
+      if (m) {
+        chosenModifiers.push({
+          ModifierId: String(m.ModifierID || m.ModifierId || ""),
+          ModifierName: m.ModifierName,
+          Price: Number(m.Price || 0),
+          qty: qty,
+        });
+      }
+    });
 
-    const modifierPriceTotal = chosenModifiers.reduce((sum, m) => sum + m.Price, 0);
+    const modifierPriceTotal = chosenModifiers.reduce(
+      (sum, m) => sum + Number(m.Price || 0) * (m.qty || 1),
+      0,
+    );
     const finalPrice = (dish.Price || 0) + modifierPriceTotal;
 
     addToCartGlobal({
@@ -330,7 +475,11 @@ export default function ComboCustomizer({
           <View style={styles.header}>
             <View style={styles.headerTitleRow}>
               <View style={styles.iconCircle}>
-                <Ionicons name="fast-food-outline" size={18} color={Theme.primary} />
+                <Ionicons
+                  name="fast-food-outline"
+                  size={18}
+                  color={Theme.primary}
+                />
               </View>
               <Text style={styles.title} numberOfLines={1}>
                 Customize {dish?.Name || "Combo"}
@@ -348,9 +497,16 @@ export default function ComboCustomizer({
             </View>
           ) : error ? (
             <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle-outline" size={48} color={Theme.danger} />
+              <Ionicons
+                name="alert-circle-outline"
+                size={48}
+                color={Theme.danger}
+              />
               <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={loadComboConfig}>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={loadComboConfig}
+              >
                 <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
             </View>
@@ -366,7 +522,11 @@ export default function ComboCustomizer({
                     <View style={styles.groupHeader}>
                       <Text style={styles.groupTitle}>{group.groupName}</Text>
                       <Text style={styles.groupRules}>
-                        (Pick {group.minSelection === group.maxSelection ? group.minSelection : `${group.minSelection}-${group.maxSelection}`})
+                        (Pick{" "}
+                        {group.minSelection === group.maxSelection
+                          ? group.minSelection
+                          : `${group.minSelection}-${group.maxSelection}`}
+                        )
                       </Text>
                     </View>
                     <View style={styles.optionsGrid}>
@@ -384,21 +544,38 @@ export default function ComboCustomizer({
                                 group.comboGroupId,
                                 option,
                                 group.isMultiSelect,
-                                group.maxSelection
+                                group.maxSelection,
                               )
                             }
                           >
-                            <Text style={[styles.optionName, isSelected && styles.optionTextSelected]}>
+                            <Text
+                              style={[
+                                styles.optionName,
+                                isSelected && styles.optionTextSelected,
+                              ]}
+                            >
                               {option.name}
                             </Text>
                             {(option.surcharge > 0 || option.dishPrice > 0) && (
-                              <Text style={[styles.optionSurcharge, isSelected && styles.optionTextSelected]}>
-                                +${(option.surcharge + (option.dishPrice || 0)).toFixed(2)}
+                              <Text
+                                style={[
+                                  styles.optionSurcharge,
+                                  isSelected && styles.optionTextSelected,
+                                ]}
+                              >
+                                +$
+                                {(
+                                  option.surcharge + (option.dishPrice || 0)
+                                ).toFixed(2)}
                               </Text>
                             )}
                             {isSelected && (
                               <View style={styles.checkmarkWrap}>
-                                <Ionicons name="checkmark-circle" size={18} color={Theme.primary} />
+                                <Ionicons
+                                  name="checkmark-circle"
+                                  size={18}
+                                  color={Theme.primary}
+                                />
                               </View>
                             )}
                           </TouchableOpacity>
@@ -410,70 +587,161 @@ export default function ComboCustomizer({
               }}
               ListFooterComponent={(() => {
                 let currentTotal = config?.basePrice || 0;
-                config?.groups?.forEach(group => {
+                config?.groups?.forEach((group) => {
                   const selectedIds = selections[group.comboGroupId] || [];
-                  const selectedOptions = group.options.filter(o => selectedIds.includes(o.dishId));
-                  selectedOptions.forEach(opt => {
+                  const selectedOptions = group.options.filter((o) =>
+                    selectedIds.includes(o.dishId),
+                  );
+                  selectedOptions.forEach((opt) => {
                     currentTotal += (opt.surcharge || 0) + (opt.dishPrice || 0);
                   });
                 });
- 
-                const chosenModifiers = dishModifiers.filter(m => selectedModifierIds.includes(String(m.ModifierID || m.ModifierId || "")));
-                const modifierPriceTotal = chosenModifiers.reduce((sum, m) => sum + Number(m.Price || 0), 0);
+
+                const chosenModifiers: any[] = [];
+                Object.entries(selectedModifierQuantities).forEach(([key, qty]) => {
+                  if (qty <= 0) return;
+                  const [modId] = key.split("_");
+                  const m = dishModifiers.find((x) => String(x.ModifierID) === String(modId));
+                  if (m) {
+                    chosenModifiers.push({
+                      ModifierId: String(m.ModifierID || m.ModifierId || ""),
+                      ModifierName: m.ModifierName,
+                      Price: Number(m.Price || 0),
+                      qty: qty,
+                    });
+                  }
+                });
+                const modifierPriceTotal = chosenModifiers.reduce(
+                  (sum, m) => sum + Number(m.Price || 0) * (m.qty || 1),
+                  0,
+                );
                 currentTotal += modifierPriceTotal;
 
                 return (
                   <View style={styles.footer}>
                     {dishModifiers.length > 0 && (
                       <View style={{ marginBottom: 20 }}>
-                        <Text style={[styles.groupTitle, { marginBottom: 12 }]}>Add Modifiers (Multiple Selection)</Text>
-                        <View style={{ gap: 8 }}>
-                          {dishModifiers.map(m => {
-                            const isSelected = selectedModifierIds.includes(String(m.ModifierID || m.ModifierId || ""));
-                            return (
-                              <TouchableOpacity
-                                key={m.ModifierID}
-                                style={[
-                                  styles.modifierRow,
-                                  isSelected && styles.modifierRowSelected
-                                ]}
-                                onPress={() => handleToggleModifier(String(m.ModifierID || m.ModifierId || ""))}
-                                activeOpacity={0.7}
-                              >
-                                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                                  <Ionicons 
-                                    name={isSelected ? "checkbox" : "square-outline"} 
-                                    size={20} 
-                                    color={isSelected ? Theme.primary : "#7F8C8D"} 
-                                  />
-                                  <Text style={styles.modifierName}>{m.ModifierName}</Text>
-                                </View>
-                                {m.Price > 0 && (
-                                  <Text style={styles.modifierPrice}>+${Number(m.Price).toFixed(2)}</Text>
-                                )}
-                              </TouchableOpacity>
-                            );
-                          })}
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                          <Text style={styles.groupTitle}>
+                            Add Modifiers
+                          </Text>
+                          {groupedModifiers.length === 1 && (
+                            <Text style={styles.modifierGroupLimits}>
+                              {groupedModifiers[0].minSelect > 0 && groupedModifiers[0].maxSelect > 0 && `(Select ${groupedModifiers[0].minSelect} to ${groupedModifiers[0].maxSelect})`}
+                              {groupedModifiers[0].minSelect > 0 && groupedModifiers[0].maxSelect === 0 && `(Select at least ${groupedModifiers[0].minSelect})`}
+                              {groupedModifiers[0].minSelect === 0 && groupedModifiers[0].maxSelect > 0 && `(Select up to ${groupedModifiers[0].maxSelect})`}
+                              {groupedModifiers[0].minSelect === 0 && groupedModifiers[0].maxSelect === 0 && `(Optional)`}
+                            </Text>
+                          )}
                         </View>
+                        
+                        {groupedModifiers.map((group) => {
+                          const gId = group.groupId;
+                          const gName = group.groupName;
+                          const maxSelect = group.maxSelect;
+                          const minSelect = group.minSelect;
+                          
+                          const groupSelectedCount = Object.entries(selectedModifierQuantities)
+                            .filter(([k]) => k.endsWith(`_${gId}`))
+                            .reduce((sum, [, q]) => sum + q, 0);
+
+                          return (
+                            <View key={gId} style={{ marginBottom: 15 }}>
+                              {groupedModifiers.length > 1 && (
+                                <View style={styles.modifierGroupHeader}>
+                                  <Text style={styles.modifierGroupName}>{gName}</Text>
+                                  <Text style={styles.modifierGroupLimits}>
+                                    {minSelect > 0 && maxSelect > 0 && `(Select ${minSelect} to ${maxSelect})`}
+                                    {minSelect > 0 && maxSelect === 0 && `(Select at least ${minSelect})`}
+                                    {minSelect === 0 && maxSelect > 0 && `(Select up to ${maxSelect})`}
+                                    {minSelect === 0 && maxSelect === 0 && `(Optional)`}
+                                    {` - Selected: ${groupSelectedCount}`}
+                                  </Text>
+                                </View>
+                              )}
+
+                              <View style={styles.modifierGrid}>
+                                {group.items.map((m) => {
+                                  const key = `${m.ModifierID}_${gId}`;
+                                  const qty = selectedModifierQuantities[key] || 0;
+                                  const isSelected = qty > 0;
+                                  const isDisabled = maxSelect > 0 && groupSelectedCount >= maxSelect && qty === 0;
+
+                                  return (
+                                    <TouchableOpacity
+                                      key={m.ModifierID}
+                                      style={[
+                                        styles.modifierCard,
+                                        isSelected && styles.modifierCardSelected,
+                                        isDisabled && { opacity: 0.5 }
+                                      ]}
+                                      onPress={() => {
+                                        if (isSelected || !isDisabled) {
+                                          handleToggleModifier(m, gId);
+                                        }
+                                      }}
+                                      disabled={isDisabled}
+                                      activeOpacity={0.7}
+                                    >
+                                      <Text style={[styles.modifierCardName, isSelected && styles.modifierCardTextSelected]}>
+                                        {m.ModifierName}
+                                      </Text>
+                                      {m.Price > 0 && (
+                                        <Text style={[styles.modifierCardPrice, isSelected && styles.modifierCardTextSelected]}>
+                                          +${Number(m.Price).toFixed(2)}
+                                        </Text>
+                                      )}
+                                      {isSelected && (
+                                        <View style={styles.modifierCheckmarkWrap}>
+                                          <Ionicons
+                                            name="checkmark-circle"
+                                            size={18}
+                                            color={Theme.primary}
+                                          />
+                                        </View>
+                                      )}
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+                            </View>
+                          );
+                        })}
                       </View>
                     )}
 
                     {error ? (
-                      <Text style={{ color: Theme.danger, textAlign: "center", marginBottom: 12, fontFamily: Fonts.medium, fontSize: 13 }}>
+                      <Text
+                        style={{
+                          color: Theme.danger,
+                          textAlign: "center",
+                          marginBottom: 12,
+                          fontFamily: Fonts.medium,
+                          fontSize: 13,
+                        }}
+                      >
                         {error}
                       </Text>
                     ) : null}
-                    <TouchableOpacity style={styles.confirmButton} onPress={handleAddToCart}>
+                    <TouchableOpacity
+                      style={styles.confirmButton}
+                      onPress={handleAddToCart}
+                    >
                       <Text style={styles.confirmButtonText}>
                         Add Combo to Cart - ${currentTotal.toFixed(2)}
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.confirmButton, { backgroundColor: "#ECEFF1", marginTop: 10 }]} 
+                    <TouchableOpacity
+                      style={[
+                        styles.confirmButton,
+                        { backgroundColor: "#ECEFF1", marginTop: 10 },
+                      ]}
                       onPress={handleAddDirectly}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.confirmButtonText, { color: "#37474F" }]}>
+                      <Text
+                        style={[styles.confirmButtonText, { color: "#37474F" }]}
+                      >
                         Add Base Combo Directly (Skip Selections)
                       </Text>
                     </TouchableOpacity>
@@ -610,7 +878,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#EAECEE",
     borderRadius: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "center",
@@ -633,6 +901,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     color: "#2C3E50",
     textAlign: "center",
+    paddingHorizontal: 12,
   },
   optionSurcharge: {
     fontSize: 11,
@@ -650,8 +919,9 @@ const styles = StyleSheet.create({
   },
   checkmarkWrap: {
     position: "absolute",
-    top: 6,
-    right: 6,
+    top: -9,
+    right: -9,
+    zIndex: 10,
   },
   footer: {
     marginTop: 15,
@@ -678,28 +948,74 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 0.5,
   },
-  modifierRow: {
+  modifierGrid: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#EAECEE",
-    borderRadius: 10,
-    backgroundColor: "#FAF9F6",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 8,
   },
-  modifierRowSelected: {
+  modifierCard: {
+    width: "48%",
+    backgroundColor: "#FAF9F6",
+    borderWidth: 1.5,
+    borderColor: "#EAECEE",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    minHeight: 70,
+  },
+  modifierCardSelected: {
     borderColor: Theme.primary,
     backgroundColor: "#FFF5EB",
   },
-  modifierName: {
-    fontSize: 14,
-    fontFamily: Fonts.medium,
+  modifierCardName: {
+    fontSize: 13,
+    fontFamily: Fonts.bold,
     color: "#2C3E50",
+    textAlign: "center",
   },
-  modifierPrice: {
-    fontSize: 14,
+  modifierCardTextSelected: {
+    color: Theme.primary,
+  },
+  modifierCardPrice: {
+    fontSize: 11,
     fontFamily: Fonts.bold,
     color: Theme.primary,
+    marginTop: 4,
+    backgroundColor: "#FFEEDB",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  modifierCheckmarkWrap: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    zIndex: 10,
+  },
+  modifierGroupHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F2F4F4",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  modifierGroupName: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: "#2C3E50",
+  },
+  modifierGroupLimits: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+    color: "#7F8C8D",
   },
 });

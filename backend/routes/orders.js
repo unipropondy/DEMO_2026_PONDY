@@ -494,10 +494,26 @@ async function syncToProfessionalTables(
           : "fixed";
     itemRequest.input(p_disctype, sql.NVarChar(50), resolvedDiscountType);
 
+    const isTWItem =
+      item.isTakeaway === true ||
+      item.IsTakeaway === true ||
+      item.isTakeAway === true ||
+      item.IsTakeAway === true ||
+      String(item.isTakeaway) === "1" ||
+      String(item.IsTakeaway) === "1" ||
+      String(item.isTakeAway) === "1" ||
+      String(item.IsTakeAway) === "1" ||
+      String(item.isTakeaway).toLowerCase() === "true" ||
+      String(item.IsTakeaway).toLowerCase() === "true" ||
+      String(item.isTakeAway).toLowerCase() === "true" ||
+      String(item.IsTakeAway).toLowerCase() === "true";
+
     const isSC =
-      item.isServiceCharge === true ||
-      String(item.isServiceCharge) === "1" ||
-      String(item.isServiceCharge).toLowerCase() === "true";
+      !isTWItem && (
+        item.isServiceCharge === true ||
+        String(item.isServiceCharge) === "1" ||
+        String(item.isServiceCharge).toLowerCase() === "true"
+      );
     let itemSC = null;
     if (isSC) {
       const qtyVal = Number(item.qty || 1);
@@ -649,22 +665,58 @@ async function syncTableStatus(req, tableId) {
     OR (Tableno = @TableNo AND (isOrderClosed = 0 OR isOrderClosed IS NULL))
     ORDER BY CASE WHEN OrderNumber = (SELECT CurrentOrderId FROM TableMaster WHERE TableId = @tid) THEN 0 ELSE 1 END, CreatedOn DESC;
 
-    -- Calculate Totals strictly including Service Charge and GST
+    DECLARE @TakeawayOverride INT = 0;
+    DECLARE @SCOverride INT = 0;
+
+    IF EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = 'RestaurantOrderCur' AND COLUMN_NAME = 'TakeawayChargeOverride'
+    )
+    BEGIN
+      SELECT TOP 1 @TakeawayOverride = ISNULL(TakeawayChargeOverride, 0)
+      FROM RestaurantOrderCur
+      WHERE OrderId = @ActualOrderId;
+    END
+
+    IF EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = 'RestaurantOrderCur' AND COLUMN_NAME = 'ServiceChargeOverride'
+    )
+    BEGIN
+      SELECT TOP 1 @SCOverride = ISNULL(ServiceChargeOverride, 0)
+      FROM RestaurantOrderCur
+      WHERE OrderId = @ActualOrderId;
+    END
+
+    -- Calculate Totals strictly including Service Charge, Takeaway Charges and GST
     DECLARE @subtotal DECIMAL(18,2) = 0;
     DECLARE @serviceCharge DECIMAL(18,2) = 0;
+    DECLARE @takeawayCharge DECIMAL(18,2) = 0;
+    DECLARE @takeawayRate DECIMAL(18,2) = 0;
     DECLARE @gstRate DECIMAL(18,2) = 0.09; -- default 9%
+
+    SELECT TOP 1 @takeawayRate = ISNULL(TakeawayCharges, 0) FROM CompanySettings;
 
     SELECT 
         @count = COUNT(*), 
         @subtotal = ISNULL(SUM(ActualAmount), 0),
-        @serviceCharge = ISNULL(SUM(ServiceCharge), 0)
+        @serviceCharge = CASE WHEN @SCOverride = 1 THEN 0 ELSE ISNULL(SUM(ServiceCharge), 0) END,
+        @takeawayCharge = CASE WHEN @TakeawayOverride = 1 THEN 0 ELSE ISNULL(SUM(Quantity * CASE WHEN isTakeAway = 1 THEN @takeawayRate ELSE 0 END), 0) END
     FROM RestaurantOrderDetailCur 
     WHERE OrderId = @ActualOrderId AND StatusCode <> 0;
 
     SELECT TOP 1 @gstRate = ISNULL(GSTPercentage, 0) / 100.0 FROM CompanySettings;
     IF @gstRate IS NULL SET @gstRate = 0.09;
 
-    SET @total = ROUND(@subtotal + @serviceCharge + ((@subtotal + @serviceCharge) * @gstRate), 2);
+    SET @total = ROUND(@subtotal + @serviceCharge + @takeawayCharge + ((@subtotal + @serviceCharge + @takeawayCharge) * @gstRate), 2);
+
+    -- Update RestaurantOrderCur with calculated TakeawayCharge
+    IF @ActualOrderId IS NOT NULL
+    BEGIN
+        UPDATE RestaurantOrderCur 
+        SET TakeawayCharge = @takeawayCharge
+        WHERE OrderId = @ActualOrderId;
+    END
 
     -- 🛡️ SHIELD 1: ATOMIC SYNC - If no items, force close the order to prevent ghosts
     IF @count = 0 AND @ActualOrderId IS NOT NULL
@@ -676,6 +728,7 @@ async function syncTableStatus(req, tableId) {
     -- Update TableMaster with DEFINITIVE state
     UPDATE TableMaster 
     SET Status = CASE 
+        WHEN @count = 0 THEN 0
         WHEN Status = 2 THEN 2 
         WHEN Status = 3 THEN 3
         WHEN @count > 0 THEN 1 
@@ -688,16 +741,16 @@ async function syncTableStatus(req, tableId) {
                          WHEN @ActualOrderNo IS NOT NULL AND @ActualOrderNo <> ISNULL(CurrentOrderId, '') THEN GETDATE()
                          -- INITIAL SET: If it was NULL/Invalid and we now have items
                          WHEN (@count > 0 OR Status IN (2, 3)) AND (StartTime IS NULL OR StartTime < '2000-01-01') THEN GETDATE() 
-                         -- Strictly CLEAR StartTime if table is becoming Available
-                         WHEN @count = 0 AND Status NOT IN (2, 3) THEN NULL 
+                         -- Strictly CLEAR StartTime if table has 0 items
+                         WHEN @count = 0 THEN NULL 
                          ELSE StartTime 
                     END,
         CustomerName = CASE 
-                         WHEN @count = 0 AND Status NOT IN (2, 3) THEN NULL 
+                         WHEN @count = 0 THEN NULL 
                          ELSE CustomerName 
                     END,
         Pax = CASE 
-                         WHEN @count = 0 AND Status NOT IN (2, 3) THEN NULL 
+                         WHEN @count = 0 THEN NULL 
                          ELSE Pax 
                     END,
         CurrentOrderId = @ActualOrderNo,
@@ -2192,6 +2245,25 @@ router.post("/reduce-service-charge", async (req, res) => {
           AND (isOrderClosed = 0 OR isOrderClosed IS NULL)
       `);
 
+    // Sync status to update related tables and broadcast total change
+    const orderRes = await pool.request()
+      .input("orderNo", sql.VarChar(50), String(orderId).trim())
+      .query(`
+        SELECT TOP 1 tm.TableId 
+        FROM RestaurantOrderCur h
+        LEFT JOIN TableMaster tm ON RTRIM(LTRIM(h.Tableno)) = RTRIM(LTRIM(tm.TableNumber))
+        WHERE h.OrderNumber = @orderNo
+      `);
+    const tableId = orderRes.recordset[0]?.TableId;
+    if (tableId) {
+      const cleanTid = String(tableId).replace(/^\{|\}$/g, "").trim();
+      await syncTableStatus(req, cleanTid);
+      req.app.get("io")?.emit("cart_updated", {
+        tableId: cleanTid.toLowerCase(),
+        orderId: orderId,
+      });
+    }
+
     res.json({ success: true, serviceChargeReduced: overrideValue === 1 });
   } catch (err) {
     console.error("❌ reduce-service-charge Error:", err.message);
@@ -2233,7 +2305,7 @@ router.get("/:orderId/sc-override", async (req, res) => {
   }
 });
 
-// Self-healing: adds TakeawayCharge column if it doesn't exist to RestaurantOrderCur and RestaurantOrder
+// Self-healing: adds TakeawayCharge and TakeawayChargeOverride columns if they don't exist to RestaurantOrderCur and RestaurantOrder
 router.post("/apply-takeaway-charge", async (req, res) => {
   try {
     const { orderId, apply } = req.body; // apply = true to add takeaway charge, false to remove
@@ -2253,6 +2325,18 @@ router.post("/apply-takeaway-charge", async (req, res) => {
         WHERE TABLE_NAME = 'RestaurantOrder' AND COLUMN_NAME = 'TakeawayCharge'
       )
       ALTER TABLE RestaurantOrder ADD TakeawayCharge DECIMAL(18, 2) DEFAULT 0;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME = 'RestaurantOrderCur' AND COLUMN_NAME = 'TakeawayChargeOverride'
+      )
+      ALTER TABLE RestaurantOrderCur ADD TakeawayChargeOverride BIT NULL;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME = 'RestaurantOrder' AND COLUMN_NAME = 'TakeawayChargeOverride'
+      )
+      ALTER TABLE RestaurantOrder ADD TakeawayChargeOverride BIT NULL;
     `);
 
     let chargeValue = 0;
@@ -2262,18 +2346,40 @@ router.post("/apply-takeaway-charge", async (req, res) => {
       chargeValue = parseFloat(settingsRes.recordset[0]?.TakeawayCharges) || 0;
     }
 
+    const overrideValue = apply ? 0 : 1;
+
     await pool
       .request()
       .input("orderNo", sql.NVarChar(50), String(orderId).trim())
       .input("charge", sql.Decimal(18, 2), chargeValue)
+      .input("override", sql.Bit, overrideValue)
       .query(`
         UPDATE RestaurantOrderCur
-        SET TakeawayCharge = @charge, ModifiedOn = GETDATE()
+        SET TakeawayCharge = @charge, TakeawayChargeOverride = @override, ModifiedOn = GETDATE()
         WHERE OrderNumber = @orderNo
           AND (isOrderClosed = 0 OR isOrderClosed IS NULL)
       `);
 
-    res.json({ success: true, takeawayCharge: chargeValue });
+    // Sync status to update related tables and broadcast total change
+    const orderRes = await pool.request()
+      .input("orderNo", sql.VarChar(50), String(orderId).trim())
+      .query(`
+        SELECT TOP 1 tm.TableId 
+        FROM RestaurantOrderCur h
+        LEFT JOIN TableMaster tm ON RTRIM(LTRIM(h.Tableno)) = RTRIM(LTRIM(tm.TableNumber))
+        WHERE h.OrderNumber = @orderNo
+      `);
+    const tableId = orderRes.recordset[0]?.TableId;
+    if (tableId) {
+      const cleanTid = String(tableId).replace(/^\{|\}$/g, "").trim();
+      await syncTableStatus(req, cleanTid);
+      req.app.get("io")?.emit("cart_updated", {
+        tableId: cleanTid.toLowerCase(),
+        orderId: orderId,
+      });
+    }
+
+    res.json({ success: true, takeawayCharge: chargeValue, takeawayChargeOverride: overrideValue });
   } catch (err) {
     console.error("❌ apply-takeaway-charge Error:", err.message);
     res.status(500).json({ error: err.message });
@@ -2290,24 +2396,25 @@ router.get("/:orderId/takeaway-charge", async (req, res) => {
     // Check column exists first
     const colCheck = await pool.request().query(`
       SELECT 1 AS HasCol FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_NAME = 'RestaurantOrderCur' AND COLUMN_NAME = 'TakeawayCharge'
+      WHERE TABLE_NAME = 'RestaurantOrderCur' AND COLUMN_NAME = 'TakeawayChargeOverride'
     `);
     if (!colCheck.recordset.length) {
-      return res.json({ takeawayCharge: 0 });
+      return res.json({ takeawayCharge: 0, takeawayChargeOverride: 0 });
     }
 
     const result = await pool
       .request()
       .input("orderNo", sql.NVarChar(50), String(orderId).trim())
       .query(`
-        SELECT TOP 1 ISNULL(TakeawayCharge, 0) AS TakeawayCharge
+        SELECT TOP 1 ISNULL(TakeawayCharge, 0) AS TakeawayCharge, ISNULL(TakeawayChargeOverride, 0) AS TakeawayChargeOverride
         FROM RestaurantOrderCur
         WHERE OrderNumber = @orderNo
           AND (isOrderClosed = 0 OR isOrderClosed IS NULL)
       `);
 
     const takeawayCharge = parseFloat(result.recordset[0]?.TakeawayCharge) || 0;
-    res.json({ takeawayCharge });
+    const takeawayChargeOverride = result.recordset[0]?.TakeawayChargeOverride === true || result.recordset[0]?.TakeawayChargeOverride === 1 ? 1 : 0;
+    res.json({ takeawayCharge, takeawayChargeOverride });
   } catch (err) {
     console.error("❌ takeaway-charge GET Error:", err.message);
     res.status(500).json({ error: err.message });

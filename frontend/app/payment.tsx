@@ -1,7 +1,7 @@
 import { API_URL } from "@/constants/Config";
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
+import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -35,15 +35,15 @@ import {
 } from "../stores/activeOrdersStore";
 import { useAuthStore } from "../stores/authStore";
 import { useCartStore } from "../stores/cartStore";
-import { useCompanySettingsStore } from "../stores/companySettingsStore";
 import type { CompanySettings } from "../stores/companySettingsStore";
+import { useCompanySettingsStore } from "../stores/companySettingsStore";
 import { useGeneralSettingsStore } from "../stores/generalSettingsStore";
-import { useQuickCashStore } from "../stores/quickCashStore";
 import { useOrderContextStore } from "../stores/orderContextStore";
-import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
 import type { CachedPaymentMethod } from "../stores/paymentSettingsStore";
-import { useTableStatusStore } from "../stores/tableStatusStore";
+import { usePaymentSettingsStore } from "../stores/paymentSettingsStore";
+import { useQuickCashStore } from "../stores/quickCashStore";
 import { useServiceChargeOverrideStore } from "../stores/serviceChargeOverrideStore";
+import { useTableStatusStore } from "../stores/tableStatusStore";
 import { CustomerDisplaySync } from "../utils/CustomerDisplaySync";
 
 const EMPTY_ARRAY: any[] = [];
@@ -124,8 +124,8 @@ export default function PaymentScreen() {
   const memberPhone = params.memberPhone as string | undefined;
   const isMember = params.isMember === "true";
   const isLedgerCollection = !!memberId;
-const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "cancelled" | "failed">("idle");
-const [paymentMessage, setPaymentMessage] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "cancelled" | "failed">("idle");
+  const [paymentMessage, setPaymentMessage] = useState("");
   const allocationsParam = useMemo(() => {
     if (!params.allocations) return null;
     try {
@@ -419,7 +419,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
   const scReducedLocal = useServiceChargeOverrideStore((s) =>
     displayOrderId ? s.overrides[displayOrderId.toLowerCase()] : false
   );
-  const [takeawayChargeApplied, setTakeawayChargeApplied] = useState(false);
+  const [takeawayChargeApplied, setTakeawayChargeApplied] = useState(true);
   const [takeawayChargeAmt, setTakeawayChargeAmt] = useState(0);
 
   useEffect(() => {
@@ -452,13 +452,12 @@ const [paymentMessage, setPaymentMessage] = useState("");
         .then((r) => r.json())
         .then((d) => {
           console.log("✅ [Payment] Takeaway charge response:", d);
-          if (d?.takeawayCharge > 0) {
-            setTakeawayChargeApplied(true);
-            setTakeawayChargeAmt(d.takeawayCharge);
-          } else {
+          if (d?.takeawayChargeOverride === 1) {
             setTakeawayChargeApplied(false);
-            setTakeawayChargeAmt(0);
+          } else {
+            setTakeawayChargeApplied(true);
           }
+          setTakeawayChargeAmt(d?.takeawayCharge || 0);
         })
         .catch((e) => {
           console.warn("❌ [Payment] Failed to fetch takeaway-charge status:", e);
@@ -613,71 +612,17 @@ const [paymentMessage, setPaymentMessage] = useState("");
     };
   }, []);
 
-  useEffect(() => {
-    if (!isFocused) {
-      if (pathname !== "/payment_success") {
-        CustomerDisplaySync.isPaymentActive = false;
-        CustomerDisplaySync.syncIdle();
-      }
-      return;
-    }
 
-    CustomerDisplaySync.isPaymentActive = true;
 
-    if (context && finalItems.length > 0) {
-      // Distinguish YeahPay PayNow and YeahPay Card from regular payment modes
-      // so the customer display shows custom cards and avoids static QRs.
-      const selectedMethodObj = paymentMethods.find((m: any) => m.payMode === method);
-      const isYeahPayMode = selectedMethodObj?.yeahPayEnabled === true;
-      const isPayNowPayMode = /PAYNOW|PAY-NOW/i.test(method);
-      const isCardPayMode = /CARD/i.test(method);
-      
-      let displayPaymentMethod = method;
-      if (isYeahPayMode) {
-        if (isPayNowPayMode) {
-          displayPaymentMethod = 'YEAHPAY_PAYNOW';
-        } else if (isCardPayMode) {
-          displayPaymentMethod = 'YEAHPAY_CARD';
-        }
-      }
-
-      // Include member name when MEMBER or CREDIT mode is selected
-      const isMemberMode = /^(MEMBER|CREDIT)$/i.test((method || '').trim());
-      const displayMemberName = isMemberMode ? (selectedMember?.Name || '') : '';
-
-      CustomerDisplaySync.syncCart({
-        orderContext: context,
-        cart: finalItems,
-        discountInfo: discount,
-        gstPercentage: settingsStore.gstPercentage || 0,
-        roundOff: roundOff,
-        active: true,
-        orderId: displayOrderId,
-        paymentMethod: displayPaymentMethod,
-        memberName: displayMemberName,
-      });
-    } else {
-      CustomerDisplaySync.syncIdle();
-    }
-  }, [
-    isFocused,
-    pathname,
-    context,
-    finalItems,
-    discount,
-    settingsStore.gstPercentage,
-    roundOff,
-    displayOrderId,
-    method,
-    paymentMethods,
-    selectedMember,
-  ]);
+  const takeawayCharges = settingsStore.takeawayCharges || 0;
 
   const {
     subtotal,
     grossTotal: payGrossTotal,
     totalItemDiscount: payItemDiscount,
     scEligibleSubtotal,
+    calcTakeawayChargeAmt,
+    takeawayQty,
   } = useMemo(() => {
     if (isLedgerCollection) {
       return {
@@ -685,6 +630,8 @@ const [paymentMessage, setPaymentMessage] = useState("");
         totalItemDiscount: 0,
         subtotal: collectAmount || 0,
         scEligibleSubtotal: 0,
+        calcTakeawayChargeAmt: 0,
+        takeawayQty: 0,
       };
     }
     const nonVoided = finalItems.filter((i: any) => i.status !== "VOIDED");
@@ -705,14 +652,18 @@ const [paymentMessage, setPaymentMessage] = useState("");
           }
         }
         const itemSubtotal = baseTotal - itemDiscount;
+        const isTakeawayItem = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
         const isSC =
-          Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+          !isTakeawayItem && (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
+        const itemTWCharge = isTakeawayItem ? (item.qty || 1) * takeawayCharges : 0;
         return {
           grossTotal: acc.grossTotal + baseTotal,
           totalItemDiscount: acc.totalItemDiscount + itemDiscount,
           subtotal: acc.subtotal + itemSubtotal,
           scEligibleSubtotal:
             acc.scEligibleSubtotal + (isSC ? itemSubtotal : 0),
+          calcTakeawayChargeAmt: acc.calcTakeawayChargeAmt + itemTWCharge,
+          takeawayQty: acc.takeawayQty + (isTakeawayItem ? (item.qty || 1) : 0),
         };
       },
       {
@@ -720,9 +671,11 @@ const [paymentMessage, setPaymentMessage] = useState("");
         totalItemDiscount: 0,
         subtotal: 0,
         scEligibleSubtotal: 0,
+        calcTakeawayChargeAmt: 0,
+        takeawayQty: 0,
       },
     );
-  }, [finalItems, isLedgerCollection, collectAmount]);
+  }, [finalItems, isLedgerCollection, collectAmount, takeawayCharges]);
 
   const allItemsHaveSC = useMemo(() => {
     const activeItems = finalItems.filter(
@@ -731,8 +684,10 @@ const [paymentMessage, setPaymentMessage] = useState("");
     return (
       activeItems.length > 0 &&
       activeItems.every(
-        (item: any) =>
-          Number(item.isServiceCharge) === 1 || item.isServiceCharge === true,
+        (item: any) => {
+          const isTakeawayItem = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
+          return !isTakeawayItem && (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
+        },
       )
     );
   }, [finalItems]);
@@ -757,7 +712,21 @@ const [paymentMessage, setPaymentMessage] = useState("");
     return Math.max(0, scEligibleSubtotal - proportion * discountAmount);
   }, [scEligibleSubtotal, subtotal, discountAmount, isLedgerCollection]);
 
-  const currentTakeawayCharge = takeawayChargeApplied ? takeawayChargeAmt : 0;
+  const billDiscountProportion = useMemo(() => {
+    if (isLedgerCollection) return 0;
+    if (!discount?.applied) return 0;
+    if (discount.type === "percentage") {
+      return discount.value / 100;
+    }
+    return subtotal > 0 ? (discountAmount / subtotal) : 0;
+  }, [discount, subtotal, discountAmount, isLedgerCollection]);
+
+  const currentTakeawayCharge = useMemo(() => {
+    if (isLedgerCollection) return 0;
+    if (!takeawayChargeApplied) return 0;
+    return calcTakeawayChargeAmt * (1 - billDiscountProportion);
+  }, [takeawayChargeApplied, calcTakeawayChargeAmt, billDiscountProportion, isLedgerCollection]);
+
   const serviceChargeAmt = isLedgerCollection ? 0 : (scReduced || scReducedLocal ? 0 : scEligibleNet * scRate);
   const taxableAmount = netAfterDiscount + serviceChargeAmt + currentTakeawayCharge;
   const tax = isLedgerCollection ? 0 : taxableAmount * gstRate;
@@ -792,14 +761,76 @@ const [paymentMessage, setPaymentMessage] = useState("");
   const displayedRoundOff =
     roundOff !== 0
       ? parseFloat(
-          (
-            total -
-            (netAmountForDisplay + displayedServiceCharge + displayedTax)
-          ).toFixed(2),
-        )
+        (
+          total -
+          (netAmountForDisplay + displayedServiceCharge + displayedTax + currentTakeawayCharge)
+        ).toFixed(2),
+      )
       : 0;
   const paidNum = isCashMethod(method) ? parseFloat(cashInput) || 0 : total;
   const change = Math.max(0, paidNum - total);
+
+  useEffect(() => {
+    if (!isFocused) {
+      if (pathname !== "/payment_success") {
+        CustomerDisplaySync.isPaymentActive = false;
+        CustomerDisplaySync.syncIdle();
+      }
+      return;
+    }
+
+    CustomerDisplaySync.isPaymentActive = true;
+
+    if (context && finalItems.length > 0) {
+      // Distinguish YeahPay PayNow and YeahPay Card from regular payment modes
+      // so the customer display shows custom cards and avoids static QRs.
+      const selectedMethodObj = paymentMethods.find((m: any) => m.payMode === method);
+      const isYeahPayMode = selectedMethodObj?.yeahPayEnabled === true;
+      const isPayNowPayMode = /PAYNOW|PAY-NOW/i.test(method);
+      const isCardPayMode = /CARD/i.test(method);
+
+      let displayPaymentMethod = method;
+      if (isYeahPayMode) {
+        if (isPayNowPayMode) {
+          displayPaymentMethod = 'YEAHPAY_PAYNOW';
+        } else if (isCardPayMode) {
+          displayPaymentMethod = 'YEAHPAY_CARD';
+        }
+      }
+
+      // Include member name when MEMBER or CREDIT mode is selected
+      const isMemberMode = /^(MEMBER|CREDIT)$/i.test((method || '').trim());
+      const displayMemberName = isMemberMode ? (selectedMember?.Name || '') : '';
+
+      CustomerDisplaySync.syncCart({
+        orderContext: context,
+        cart: finalItems,
+        discountInfo: discount,
+        gstPercentage: settingsStore.gstPercentage || 0,
+        roundOff: roundOff,
+        active: true,
+        orderId: displayOrderId,
+        paymentMethod: displayPaymentMethod,
+        memberName: displayMemberName,
+        takeawayCharge: currentTakeawayCharge,
+      });
+    } else {
+      CustomerDisplaySync.syncIdle();
+    }
+  }, [
+    isFocused,
+    pathname,
+    context,
+    finalItems,
+    discount,
+    settingsStore.gstPercentage,
+    roundOff,
+    displayOrderId,
+    method,
+    paymentMethods,
+    selectedMember,
+    currentTakeawayCharge,
+  ]);
 
   // ── Quick Cash ─────────────────────────────────────────────────────────────
   const { settings: generalSettings } = useGeneralSettingsStore();
@@ -828,7 +859,7 @@ const [paymentMessage, setPaymentMessage] = useState("");
     setLoadingMethods(true);
     try {
       const cached = usePaymentSettingsStore.getState().paymentMethods;
-      
+
       const mapped: PaymentMethod[] = cached.map((d: CachedPaymentMethod) => ({
         payMode: d.payMode || "",
         description: d.description || d.payMode || "",
@@ -927,215 +958,215 @@ const [paymentMessage, setPaymentMessage] = useState("");
     return () => clearInterval(timer);
   }, []);
 
-const confirmPayment = async () => {
-  if (processing) return;
+  const confirmPayment = async () => {
+    if (processing) return;
 
-  const selectedMethod = paymentMethods.find(m => m.payMode === method);
-  const isYeahPay = selectedMethod?.yeahPayEnabled === true;
-  const isCard = method.trim().toUpperCase().includes("CARD") && !method.trim().toUpperCase().includes("PAYNOW");
+    const selectedMethod = paymentMethods.find(m => m.payMode === method);
+    const isYeahPay = selectedMethod?.yeahPayEnabled === true;
+    const isCard = method.trim().toUpperCase().includes("CARD") && !method.trim().toUpperCase().includes("PAYNOW");
 
-  // ✅ YEAHPAY - Direct terminal call
-  if (isYeahPay && total > 0) {
-    setPaymentStatus("processing");
-    setPaymentMessage("Processing payment...");
-    setProcessing(true);
-    
-    try {
-      const deviceSn = selectedMethod?.deviceSn || '';
-      const salt = selectedMethod?.deviceSalt || '';
-      
-      console.log('🔄 [MainPayment] Calling YeahPay terminal for:', method);
-      console.log('   Amount:', total);
-      console.log('   DeviceSN:', deviceSn);
-      
-      if (!deviceSn) {
+    // ✅ YEAHPAY - Direct terminal call
+    if (isYeahPay && total > 0) {
+      setPaymentStatus("processing");
+      setPaymentMessage("Processing payment...");
+      setProcessing(true);
+
+      try {
+        const deviceSn = selectedMethod?.deviceSn || '';
+        const salt = selectedMethod?.deviceSalt || '';
+
+        console.log('🔄 [MainPayment] Calling YeahPay terminal for:', method);
+        console.log('   Amount:', total);
+        console.log('   DeviceSN:', deviceSn);
+
+        if (!deviceSn) {
+          setPaymentStatus("failed");
+          setPaymentMessage("DeviceSN not configured");
+          Alert.alert('Configuration Error', 'DeviceSN not configured.');
+          setProcessing(false);
+          return;
+        }
+
+        const endpoint = isCard ? '/api/yeahpay/card-payment' : '/api/yeahpay/paynow-payment';
+        const response = await fetch(`${API_URL}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(useAuthStore.getState().token ? { 'Authorization': `Bearer ${useAuthStore.getState().token}` } : {}),
+          },
+          body: JSON.stringify({
+            amount: total,
+            deviceSn: deviceSn,
+            salt: salt || ''
+          })
+        });
+
+        const result = await response.json();
+        console.log('✅ [MainPayment] Terminal response:', result);
+
+        const responseCode = result.code;
+
+        // ✅ SUCCESS - Code 0
+        if (result.success || responseCode === 0) {
+          setPaymentStatus("success");
+          setPaymentMessage(`✅ ${currencySymbol}${total.toFixed(2)} paid successfully via ${method}`);
+
+          showToast({
+            type: 'success',
+            message: '✅ Payment Successful',
+            subtitle: `${currencySymbol}${total.toFixed(2)} paid via ${method}`
+          });
+
+          // ✅ Proceed to save
+          executeFinalPayment();
+
+          // ✅ CANCELLED - Code -1027
+        } else if (responseCode === -1027) {
+          setPaymentStatus("cancelled");
+          setPaymentMessage(`❌ Transaction cancelled on terminal`);
+
+          Alert.alert(
+            '❌ Transaction Cancelled',
+            'Payment was cancelled on the terminal. Please try again.',
+            [{ text: 'OK' }]
+          );
+          setProcessing(false);
+
+          // ✅ TIMEOUT - Code -1028, -1008
+        } else if (responseCode === -1028 || responseCode === -1008) {
+          setPaymentStatus("failed");
+          setPaymentMessage(`⏰ Transaction timeout`);
+
+          Alert.alert(
+            '⏰ Transaction Timeout',
+            'Card read timed out. Please try again.',
+            [{ text: 'OK' }]
+          );
+          setProcessing(false);
+
+          // ✅ FAILED - Other errors
+        } else {
+          setPaymentStatus("failed");
+          const errorMsg = result.msg || result.error || 'Payment declined';
+          setPaymentMessage(`❌ ${errorMsg}`);
+
+          Alert.alert(
+            '❌ Payment Failed',
+            errorMsg,
+            [{ text: 'OK' }]
+          );
+          setProcessing(false);
+        }
+
+      } catch (error: any) {
+        console.error('❌ [MainPayment] Terminal error:', error);
         setPaymentStatus("failed");
-        setPaymentMessage("DeviceSN not configured");
-        Alert.alert('Configuration Error', 'DeviceSN not configured.');
+        setPaymentMessage(`❌ ${error.message}`);
+        Alert.alert('Error', error.message || 'Failed to connect to terminal');
         setProcessing(false);
+      }
+      return;
+    }
+    // ============================================================
+    // REST OF EXISTING CODE
+    // ============================================================
+
+    if (isLedgerCollection) {
+      const parsedAmt = parseFloat(collectionAmount) || 0;
+      if (parsedAmt <= 0) {
+        showToast({
+          type: "warning",
+          message: "Invalid Amount",
+          subtitle: "Please enter a positive collection amount.",
+        });
         return;
       }
-      
-      const endpoint = isCard ? '/api/yeahpay/card-payment' : '/api/yeahpay/paynow-payment';
-      const response = await fetch(`${API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(useAuthStore.getState().token ? { 'Authorization': `Bearer ${useAuthStore.getState().token}` } : {}),
-        },
-        body: JSON.stringify({
-          amount: total,
-          deviceSn: deviceSn,
-          salt: salt || ''
-        })
-      });
-      
-      const result = await response.json();
-      console.log('✅ [MainPayment] Terminal response:', result);
-      
-      const responseCode = result.code;
-      
-      // ✅ SUCCESS - Code 0
-      if (result.success || responseCode === 0) {
-        setPaymentStatus("success");
-        setPaymentMessage(`✅ ${currencySymbol}${total.toFixed(2)} paid successfully via ${method}`);
-        
+      if (collectAmount !== undefined && parsedAmt > collectAmount + 0.01) {
         showToast({
-          type: 'success',
-          message: '✅ Payment Successful',
-          subtitle: `${currencySymbol}${total.toFixed(2)} paid via ${method}`
+          type: "warning",
+          message: "Overpayment Prevention",
+          subtitle: `Cannot exceed outstanding balance of ${currencySymbol}${collectAmount.toFixed(2)}`,
         });
-        
-        // ✅ Proceed to save
+        return;
+      }
+    }
+    if (isLedgerCollection && total <= 0) {
+      Alert.alert(
+        "No Payment Required",
+        `Outstanding balance is ${currencySymbol}${total.toFixed(2)}. No collection payment is required.`,
+      );
+      return;
+    }
+    if (
+      total > 0 &&
+      isCashMethod(method) &&
+      paidNum < total &&
+      Math.abs(paidNum - total) > 0.01
+    ) {
+      showToast({
+        type: "warning",
+        message: "Insufficient Payment",
+        subtitle: `Please enter at least ${currencySymbol}${total.toFixed(2)}`,
+      });
+      return;
+    }
+    const { settings } = usePaymentSettingsStore.getState();
+    const mUpper = method.trim().toUpperCase();
+    if (
+      mUpper === "MEMBER" ||
+      mUpper === "CREDIT" ||
+      mUpper === "5" ||
+      mUpper === "6"
+    ) {
+      if (!selectedMember) {
+        setShowMemberModal(true);
+        return;
+      }
+      const isLimitExceeded =
+        (selectedMember.CurrentBalance || 0) + total >
+        (selectedMember.CreditLimit || 0);
+      if (isLimitExceeded) {
+        const isAdminOrManager =
+          user?.role === "ADMIN" || user?.role === "MANAGER";
+        if (isAdminOrManager) {
+          Alert.alert(
+            "Credit Limit Exceeded",
+            `Customer outstanding will be ${currencySymbol}${((selectedMember.CurrentBalance || 0) + total).toFixed(2)} which exceeds limit of ${currencySymbol}${(selectedMember.CreditLimit || 0).toFixed(2)}. Authorize this credit sale?`,
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Authorize & Complete",
+                onPress: () => executeFinalPayment(),
+              },
+            ],
+          );
+        } else {
+          showToast({
+            type: "error",
+            message: "Credit Limit Exceeded",
+            subtitle: "Manager approval required to override",
+          });
+        }
+      } else {
         executeFinalPayment();
-        
-      // ✅ CANCELLED - Code -1027
-      } else if (responseCode === -1027) {
-        setPaymentStatus("cancelled");
-        setPaymentMessage(`❌ Transaction cancelled on terminal`);
-        
-        Alert.alert(
-          '❌ Transaction Cancelled',
-          'Payment was cancelled on the terminal. Please try again.',
-          [{ text: 'OK' }]
-        );
-        setProcessing(false);
-        
-      // ✅ TIMEOUT - Code -1028, -1008
-      } else if (responseCode === -1028 || responseCode === -1008) {
-        setPaymentStatus("failed");
-        setPaymentMessage(`⏰ Transaction timeout`);
-        
-        Alert.alert(
-          '⏰ Transaction Timeout',
-          'Card read timed out. Please try again.',
-          [{ text: 'OK' }]
-        );
-        setProcessing(false);
-        
-      // ✅ FAILED - Other errors
-      } else {
-        setPaymentStatus("failed");
-        const errorMsg = result.msg || result.error || 'Payment declined';
-        setPaymentMessage(`❌ ${errorMsg}`);
-        
-        Alert.alert(
-          '❌ Payment Failed',
-          errorMsg,
-          [{ text: 'OK' }]
-        );
-        setProcessing(false);
       }
-      
-    } catch (error: any) {
-      console.error('❌ [MainPayment] Terminal error:', error);
-      setPaymentStatus("failed");
-      setPaymentMessage(`❌ ${error.message}`);
-      Alert.alert('Error', error.message || 'Failed to connect to terminal');
-      setProcessing(false);
+      return;
     }
-    return;
-  }
-  // ============================================================
-  // REST OF EXISTING CODE
-  // ============================================================
 
-  if (isLedgerCollection) {
-    const parsedAmt = parseFloat(collectionAmount) || 0;
-    if (parsedAmt <= 0) {
-      showToast({
-        type: "warning",
-        message: "Invalid Amount",
-        subtitle: "Please enter a positive collection amount.",
-      });
+    // ✅ Only show QR for REGULAR PayNow (NOT YeahPay)
+    if (mUpper.includes("PAYNOW") && settings.payNowQrUrl) {
+      setIsPayNowVisible(true);
       return;
     }
-    if (collectAmount !== undefined && parsedAmt > collectAmount + 0.01) {
-      showToast({
-        type: "warning",
-        message: "Overpayment Prevention",
-        subtitle: `Cannot exceed outstanding balance of ${currencySymbol}${collectAmount.toFixed(2)}`,
-      });
-      return;
-    }
-  }
-  if (isLedgerCollection && total <= 0) {
-    Alert.alert(
-      "No Payment Required",
-      `Outstanding balance is ${currencySymbol}${total.toFixed(2)}. No collection payment is required.`,
-    );
-    return;
-  }
-  if (
-    total > 0 &&
-    isCashMethod(method) &&
-    paidNum < total &&
-    Math.abs(paidNum - total) > 0.01
-  ) {
-    showToast({
-      type: "warning",
-      message: "Insufficient Payment",
-      subtitle: `Please enter at least ${currencySymbol}${total.toFixed(2)}`,
-    });
-    return;
-  }
-  const { settings } = usePaymentSettingsStore.getState();
-  const mUpper = method.trim().toUpperCase();
-  if (
-    mUpper === "MEMBER" ||
-    mUpper === "CREDIT" ||
-    mUpper === "5" ||
-    mUpper === "6"
-  ) {
-    if (!selectedMember) {
-      setShowMemberModal(true);
-      return;
-    }
-    const isLimitExceeded =
-      (selectedMember.CurrentBalance || 0) + total >
-      (selectedMember.CreditLimit || 0);
-    if (isLimitExceeded) {
-      const isAdminOrManager =
-        user?.role === "ADMIN" || user?.role === "MANAGER";
-      if (isAdminOrManager) {
-        Alert.alert(
-          "Credit Limit Exceeded",
-          `Customer outstanding will be ${currencySymbol}${((selectedMember.CurrentBalance || 0) + total).toFixed(2)} which exceeds limit of ${currencySymbol}${(selectedMember.CreditLimit || 0).toFixed(2)}. Authorize this credit sale?`,
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Authorize & Complete",
-              onPress: () => executeFinalPayment(),
-            },
-          ],
-        );
-      } else {
-        showToast({
-          type: "error",
-          message: "Credit Limit Exceeded",
-          subtitle: "Manager approval required to override",
-        });
-      }
-    } else {
-      executeFinalPayment();
-    }
-    return;
-  }
 
-  // ✅ Only show QR for REGULAR PayNow (NOT YeahPay)
-  if (mUpper.includes("PAYNOW") && settings.payNowQrUrl) {
-    setIsPayNowVisible(true);
-    return;
-  }
-  
-  // ✅ Only show UPI for regular UPI
-  if (mUpper.includes("UPI") && settings.upiId) {
-    setIsUPIVisible(true);
-    return;
-  }
-  
-  executeFinalPayment();
-};
+    // ✅ Only show UPI for regular UPI
+    if (mUpper.includes("UPI") && settings.upiId) {
+      setIsUPIVisible(true);
+      return;
+    }
+
+    executeFinalPayment();
+  };
   const executeFinalPayment = async (
     payments?: Array<{
       payModeId: number;
@@ -1151,22 +1182,22 @@ const confirmPayment = async () => {
       const payModeId = selectedMode ? selectedMode.position || 1 : 1;
       const finalPayments = payments
         ? payments.map((p) => ({
-            payModeId: p.payModeId,
-            payMode:
-              (p as any).payMode ||
-              paymentMethods.find((x) => x.position === p.payModeId)?.payMode ||
-              "CASH",
-            amount: p.amount,
-            referenceNo: p.referenceNo || "",
-          }))
+          payModeId: p.payModeId,
+          payMode:
+            (p as any).payMode ||
+            paymentMethods.find((x) => x.position === p.payModeId)?.payMode ||
+            "CASH",
+          amount: p.amount,
+          referenceNo: p.referenceNo || "",
+        }))
         : [
-            {
-              payModeId,
-              payMode: method,
-              amount: total,
-              referenceNo: "",
-            },
-          ];
+          {
+            payModeId,
+            payMode: method,
+            amount: total,
+            referenceNo: "",
+          },
+        ];
 
       const payEndpoint = isMember
         ? `${API_URL}/api/members/pay`
@@ -1193,36 +1224,36 @@ const confirmPayment = async () => {
         const result = await response.json();
         if (result.success) {
           router.push({
-              pathname: "/payment_success" as any,
-              params: {
-                total: total.toFixed(2),
-                paidNum: (payments && payments.length > 0
-                  ? total
-                  : paidNum
-                ).toFixed(2),
-                change: (payments && payments.length > 0 ? 0 : change).toFixed(
-                  2,
-                ),
-                method:
-                  payments && payments.length > 0 ? "SPLIT" : method.trim(),
-                payments: payments ? JSON.stringify(payments) : "[]",
-                orderId:
-                  result.settlementId ||
-                  result.transactionId ||
-                  "COLL-" + Date.now(),
-                tableNo: "LEDGER",
-                section: "",
-                orderType: "LEDGER",
-                discountInfo: "{}",
-                items: "[]",
-                roundOff: "0.00",
-                serviceCharge: "0.00",
-                isSplit: payments && payments.length > 0 ? "true" : "false",
-                waiterName: user?.userName || "Cashier",
-                isLedgerCollection: "true",
-                isMember: isMember ? "true" : "false",
-              },
-            });
+            pathname: "/payment_success" as any,
+            params: {
+              total: total.toFixed(2),
+              paidNum: (payments && payments.length > 0
+                ? total
+                : paidNum
+              ).toFixed(2),
+              change: (payments && payments.length > 0 ? 0 : change).toFixed(
+                2,
+              ),
+              method:
+                payments && payments.length > 0 ? "SPLIT" : method.trim(),
+              payments: payments ? JSON.stringify(payments) : "[]",
+              orderId:
+                result.settlementId ||
+                result.transactionId ||
+                "COLL-" + Date.now(),
+              tableNo: "LEDGER",
+              section: "",
+              orderType: "LEDGER",
+              discountInfo: "{}",
+              items: "[]",
+              roundOff: "0.00",
+              serviceCharge: "0.00",
+              isSplit: payments && payments.length > 0 ? "true" : "false",
+              waiterName: user?.userName || "Cashier",
+              isLedgerCollection: "true",
+              isMember: isMember ? "true" : "false",
+            },
+          });
         } else {
           showToast({
             type: "error",
@@ -1314,71 +1345,71 @@ const confirmPayment = async () => {
       });
       const result = await response.json();
       if (result.success) {
-          // Navigate first — let the success screen mount fully before mutating store state
-          router.push({
-            pathname: "/payment_success" as any,
-            params: {
-              total: total.toFixed(2),
-              paidNum: (payments && payments.length > 0
-                ? total
-                : paidNum
-              ).toFixed(2),
-              change: (payments && payments.length > 0 ? 0 : change).toFixed(2),
-              method: payments && payments.length > 0 ? "SPLIT" : method.trim(),
-              payments: payments ? JSON.stringify(payments) : "[]",
-              orderId: result.billNo || result.orderId || displayOrderId || "",
-              tableNo: context?.tableNo ?? "",
-              section: context?.section ?? "",
-              orderType: context?.orderType ?? "",
-              discountInfo: JSON.stringify(
-                discount?.applied && discountAmount > 0
-                  ? { ...discount, amount: discountAmount, subtotal }
-                  : {},
-              ),
-              items: JSON.stringify(finalItems || []),
-              roundOff: displayedRoundOff.toFixed(2),
-              serviceCharge: displayedServiceCharge.toFixed(2),
-              takeawayCharge: currentTakeawayCharge.toFixed(2),
-              isSplit: splitItems ? "true" : "false",
-              waiterName: context?.serverName ?? "",
-            },
-          });
-          // Snapshot context/splitItems before the delayed cleanup
-          const ctxSnapshot = context;
-          const splitSnapshot = splitItems;
-          const orderIdSnapshot = displayOrderId;
-          // Delay cleanup so the success screen renders before store mutations
-          setTimeout(() => {
-            if (ctxSnapshot) {
-              if (splitSnapshot) {
-                const { carts, currentContextId, setCartItems } =
-                  useCartStore.getState();
-                if (currentContextId) {
-                  const updated = (carts[currentContextId] || [])
-                    .map((o: any) => {
-                      const s = splitSnapshot.find(
-                        (si: any) => si.lineItemId === o.lineItemId,
-                      );
-                      return s ? { ...o, qty: o.qty - s.qty } : o;
-                    })
-                    .filter((i: any) => i.qty > 0);
-                  setCartItems(currentContextId, updated);
-                }
-                useCartStore.getState().setActiveSplitItems(null);
-              } else {
-                if (ctxSnapshot.orderType === "DINE_IN") {
-                  clearTable(ctxSnapshot.section!, ctxSnapshot.tableNo!);
-                }
-
-                if (ctxSnapshot.tableId) {
-                  useCartStore.getState().clearTableSession(ctxSnapshot.tableId);
-                  closeActiveOrder(orderIdSnapshot || "");
-                }
-
-                useOrderContextStore.getState().clearOrderContext();
+        // Navigate first — let the success screen mount fully before mutating store state
+        router.push({
+          pathname: "/payment_success" as any,
+          params: {
+            total: total.toFixed(2),
+            paidNum: (payments && payments.length > 0
+              ? total
+              : paidNum
+            ).toFixed(2),
+            change: (payments && payments.length > 0 ? 0 : change).toFixed(2),
+            method: payments && payments.length > 0 ? "SPLIT" : method.trim(),
+            payments: payments ? JSON.stringify(payments) : "[]",
+            orderId: result.billNo || result.orderId || displayOrderId || "",
+            tableNo: context?.tableNo ?? "",
+            section: context?.section ?? "",
+            orderType: context?.orderType ?? "",
+            discountInfo: JSON.stringify(
+              discount?.applied && discountAmount > 0
+                ? { ...discount, amount: discountAmount, subtotal }
+                : {},
+            ),
+            items: JSON.stringify(finalItems || []),
+            roundOff: displayedRoundOff.toFixed(2),
+            serviceCharge: displayedServiceCharge.toFixed(2),
+            takeawayCharge: currentTakeawayCharge.toFixed(2),
+            isSplit: splitItems ? "true" : "false",
+            waiterName: context?.serverName ?? "",
+          },
+        });
+        // Snapshot context/splitItems before the delayed cleanup
+        const ctxSnapshot = context;
+        const splitSnapshot = splitItems;
+        const orderIdSnapshot = displayOrderId;
+        // Delay cleanup so the success screen renders before store mutations
+        setTimeout(() => {
+          if (ctxSnapshot) {
+            if (splitSnapshot) {
+              const { carts, currentContextId, setCartItems } =
+                useCartStore.getState();
+              if (currentContextId) {
+                const updated = (carts[currentContextId] || [])
+                  .map((o: any) => {
+                    const s = splitSnapshot.find(
+                      (si: any) => si.lineItemId === o.lineItemId,
+                    );
+                    return s ? { ...o, qty: o.qty - s.qty } : o;
+                  })
+                  .filter((i: any) => i.qty > 0);
+                setCartItems(currentContextId, updated);
               }
+              useCartStore.getState().setActiveSplitItems(null);
+            } else {
+              if (ctxSnapshot.orderType === "DINE_IN") {
+                clearTable(ctxSnapshot.section!, ctxSnapshot.tableNo!);
+              }
+
+              if (ctxSnapshot.tableId) {
+                useCartStore.getState().clearTableSession(ctxSnapshot.tableId);
+                closeActiveOrder(orderIdSnapshot || "");
+              }
+
+              useOrderContextStore.getState().clearOrderContext();
             }
-          }, 800);
+          }
+        }, 800);
       } else {
         showToast({ type: "error", message: "Failed", subtitle: result.error });
       }
@@ -1990,8 +2021,9 @@ const confirmPayment = async () => {
 
     const finalPrice = baseTotal - itemDiscount;
 
+    const isTakeawayItem = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
     const isSC =
-      (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true) && useGeneralSettingsStore.getState().settings.SVCIdentification !== false;
+      !isTakeawayItem && (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true) && useGeneralSettingsStore.getState().settings.SVCIdentification !== false;
 
     return (
       <View
@@ -2037,10 +2069,10 @@ const confirmPayment = async () => {
           </View>
 
           {(item.spicy && item.spicy !== "Medium") ||
-          (item.oil && item.oil !== "Normal") ||
-          (item.salt && item.salt !== "Normal") ||
-          (item.sugar && item.sugar !== "Normal") ||
-          item.note ? (
+            (item.oil && item.oil !== "Normal") ||
+            (item.salt && item.salt !== "Normal") ||
+            (item.sugar && item.sugar !== "Normal") ||
+            item.note ? (
             <Text style={styles.itemSubText} numberOfLines={2}>
               {[
                 item.spicy && item.spicy !== "Medium" ? `🌶 ${item.spicy}` : "",
@@ -2383,7 +2415,7 @@ const confirmPayment = async () => {
                                   size={isMobile ? 16 : 20}
                                   color={
                                     isSelected ? "#fff" :
-                                    Theme.primary
+                                      Theme.primary
                                   }
                                 />
                               </View>
@@ -2403,186 +2435,186 @@ const confirmPayment = async () => {
                       </View>
                     )}
                     {paymentStatus !== "idle" && (
-  <View style={[
-    styles.statusContainer,
-    paymentStatus === "success" && styles.statusSuccess,
-    paymentStatus === "cancelled" && styles.statusCancelled,
-    paymentStatus === "failed" && styles.statusFailed,
-    paymentStatus === "processing" && styles.statusProcessing,
-  ]}>
-    <Ionicons 
-      name={
-        paymentStatus === "success" ? "checkmark-circle" :
-        paymentStatus === "cancelled" ? "close-circle" :
-        paymentStatus === "failed" ? "alert-circle" :
-        "sync"
-      } 
-      size={24} 
-      color={
-        paymentStatus === "success" ? "#22c55e" :
-        paymentStatus === "cancelled" ? "#f59e0b" :
-        paymentStatus === "failed" ? "#ef4444" :
-        "#3b82f6"
-      } 
-    />
-    <Text style={[
-      styles.statusMessage,
-      paymentStatus === "success" && styles.statusMessageSuccess,
-      paymentStatus === "cancelled" && styles.statusMessageCancelled,
-      paymentStatus === "failed" && styles.statusMessageFailed,
-      paymentStatus === "processing" && styles.statusMessageProcessing,
-    ]}>
-      {paymentMessage}
-    </Text>
-  </View>
-)}
+                      <View style={[
+                        styles.statusContainer,
+                        paymentStatus === "success" && styles.statusSuccess,
+                        paymentStatus === "cancelled" && styles.statusCancelled,
+                        paymentStatus === "failed" && styles.statusFailed,
+                        paymentStatus === "processing" && styles.statusProcessing,
+                      ]}>
+                        <Ionicons
+                          name={
+                            paymentStatus === "success" ? "checkmark-circle" :
+                              paymentStatus === "cancelled" ? "close-circle" :
+                                paymentStatus === "failed" ? "alert-circle" :
+                                  "sync"
+                          }
+                          size={24}
+                          color={
+                            paymentStatus === "success" ? "#22c55e" :
+                              paymentStatus === "cancelled" ? "#f59e0b" :
+                                paymentStatus === "failed" ? "#ef4444" :
+                                  "#3b82f6"
+                          }
+                        />
+                        <Text style={[
+                          styles.statusMessage,
+                          paymentStatus === "success" && styles.statusMessageSuccess,
+                          paymentStatus === "cancelled" && styles.statusMessageCancelled,
+                          paymentStatus === "failed" && styles.statusMessageFailed,
+                          paymentStatus === "processing" && styles.statusMessageProcessing,
+                        ]}>
+                          {paymentMessage}
+                        </Text>
+                      </View>
+                    )}
 
                     {(method.trim().toUpperCase() === "MEMBER" ||
                       method.trim().toUpperCase() === "CREDIT") && (
-                      <View style={styles.creditMemberSection}>
-                        <View style={styles.sectionHeader}>
-                          <Text style={styles.sectionTitle}>
-                            {method.trim().toUpperCase() === "CREDIT"
-                              ? "Credit Customer Account"
-                              : "Member Account"}
-                          </Text>
-                        </View>
+                        <View style={styles.creditMemberSection}>
+                          <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>
+                              {method.trim().toUpperCase() === "CREDIT"
+                                ? "Credit Customer Account"
+                                : "Member Account"}
+                            </Text>
+                          </View>
 
-                        {selectedMember ? (
-                          <View style={styles.selectedCreditCard}>
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                              }}
-                            >
+                          {selectedMember ? (
+                            <View style={styles.selectedCreditCard}>
                               <View
                                 style={{
                                   flexDirection: "row",
+                                  justifyContent: "space-between",
                                   alignItems: "center",
-                                  gap: 10,
                                 }}
                               >
-                                <View style={styles.creditIconBadge}>
-                                  <FontAwesome5
-                                    name="user-tag"
-                                    size={14}
-                                    color="#fff"
-                                  />
-                                </View>
-                                <View>
-                                  <Text style={styles.creditCardName}>
-                                    {selectedMember.Name}
-                                  </Text>
-                                  <Text style={styles.creditCardPhone}>
-                                    {selectedMember.Phone}
-                                  </Text>
-                                </View>
-                              </View>
-                              <TouchableOpacity
-                                style={styles.changeCreditBtn}
-                                onPress={() => setShowMemberModal(true)}
-                              >
-                                <Text style={styles.changeCreditBtnText}>
-                                  Change
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-
-                            <View style={styles.creditCardStatsRow}>
-                              <View style={styles.creditStatCol}>
-                                <Text style={styles.creditStatLabel}>
-                                  Available Credit
-                                </Text>
-                                <Text
-                                  style={[
-                                    styles.creditStatValue,
-                                    {
-                                      color:
-                                        (selectedMember.CreditLimit || 0) -
-                                          (selectedMember.CurrentBalance || 0) <
-                                        total
-                                          ? Theme.danger
-                                          : Theme.success,
-                                    },
-                                  ]}
+                                <View
+                                  style={{
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    gap: 10,
+                                  }}
                                 >
-                                  {formatMoney(
-                                    currencySymbol,
-                                    (selectedMember.CreditLimit || 0) -
-                                      (selectedMember.CurrentBalance || 0),
-                                  )}
-                                </Text>
+                                  <View style={styles.creditIconBadge}>
+                                    <FontAwesome5
+                                      name="user-tag"
+                                      size={14}
+                                      color="#fff"
+                                    />
+                                  </View>
+                                  <View>
+                                    <Text style={styles.creditCardName}>
+                                      {selectedMember.Name}
+                                    </Text>
+                                    <Text style={styles.creditCardPhone}>
+                                      {selectedMember.Phone}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <TouchableOpacity
+                                  style={styles.changeCreditBtn}
+                                  onPress={() => setShowMemberModal(true)}
+                                >
+                                  <Text style={styles.changeCreditBtnText}>
+                                    Change
+                                  </Text>
+                                </TouchableOpacity>
                               </View>
-                              <View style={styles.creditStatCol}>
-                                <Text style={styles.creditStatLabel}>
-                                  Credit Limit
-                                </Text>
-                                <Text style={styles.creditStatValue}>
-                                  {formatMoney(
-                                    currencySymbol,
-                                    selectedMember.CreditLimit || 0,
-                                  )}
-                                </Text>
-                              </View>
-                              <View style={styles.creditStatCol}>
-                                <Text style={styles.creditStatLabel}>
-                                  Outstanding
-                                </Text>
-                                <Text style={styles.creditStatValue}>
-                                  {formatMoney(
-                                    currencySymbol,
-                                    selectedMember.CurrentBalance || 0,
-                                  )}
-                                </Text>
-                              </View>
-                            </View>
 
-                            {(selectedMember.CurrentBalance || 0) + total >
-                              (selectedMember.CreditLimit || 0) && (
-                              <View style={styles.limitExceededBanner}>
+                              <View style={styles.creditCardStatsRow}>
+                                <View style={styles.creditStatCol}>
+                                  <Text style={styles.creditStatLabel}>
+                                    Available Credit
+                                  </Text>
+                                  <Text
+                                    style={[
+                                      styles.creditStatValue,
+                                      {
+                                        color:
+                                          (selectedMember.CreditLimit || 0) -
+                                            (selectedMember.CurrentBalance || 0) <
+                                            total
+                                            ? Theme.danger
+                                            : Theme.success,
+                                      },
+                                    ]}
+                                  >
+                                    {formatMoney(
+                                      currencySymbol,
+                                      (selectedMember.CreditLimit || 0) -
+                                      (selectedMember.CurrentBalance || 0),
+                                    )}
+                                  </Text>
+                                </View>
+                                <View style={styles.creditStatCol}>
+                                  <Text style={styles.creditStatLabel}>
+                                    Credit Limit
+                                  </Text>
+                                  <Text style={styles.creditStatValue}>
+                                    {formatMoney(
+                                      currencySymbol,
+                                      selectedMember.CreditLimit || 0,
+                                    )}
+                                  </Text>
+                                </View>
+                                <View style={styles.creditStatCol}>
+                                  <Text style={styles.creditStatLabel}>
+                                    Outstanding
+                                  </Text>
+                                  <Text style={styles.creditStatValue}>
+                                    {formatMoney(
+                                      currencySymbol,
+                                      selectedMember.CurrentBalance || 0,
+                                    )}
+                                  </Text>
+                                </View>
+                              </View>
+
+                              {(selectedMember.CurrentBalance || 0) + total >
+                                (selectedMember.CreditLimit || 0) && (
+                                  <View style={styles.limitExceededBanner}>
+                                    <Ionicons
+                                      name="alert-circle"
+                                      size={16}
+                                      color={Theme.danger}
+                                    />
+                                    <Text style={styles.limitExceededText}>
+                                      Transaction exceeds Credit Limit by{" "}
+                                      {formatMoney(
+                                        currencySymbol,
+                                        (selectedMember.CurrentBalance || 0) +
+                                        total -
+                                        (selectedMember.CreditLimit || 0),
+                                      )}
+                                    </Text>
+                                  </View>
+                                )}
+                            </View>
+                          ) : (
+                            <TouchableOpacity
+                              style={styles.selectCreditPrompt}
+                              onPress={() => setShowMemberModal(true)}
+                              activeOpacity={0.7}
+                            >
+                              <View style={styles.selectCreditPromptInner}>
                                 <Ionicons
-                                  name="alert-circle"
-                                  size={16}
-                                  color={Theme.danger}
+                                  name="search-outline"
+                                  size={24}
+                                  color={Theme.primary}
                                 />
-                                <Text style={styles.limitExceededText}>
-                                  Transaction exceeds Credit Limit by{" "}
-                                  {formatMoney(
-                                    currencySymbol,
-                                    (selectedMember.CurrentBalance || 0) +
-                                      total -
-                                      (selectedMember.CreditLimit || 0),
-                                  )}
+                                <Text style={styles.selectCreditPromptTitle}>
+                                  No Customer Selected
+                                </Text>
+                                <Text style={styles.selectCreditPromptSub}>
+                                  Tap here to search existing or quick-add a new
+                                  credit customer
                                 </Text>
                               </View>
-                            )}
-                          </View>
-                        ) : (
-                          <TouchableOpacity
-                            style={styles.selectCreditPrompt}
-                            onPress={() => setShowMemberModal(true)}
-                            activeOpacity={0.7}
-                          >
-                            <View style={styles.selectCreditPromptInner}>
-                              <Ionicons
-                                name="search-outline"
-                                size={24}
-                                color={Theme.primary}
-                              />
-                              <Text style={styles.selectCreditPromptTitle}>
-                                No Customer Selected
-                              </Text>
-                              <Text style={styles.selectCreditPromptSub}>
-                                Tap here to search existing or quick-add a new
-                                credit customer
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
 
                     {isCashMethod(method) && (
                       <View style={styles.cashSection}>
@@ -2828,7 +2860,7 @@ const confirmPayment = async () => {
                                 method.trim().toUpperCase() === "CREDIT" ||
                                 method.trim().toUpperCase() === "5" ||
                                 method.trim().toUpperCase() === "6") &&
-                              selectedMember
+                                selectedMember
                                 ? "Complement Settlement"
                                 : "Complete Settlement"}
                             </Text>
@@ -2905,6 +2937,17 @@ const confirmPayment = async () => {
                           <Text style={styles.breakValue}>
                             {currencySymbol}
                             {displayedServiceCharge.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                      {currentTakeawayCharge > 0 && (
+                        <View style={styles.breakRow}>
+                          <Text style={styles.breakLabel}>
+                            Takeaway Charges ({currencySymbol}{takeawayCharges.toFixed(2)} * {takeawayQty})
+                          </Text>
+                          <Text style={styles.breakValue}>
+                            {currencySymbol}
+                            {currentTakeawayCharge.toFixed(2)}
                           </Text>
                         </View>
                       )}
@@ -2996,7 +3039,7 @@ const confirmPayment = async () => {
                                 style={[
                                   styles.roundingToggleBtn,
                                   roundType === "ten" &&
-                                    styles.activeRoundingBtn,
+                                  styles.activeRoundingBtn,
                                 ]}
                                 onPress={() => {
                                   if (roundType === "ten") {
@@ -3029,7 +3072,7 @@ const confirmPayment = async () => {
                                   style={[
                                     styles.roundingToggleText,
                                     roundType === "ten" &&
-                                      styles.activeRoundingText,
+                                    styles.activeRoundingText,
                                   ]}
                                 >
                                   {roundType === "ten"
@@ -3690,7 +3733,7 @@ const confirmPayment = async () => {
                                 {formatMoney(
                                   currencySymbol,
                                   selectedMember.CreditLimit -
-                                    selectedMember.CurrentBalance,
+                                  selectedMember.CurrentBalance,
                                 )}
                               </Text>
                             </View>
@@ -3915,48 +3958,48 @@ const styles = StyleSheet.create({
   },
   // In the styles object, add these:
 
-statusContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  padding: 12,
-  borderRadius: 12,
-  marginVertical: 10,
-  gap: 10,
-  borderWidth: 1,
-},
-statusSuccess: {
-  backgroundColor: '#dcfce7',
-  borderColor: '#22c55e',
-},
-statusCancelled: {
-  backgroundColor: '#fef3c7',
-  borderColor: '#f59e0b',
-},
-statusFailed: {
-  backgroundColor: '#fee2e2',
-  borderColor: '#ef4444',
-},
-statusProcessing: {
-  backgroundColor: '#dbeafe',
-  borderColor: '#3b82f6',
-},
-statusMessage: {
-  fontSize: 14,
-  fontFamily: Fonts.bold,
-  flex: 1,
-},
-statusMessageSuccess: {
-  color: '#16a34a',
-},
-statusMessageCancelled: {
-  color: '#d97706',
-},
-statusMessageFailed: {
-  color: '#dc2626',
-},
-statusMessageProcessing: {
-  color: '#2563eb',
-},
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginVertical: 10,
+    gap: 10,
+    borderWidth: 1,
+  },
+  statusSuccess: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#22c55e',
+  },
+  statusCancelled: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+  },
+  statusFailed: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#ef4444',
+  },
+  statusProcessing: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#3b82f6',
+  },
+  statusMessage: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    flex: 1,
+  },
+  statusMessageSuccess: {
+    color: '#16a34a',
+  },
+  statusMessageCancelled: {
+    color: '#d97706',
+  },
+  statusMessageFailed: {
+    color: '#dc2626',
+  },
+  statusMessageProcessing: {
+    color: '#2563eb',
+  },
   methodsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",

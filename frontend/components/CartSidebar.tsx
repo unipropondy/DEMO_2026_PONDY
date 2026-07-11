@@ -494,7 +494,8 @@ const CartItemRow = React.memo(
       item.StatusCode === 0 ||
       item.statusCode === 0;
 
-    const isSC = (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true) && useGeneralSettingsStore.getState().settings.SVCIdentification !== false;
+    const isTakeawayItem = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
+    const isSC = !isTakeawayItem && (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true) && useGeneralSettingsStore.getState().settings.SVCIdentification !== false;
 
     return (
       <View style={[
@@ -1126,7 +1127,9 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
     }
   }, [displayItems.length, orderContext?.tableId]);
 
-  const { grossTotal, totalDiscount, scEligibleSubtotal } = useMemo(() => {
+  const takeawayCharges = settings.takeawayCharges || 0;
+
+  const { grossTotal, totalDiscount, scEligibleSubtotal, takeawayChargeAmt, takeawayQty } = useMemo(() => {
     return displayItems.reduce(
       (acc, item) => {
         const isVoided = "status" in item && item.status === "VOIDED";
@@ -1148,25 +1151,32 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
         }
 
         const itemSubtotal = baseTotal - itemDiscount;
-        const isSC = Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+        const isTakeawayItem = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
+        const isSC = !isTakeawayItem && (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
+        const itemTWCharge = isTakeawayItem ? item.qty * takeawayCharges : 0;
 
         return {
           grossTotal: acc.grossTotal + baseTotal,
           totalDiscount: acc.totalDiscount + itemDiscount,
           scEligibleSubtotal: acc.scEligibleSubtotal + (isSC ? itemSubtotal : 0),
+          takeawayChargeAmt: acc.takeawayChargeAmt + itemTWCharge,
+          takeawayQty: acc.takeawayQty + (isTakeawayItem ? item.qty : 0),
         };
       },
-      { grossTotal: 0, totalDiscount: 0, scEligibleSubtotal: 0 },
+      { grossTotal: 0, totalDiscount: 0, scEligibleSubtotal: 0, takeawayChargeAmt: 0, takeawayQty: 0 },
     );
-  }, [displayItems]);
+  }, [displayItems, takeawayCharges]);
 
   const subtotal = grossTotal - totalDiscount;
   const serviceChargeAmt = scEligibleSubtotal * scRate;
   const allItemsHaveSC = useMemo(() => {
     const activeItems = displayItems.filter((i: any) => i.status !== "VOIDED" && i.statusCode !== 0);
-    return activeItems.length > 0 && activeItems.every((item: any) => Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
+    return activeItems.length > 0 && activeItems.every((item: any) => {
+      const isTakeawayItem = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
+      return !isTakeawayItem && (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
+    });
   }, [displayItems]);
-  const taxableAmt = subtotal + serviceChargeAmt;
+  const taxableAmt = subtotal + serviceChargeAmt + takeawayChargeAmt;
   const taxAmountRaw = taxableAmt * gstRate;
   // ✅ FIX: Round GST for display so it matches the payable total
   // (e.g. 0.495 → 0.50, not 0.49 which is what toFixed(2) gives due to V8 float truncation)
@@ -1703,11 +1713,22 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
               {serviceChargeAmt > 0 && (
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
-                    {allItemsHaveSC ? "Service Charge" : "Item Service Charge"} ({settings.serviceChargePercentage}%)
+                    {allItemsHaveSC ? "Service Charge" : "Item SVC"} ({settings.serviceChargePercentage}%)
                   </Text>
                   <Text style={styles.summaryValue}>
                     {currencySymbol}
                     {serviceChargeAmt.toFixed(2)}
+                  </Text>
+                </View>
+              )}
+              {takeawayChargeAmt > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>
+                    TW Charges ({currencySymbol}{takeawayCharges.toFixed(2)} * {takeawayQty})
+                  </Text>
+                  <Text style={styles.summaryValue}>
+                    {currencySymbol}
+                    {takeawayChargeAmt.toFixed(2)}
                   </Text>
                 </View>
               )}

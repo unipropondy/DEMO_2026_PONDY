@@ -10,6 +10,7 @@ import { formatToSingaporeDate, formatToSingaporeTime, formatToSingaporeDateTime
 import BillPDFGenerator from "./BillPDFGenerator";
 import { PrinterDetector } from "./PrinterDetector";
 import SunmiPrinterService from "./SunmiPrinterService";
+import { useCompanySettingsStore } from "../stores/companySettingsStore";
 
 // Printer types
 export type PrinterType =
@@ -732,66 +733,71 @@ class UniversalPrinter {
       }
 
       // ✅ 1. Try Hardware Printer (WiFi or Bluetooth)
-      let isReachable = false;
-      const isIp = targetIp && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(targetIp.trim());
-      if (isIp) {
-        isReachable = await this.isIpReachable(targetIp);
-      } else if (targetIp && targetIp.trim().length > 0) {
-        isReachable = true;
-      }
-
-      if (isReachable) {
-        try {
-          const text = this.formatKOTThermalText(orderData, type);
-
-          if (isIp) {
-            console.log(`🌐 KOT WiFi print to: ${targetIp}`);
-            const printPromise = ThermalPrinter.printTcp({
-              ip: targetIp,
-              port: 9100,
-              payload: text,
-              mmFeedPaper: 60,
-            });
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("WiFi Timeout")), 1500),
-            );
-            await Promise.race([printPromise, timeoutPromise]);
-          } else {
-            console.log(`🔵 KOT Bluetooth print to: ${targetIp}`);
-            const printPromise = ThermalPrinter.printBluetooth({
-              macAddress: targetIp,
-              payload: text,
-              mmFeedPaper: 60,
-            });
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("BT Timeout")), 3000),
-            );
-            await Promise.race([printPromise, timeoutPromise]);
-          }
-          await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
-          return true;
-        } catch (printError) {
-          console.warn("❌ Hardware KOT failed/timeout, falling back...");
+      const hasConfiguredIp = targetIp && targetIp.trim().length > 0;
+      if (hasConfiguredIp) {
+        let isReachable = false;
+        const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(targetIp.trim());
+        if (isIp) {
+          isReachable = await this.isIpReachable(targetIp);
+        } else {
+          isReachable = true;
         }
-      }
 
-      // ✅ 2. Try Sunmi direct print (Silent)
-      const sunmiReady = await SunmiPrinterService.init().catch(() => false);
-      if (sunmiReady) {
-        try {
-          const printPromise = SunmiPrinterService.printKOT(orderData, type);
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Sunmi Timeout")), 2000),
-          );
-          const printed = await Promise.race([printPromise, timeoutPromise]);
+        if (isReachable) {
+          try {
+            const text = this.formatKOTThermalText(orderData, type);
 
-          if (printed) {
-            console.log("✅ KOT Printed with Sunmi - NO PREVIEW");
+            if (isIp) {
+              console.log(`🌐 KOT WiFi print to: ${targetIp}`);
+              const printPromise = ThermalPrinter.printTcp({
+                ip: targetIp,
+                port: 9100,
+                payload: text,
+                mmFeedPaper: 60,
+              });
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("WiFi Timeout")), 1500),
+              );
+              await Promise.race([printPromise, timeoutPromise]);
+            } else {
+              console.log(`🔵 KOT Bluetooth print to: ${targetIp}`);
+              const printPromise = ThermalPrinter.printBluetooth({
+                macAddress: targetIp,
+                payload: text,
+                mmFeedPaper: 60,
+              });
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("BT Timeout")), 3000),
+              );
+              await Promise.race([printPromise, timeoutPromise]);
+            }
             await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
             return true;
+          } catch (printError) {
+            console.warn("❌ Hardware KOT failed/timeout, falling back directly to PDF...");
           }
-        } catch (sunmiErr) {
-          console.warn("❌ Sunmi KOT failed/timeout:", sunmiErr);
+        } else {
+          console.warn(`❌ configured printer IP ${targetIp} not reachable, falling back directly to PDF...`);
+        }
+      } else {
+        // ✅ 2. Try Sunmi direct print (Silent) (Only if IP is NOT entered)
+        const sunmiReady = await SunmiPrinterService.init().catch(() => false);
+        if (sunmiReady) {
+          try {
+            const printPromise = SunmiPrinterService.printKOT(orderData, type);
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Sunmi Timeout")), 2000),
+            );
+            const printed = await Promise.race([printPromise, timeoutPromise]);
+
+            if (printed) {
+              console.log("✅ KOT Printed with Sunmi - NO PREVIEW");
+              await this.logPrintJob(orderData.orderId, orderData.orderNo, type);
+              return true;
+            }
+          } catch (sunmiErr) {
+            console.warn("❌ Sunmi KOT failed/timeout:", sunmiErr);
+          }
         }
       }
 
@@ -1008,13 +1014,13 @@ class UniversalPrinter {
                           <div class="item-main">
                             <div class="item-qty">${item.quantity || item.qty || 1}</div>
                             <div class="item-name">
-                              ${item.name}
+                              ${(item.name || "").replace(/\n/g, '<br/>')}
                               ${item.songName || item.SongName ? `<div style="font-size: 20px; font-weight: normal; color: #555; margin-top: 4px;">🎵 ${item.songName || item.SongName}</div>` : ''}
                             </div>
                           </div>
                           ${
                             item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway
-                              ? `<div class="modifier-list"><span class="modifier-item" style="font-weight: bold;">- Takeaway</span></div>`
+                              ? `<div class="modifier-list"><span class="modifier-item" style="font-size: 20px; font-weight: 900; color: #000;">- Takeaway</span></div>`
                               : ""
                           }
                           ${
@@ -1051,7 +1057,7 @@ class UniversalPrinter {
                     <div class="item-main">
                       <div class="item-qty">${item.quantity || item.qty || 1}</div>
                       <div class="item-name">
-                        ${item.name}
+                        ${(item.name || "").replace(/\n/g, '<br/>')}
                         ${item.songName || item.SongName ? `<div style="font-size: 20px; font-weight: normal; color: #555; margin-top: 4px;">🎵 ${item.songName || item.SongName}</div>` : ''}
                       </div>
                     </div>
@@ -1062,7 +1068,7 @@ class UniversalPrinter {
                       item.IsTakeAway
                         ? `
                       <div class="modifier-list">
-                        <span class="modifier-item" style="font-weight: bold;">- Takeaway</span>
+                        <span class="modifier-item" style="font-size: 20px; font-weight: 900; color: #000;">- Takeaway</span>
                       </div>
                     `
                         : ""
@@ -1167,7 +1173,14 @@ class UniversalPrinter {
         groupItems.forEach((item: any) => {
           const qtyNum = item.quantity || item.qty || 1;
           const itemName = item.name || item.DishName || "";
-          text += `[L]<font size='big'>[${qtyNum}] ${itemName}</font>\n`;
+          const lines = itemName.split("\n");
+          lines.forEach((line: string, idx: number) => {
+            if (idx === 0) {
+              text += `[L]<font size='big'>[${qtyNum}] ${line}</font>\n`;
+            } else {
+              text += `[L]<font size='big'>    ${line}</font>\n`;
+            }
+          });
 
           const songName = item.songName || item.SongName || "";
           if (songName) {
@@ -1181,7 +1194,7 @@ class UniversalPrinter {
             item.IsTakeAway
           );
           if (isTw) {
-            text += `[L]    - Takeaway\n`;
+            text += `[L]    <B>- Takeaway</B>\n`;
           }
 
           if (item.modifiers && item.modifiers.length > 0) {
@@ -1211,9 +1224,14 @@ class UniversalPrinter {
       items.forEach((item: any) => {
         const qtyNum = item.quantity || item.qty || 1;
         const itemName = item.name || item.DishName || "";
-
-        // 🚀 Square brackets [1] make quantity very clear and avoid alignment drift
-        text += `[L]<font size='big'>[${qtyNum}] ${itemName}</font>\n`;
+        const lines = itemName.split("\n");
+        lines.forEach((line: string, idx: number) => {
+          if (idx === 0) {
+            text += `[L]<font size='big'>[${qtyNum}] ${line}</font>\n`;
+          } else {
+            text += `[L]<font size='big'>    ${line}</font>\n`;
+          }
+        });
 
         const songName = item.songName || item.SongName || "";
         if (songName) {
@@ -1227,7 +1245,7 @@ class UniversalPrinter {
           item.IsTakeAway
         );
         if (isTw) {
-          text += `[L]    - Takeaway\n`;
+          text += `[L]    <B>- Takeaway</B>\n`;
         }
 
         if (item.modifiers && item.modifiers.length > 0) {
@@ -1644,7 +1662,10 @@ class UniversalPrinter {
       (i: any) => i.status !== "VOIDED",
     );
     const activeItems = (saleData.items || []).filter((i: any) => i.status !== "VOIDED" && i.statusCode !== 0);
-    const allItemsHaveSC = activeItems.length > 0 && activeItems.every((item: any) => Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
+    const allItemsHaveSC = activeItems.length > 0 && activeItems.every((item: any) => {
+      const isTakeawayItem = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
+      return !isTakeawayItem && (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
+    });
 
     printItems.forEach((item: any) => {
       // 🛡️ Robust field mapping
@@ -1674,7 +1695,8 @@ class UniversalPrinter {
         text += `[L]   ${item.name}\n`;
       }
 
-      const isSC = Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+      const isTakeawayItem = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
+      const isSC = !isTakeawayItem && (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
       if (isSC && !allItemsHaveSC) {
         text += `[L]   [Service Charge ${company.serviceChargePercentage}%]\n`;
       }
@@ -1806,7 +1828,8 @@ class UniversalPrinter {
           }
         }
         const itemSubtotal = baseTotal - itemDiscount;
-        const isSC = Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+        const isTakeawayItem = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
+        const isSC = !isTakeawayItem && (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
         if (isSC) {
           scEligibleSubtotal += itemSubtotal;
         }
@@ -1826,7 +1849,19 @@ class UniversalPrinter {
     const effectiveSCPercentage = serviceChargeAmount > 0 && currentSubtotal > 0
       ? Math.round((serviceChargeAmount / currentSubtotal) * 100)
       : scPercentage;
-    const takeawayCharge = parseFloat(String(saleData.takeawayCharge || 0)) || 0;
+
+    const companySettings = useCompanySettingsStore.getState().settings;
+    const takeawayRate = companySettings?.takeawayCharges || 0;
+    const takeawayQty = (saleData.items || []).reduce((sum: number, item: any) => {
+      const isTW = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
+      const isVoided = item.status === "VOIDED" || item.StatusCode === 0;
+      if (isTW && !isVoided) {
+        return sum + (item.qty || item.quantity || 1);
+      }
+      return sum;
+    }, 0);
+
+    const takeawayCharge = takeawayQty * takeawayRate;
     const taxableAmount = currentSubtotal + serviceChargeAmount + takeawayCharge;
     const gstAmountRaw = hasGST ? taxableAmount * (gstRate / 100) : 0;
     const gstAmount = Math.round(gstAmountRaw * 100) / 100;
@@ -1848,7 +1883,7 @@ class UniversalPrinter {
     }
 
     if (takeawayCharge > 0) {
-      text += this.formatTwoCols48("Takeaway Charge:", `${symbol}${takeawayCharge.toFixed(2)}`);
+      text += this.formatTwoCols48(`Takeaway Charges (${symbol}${takeawayRate.toFixed(2)}*${takeawayQty}):`, `${symbol}${takeawayCharge.toFixed(2)}`);
     }
 
     if (hasGST && gstAmount > 0) {
@@ -2024,7 +2059,7 @@ class UniversalPrinter {
                     id: opt.dishId,
                     qty: item.quantity || item.qty || 1,
                     price: 0,
-                    name: `${opt.name} (Combo - ${item.name})`,
+                    name: `${opt.name}\n(Combo - ${item.name})`,
                     KitchenTypeCode: optKitchenCode,
                     KitchenTypeName: opt.KitchenTypeName || opt.kitchenTypeName,
                     PrinterIP: opt.PrinterIP || opt.printerIp,

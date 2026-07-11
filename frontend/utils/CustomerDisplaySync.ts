@@ -46,6 +46,7 @@ export interface SyncCartParams {
   memberName?: string;
   isSplit?: boolean;
   splitPayments?: any[];
+  takeawayCharge?: number;
 }
 
 export interface PaymentSuccessParams {
@@ -101,13 +102,14 @@ export const CustomerDisplaySync = {
       const isDisplayOn = useGeneralSettingsStore.getState().settings.customerSideDisplay;
       if (!isDisplayOn) return;
 
-      const { orderContext, cart, discountInfo, gstPercentage, roundOff, active, orderId, paymentMethod, memberName, isSplit, splitPayments } = params;
+      const { orderContext, cart, discountInfo, gstPercentage, roundOff, active, orderId, paymentMethod, memberName, isSplit, splitPayments, takeawayCharge } = params;
       const companySettings = useCompanySettingsStore.getState().settings;
       const paymentSettings = usePaymentSettingsStore.getState().settings;
 
       const scPercentage = companySettings.serviceChargePercentage || 0;
       const scRate = scPercentage / 100;
       const gstRate = (gstPercentage || 0) / 100;
+      const takeawayChargeVal = takeawayCharge || 0;
 
       // 1. Calculate totals matching cashier formulas
       const { grossTotal, totalItemDiscount, scEligibleSubtotal } = cart.reduce(
@@ -131,7 +133,8 @@ export const CustomerDisplaySync = {
           }
 
           const itemSubtotal = baseTotal - itemDiscount;
-          const isSC = Number(item.isServiceCharge) === 1 || item.isServiceCharge === true;
+          const isTakeawayItem = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
+          const isSC = !isTakeawayItem && (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true);
 
           return {
             grossTotal: acc.grossTotal + baseTotal,
@@ -162,7 +165,7 @@ export const CustomerDisplaySync = {
       })();
 
       const serviceChargeAmount = scEligibleNet * scRate;
-      const taxableAmount = netAfterDiscount + serviceChargeAmount;
+      const taxableAmount = netAfterDiscount + serviceChargeAmount + takeawayChargeVal;
 
       const gstAmountRaw = taxableAmount * gstRate;
       const gstAmount = Math.round(gstAmountRaw * 100) / 100;
@@ -201,7 +204,7 @@ export const CustomerDisplaySync = {
           modifiers: item.modifiers || [],
           isCombo: !!item.isCombo,
           comboSelections: item.comboSelections || [],
-          isServiceCharge: Number(item.isServiceCharge) === 1 || item.isServiceCharge === true,
+          isServiceCharge: !(item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway) && (Number(item.isServiceCharge) === 1 || item.isServiceCharge === true),
         };
       });
 
@@ -220,6 +223,7 @@ export const CustomerDisplaySync = {
         orderDiscountAmount,
         serviceChargeAmount,
         serviceChargePercentage: scPercentage,
+        takeawayCharge: takeawayChargeVal,
         gstAmount,
         roundOff,
         netTotal,
