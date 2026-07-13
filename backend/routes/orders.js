@@ -673,9 +673,7 @@ async function syncTableStatus(req, tableId) {
       WHERE TABLE_NAME = 'RestaurantOrderCur' AND COLUMN_NAME = 'TakeawayChargeOverride'
     )
     BEGIN
-      SELECT TOP 1 @TakeawayOverride = ISNULL(TakeawayChargeOverride, 0)
-      FROM RestaurantOrderCur
-      WHERE OrderId = @ActualOrderId;
+      EXEC sp_executesql N'SELECT TOP 1 @out = ISNULL(TakeawayChargeOverride, 0) FROM RestaurantOrderCur WHERE OrderId = @OrderId', N'@OrderId UNIQUEIDENTIFIER, @out INT OUTPUT', @ActualOrderId, @TakeawayOverride OUTPUT;
     END
 
     IF EXISTS (
@@ -683,9 +681,7 @@ async function syncTableStatus(req, tableId) {
       WHERE TABLE_NAME = 'RestaurantOrderCur' AND COLUMN_NAME = 'ServiceChargeOverride'
     )
     BEGIN
-      SELECT TOP 1 @SCOverride = ISNULL(ServiceChargeOverride, 0)
-      FROM RestaurantOrderCur
-      WHERE OrderId = @ActualOrderId;
+      EXEC sp_executesql N'SELECT TOP 1 @out = ISNULL(ServiceChargeOverride, 0) FROM RestaurantOrderCur WHERE OrderId = @OrderId', N'@OrderId UNIQUEIDENTIFIER, @out INT OUTPUT', @ActualOrderId, @SCOverride OUTPUT;
     END
 
     -- Calculate Totals strictly including Service Charge, Takeaway Charges and GST
