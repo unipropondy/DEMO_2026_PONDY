@@ -1105,7 +1105,7 @@ export default function SalesReport() {
   const filteredMetrics = useMemo(() => {
     return dateScopedSales.reduce(
       (acc, s) => {
-        const isSubsequentSplit = s.SettlementID && s.SettlementID.includes("-") && s.SettlementID.split("-").pop().match(/^\d+$/);
+        const isSubsequentSplit = s.SettlementID && s.SettlementID.includes("-") && s.SettlementID.split("-").length > 5 && s.SettlementID.split("-").pop().match(/^\d+$/);
 
         if (s.IsCancelled) {
           if (!isSubsequentSplit) {
