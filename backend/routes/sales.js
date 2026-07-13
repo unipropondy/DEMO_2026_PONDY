@@ -277,6 +277,7 @@ router.get("/all", async (req, res) => {
              ISNULL(ri.DiscountPercentage, 0) as DiscountPercentage,
              ISNULL(cct_sale.OutstandingAmount, 0) AS OutstandingAmount,
              COALESCE(mm.Name, ccm.Name, mm_sale.Name, ccm_sale.Name) AS CustomerName,
+             NULL AS CreditOrderNo,
              sh.GuestName as GuestName,
              sh.Pax as Pax
            FROM SettlementHeader sh
@@ -325,6 +326,7 @@ router.get("/all", async (req, res) => {
             0 AS DiscountPercentage,
             0 AS OutstandingAmount,
             COALESCE(mm.Name, m.Name) AS CustomerName,
+             (SELECT TOP 1 tx.BillNo FROM CustomerCreditAllocations cca JOIN CustomerCreditTransactions tx ON cca.InvoiceTransactionId = tx.TransactionId WHERE cca.PaymentTransactionId = cct.TransactionId) AS CreditOrderNo,
             NULL AS GuestName,
             NULL AS Pax
           FROM CustomerCreditTransactions cct
@@ -370,6 +372,7 @@ router.get("/all", async (req, res) => {
              ISNULL(ri.DiscountPercentage, 0) as DiscountPercentage,
              ISNULL(cct_sale.OutstandingAmount, 0) AS OutstandingAmount,
              COALESCE(mm.Name, ccm.Name, mm_sale.Name, ccm_sale.Name) AS CustomerName,
+             NULL AS CreditOrderNo,
              sh.GuestName as GuestName,
              sh.Pax as Pax
            FROM SettlementHeader sh
@@ -416,6 +419,7 @@ router.get("/all", async (req, res) => {
             0 AS DiscountPercentage,
             0 AS OutstandingAmount,
             COALESCE(mm.Name, m.Name) AS CustomerName,
+             (SELECT TOP 1 tx.BillNo FROM CustomerCreditAllocations cca JOIN CustomerCreditTransactions tx ON cca.InvoiceTransactionId = tx.TransactionId WHERE cca.PaymentTransactionId = cct.TransactionId) AS CreditOrderNo,
             NULL AS GuestName,
             NULL AS Pax
           FROM CustomerCreditTransactions cct
