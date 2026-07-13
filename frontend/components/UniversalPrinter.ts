@@ -1851,8 +1851,9 @@ class UniversalPrinter {
       : scPercentage;
 
     const companySettings = useCompanySettingsStore.getState().settings;
-    const takeawayRate = companySettings?.takeawayCharges || 0;
-    const takeawayQty = (saleData.items || []).reduce((sum: number, item: any) => {
+    const takeawayRateFromSettings = companySettings?.takeawayCharges || 0;
+    let takeawayCharge = saleData.takeawayCharge !== undefined ? parseFloat(String(saleData.takeawayCharge)) : 0;
+    let takeawayQty = (saleData.items || []).reduce((sum: number, item: any) => {
       const isTW = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
       const isVoided = item.status === "VOIDED" || item.StatusCode === 0;
       if (isTW && !isVoided) {
@@ -1861,7 +1862,13 @@ class UniversalPrinter {
       return sum;
     }, 0);
 
-    const takeawayCharge = takeawayQty * takeawayRate;
+    if (takeawayQty === 0 && takeawayCharge > 0) {
+      const effectiveRate = takeawayRateFromSettings > 0 ? takeawayRateFromSettings : takeawayCharge;
+      takeawayQty = Math.round(takeawayCharge / effectiveRate) || 1;
+    } else if (takeawayQty > 0 && takeawayCharge === 0) {
+      takeawayCharge = takeawayQty * takeawayRateFromSettings;
+    }
+    const takeawayRate = takeawayQty > 0 ? (takeawayCharge / takeawayQty) : takeawayRateFromSettings;
     const taxableAmount = currentSubtotal + serviceChargeAmount + takeawayCharge;
     const gstAmountRaw = hasGST ? taxableAmount * (gstRate / 100) : 0;
     const gstAmount = Math.round(gstAmountRaw * 100) / 100;

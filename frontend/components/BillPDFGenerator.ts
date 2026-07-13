@@ -149,6 +149,7 @@ static async loadSettings(userId?: string | number): Promise<CompanySettings> {
                 printerIp: settings.PrinterIP || '',
                 showCompanyLogo: showCompanyLogo === true,
                 showHalalLogo: showHalalLogo === true,
+                takeawayCharges: parseFloat(settings.TakeawayCharges) || 0,
             };
 
             this.settingsCache[targetId] = {
@@ -176,6 +177,7 @@ static async loadSettings(userId?: string | number): Promise<CompanySettings> {
       cashierName: '',
       currency: 'SGD',
       currencySymbol: '$',
+      takeawayCharges: 0,
     };
   }
   
@@ -373,8 +375,9 @@ private static escapeHtml(str: string): string {
       serviceChargeAmount = scEligibleNet * (scPercentage / 100);
     }
 
-    const takeawayRate = parseFloat(String((company as any).TakeawayCharges ?? company.takeawayCharges ?? 0)) || 0;
-    const takeawayQty = (saleData.items || []).reduce((sum: number, item: any) => {
+    const takeawayRateFromSettings = parseFloat(String((company as any).TakeawayCharges ?? company.takeawayCharges ?? 0)) || 0;
+    let takeawayCharge = saleData.takeawayCharge !== undefined ? parseFloat(String(saleData.takeawayCharge)) : 0;
+    let takeawayQty = (saleData.items || []).reduce((sum: number, item: any) => {
       const isTW = item.isTakeaway || item.IsTakeaway || item.isTakeAway || item.IsTakeAway;
       const isVoided = item.status === 'VOIDED' || item.StatusCode === 0;
       if (isTW && !isVoided) {
@@ -383,7 +386,13 @@ private static escapeHtml(str: string): string {
       return sum;
     }, 0);
 
-    const takeawayCharge = takeawayQty * takeawayRate;
+    if (takeawayQty === 0 && takeawayCharge > 0) {
+      const effectiveRate = takeawayRateFromSettings > 0 ? takeawayRateFromSettings : takeawayCharge;
+      takeawayQty = Math.round(takeawayCharge / effectiveRate) || 1;
+    } else if (takeawayQty > 0 && takeawayCharge === 0) {
+      takeawayCharge = takeawayQty * takeawayRateFromSettings;
+    }
+    const takeawayRate = takeawayQty > 0 ? (takeawayCharge / takeawayQty) : takeawayRateFromSettings;
     const taxableAmount = currentSubtotal + serviceChargeAmount + takeawayCharge;
     const hasSC = serviceChargeAmount > 0;
     const effectiveSCPercentage = serviceChargeAmount > 0 && currentSubtotal > 0
