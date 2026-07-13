@@ -916,16 +916,16 @@ class UniversalPrinter {
           }
           
           .item-qty {
-            font-size: 20px;
-            font-weight: 600;
+            font-size: 24px;
+            font-weight: 900;
             width: 50px;
             line-height: 1;
             margin-right: 8px;
           }
           
           .item-name {
-            font-size: 16px;
-            font-weight: 600;
+            font-size: 22px;
+            font-weight: 900;
             flex: 1;
             line-height: 1.1;
           }
@@ -936,15 +936,16 @@ class UniversalPrinter {
           }
           
           .modifier-item {
-            font-size: 18px;
-            font-weight: bold;
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
             display: block;
           }
           
           .remarks {
             margin-left: 58px;
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 15px;
+            font-weight: 700;
             font-style: italic;
             margin-top: 4px;
           }
@@ -1031,7 +1032,7 @@ class UniversalPrinter {
                           ${
                             hasCombo
                               ? `<div class="modifier-list">${comboSels.map((g: any) => `
-                                  <div style="font-weight: bold; margin-top: 2px;">${g.groupName}:</div>
+                                  <div style="font-weight: bold; margin-top: 2px; font-size: 15px; color: #555;">${g.groupName}:</div>
                                   ${g.items?.map((opt: any) => `<span class="modifier-item" style="padding-left: 10px;">↳ ${opt.name}</span>`).join("")}
                                 `).join("")}</div>`
                               : ""
@@ -1095,7 +1096,7 @@ class UniversalPrinter {
                         ${comboSels
                           .map(
                             (g: any) => `
-                          <div style="font-weight: bold; margin-top: 2px;">${g.groupName}:</div>
+                          <div style="font-weight: bold; margin-top: 2px; font-size: 15px; color: #555;">${g.groupName}:</div>
                           ${g.items?.map((opt: any) => `<span class="modifier-item" style="padding-left: 10px;">↳ ${opt.name}</span>`).join("")}
                         `,
                           )
