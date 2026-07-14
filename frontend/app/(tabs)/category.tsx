@@ -974,6 +974,8 @@ export default function Category() {
       ).length,
   );
 
+  const tableMap = useTableStatusStore((state) => state.tableMap);
+
   // ———— STATUS HANDLERS (OPTIMISTIC) ————
   const updateTableStatus = async (
     tableId: string,
@@ -1631,9 +1633,21 @@ export default function Category() {
                     if (section === "SECTION_3") return t.DiningSection === 3;
                     return false;
                   });
-                  const occupied = sectionTables.filter(
-                    (t: TableItem) => t.Status !== 0,
-                  ).length;
+                  const occupied = sectionTables.filter((t: TableItem) => {
+                    const tableData = tableMap[t.id];
+                    const status = tableData
+                      ? (tableData.status === "SENT"
+                        ? 1
+                        : tableData.status === "BILL_REQUESTED"
+                          ? 2
+                          : tableData.status === "HOLD"
+                            ? 3
+                            : tableData.status === "LOCKED"
+                              ? 5
+                              : 0)
+                      : Number(t.Status);
+                    return status !== 0;
+                  }).length;
 
                   return (
                     <TouchableOpacity
@@ -1876,9 +1890,21 @@ export default function Category() {
                   if (section === "SECTION_3") return t.DiningSection === 3;
                   return false;
                 });
-                const occupied = sectionTables.filter(
-                  (t: TableItem) => t.Status !== 0,
-                ).length;
+                const occupied = sectionTables.filter((t: TableItem) => {
+                  const tableData = tableMap[t.id];
+                  const status = tableData
+                    ? (tableData.status === "SENT"
+                      ? 1
+                      : tableData.status === "BILL_REQUESTED"
+                        ? 2
+                        : tableData.status === "HOLD"
+                          ? 3
+                          : tableData.status === "LOCKED"
+                            ? 5
+                            : 0)
+                    : Number(t.Status);
+                  return status !== 0;
+                }).length;
 
                 return (
                   <TouchableOpacity
