@@ -1387,6 +1387,12 @@ export const useCartStore = create<CartState>()(
                   discount: isRecentlyEdited 
                     ? (localMatch.discount ?? dbItem.discount) 
                     : (dbItem.discount ?? localMatch.discount ?? 0),
+                  discountAmount: isRecentlyEdited 
+                    ? (localMatch.discountAmount ?? dbItem.discountAmount ?? localMatch.discount) 
+                    : (dbItem.discountAmount ?? localMatch.discountAmount ?? dbItem.discount ?? 0),
+                  discountType: isRecentlyEdited 
+                    ? (localMatch.discountType ?? dbItem.discountType) 
+                    : (dbItem.discountType ?? localMatch.discountType ?? "percentage"),
                   modifiers: localMatch.modifiers,
                   status: finalStatus,
                   sent: finalSent
