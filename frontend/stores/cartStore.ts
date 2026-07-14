@@ -338,6 +338,7 @@ type CartState = {
       discountAmount?: number;
       discountType?: string;
       isVoided?: boolean;
+      isTakeaway?: boolean;
     },
   ) => void;
   applyBulkItemDiscount: (value: number, type: "percentage" | "fixed") => void;
