@@ -1247,7 +1247,7 @@ router.post("/cancel", async (req, res) => {
       .request()
       .input("oid", sql.NVarChar(100), orderId).query(`
         SELECT h.OrderId, h.OrderNumber, RTRIM(LTRIM(h.Tableno)) AS Tableno, h.BusinessUnitId, h.CreatedBy, h.MobileNo,
-               tm.DiningSection, tm.TableId
+               tm.DiningSection, tm.TableId, h.start_date
         FROM RestaurantOrderCur h
         LEFT JOIN TableMaster tm ON h.Tableno = tm.TableNumber
         WHERE h.OrderNumber = @oid AND (h.isOrderClosed = 0 OR h.isOrderClosed IS NULL)
@@ -1259,6 +1259,11 @@ router.post("/cancel", async (req, res) => {
         .status(404)
         .json({ error: "Order not found or already closed" });
     }
+
+    // Fetch active business date from DateEntry
+    const activeDayRes = await pool.request().query("SELECT TOP 1 StartDate FROM DateEntry ORDER BY CreatedDate DESC");
+    const activeStartDate = activeDayRes.recordset[0]?.StartDate;
+    const finalStartDate = activeStartDate || header.start_date || new Date();
 
     const itemsData = await pool
       .request()
@@ -1301,17 +1306,18 @@ router.post("/cancel", async (req, res) => {
         .input("subTotal", sql.Money, subTotal)
         .input("voidQty", sql.Int, voidQty)
         .input("voidAmt", sql.Money, subTotal)
-        .input("mobile", sql.NVarChar(50), header.MobileNo).query(`
+        .input("mobile", sql.NVarChar(50), header.MobileNo)
+        .input("startDate", sql.Date, finalStartDate).query(`
           INSERT INTO SettlementHeader (
             SettlementID, LastSettlementDate, BillNo, OrderType, TableNo, Section, 
             CashierID, BusinessUnitId, SysAmount, ManualAmount, CreatedBy, CreatedOn, 
             IsCancelled, CancellationReason, CancelledDate, CancelledByUserName, 
-            SubTotal, TotalTax, DiscountAmount, MobileNo, VoidItemQty, VoidItemAmount
+            SubTotal, TotalTax, DiscountAmount, MobileNo, VoidItemQty, VoidItemAmount, start_date
           ) VALUES (
             @sid, GETDATE(), @oid, 'DINE-IN', @tableNo, @section, 
             @userId, @bizId, 0, 0, @userId, GETDATE(), 
             1, @reason, GETDATE(), @userName, 
-            @subTotal, 0, 0, @mobile, @voidQty, @voidAmt
+            @subTotal, 0, 0, @mobile, @voidQty, @voidAmt, @startDate
           )
         `);
 
@@ -1327,13 +1333,14 @@ router.post("/cancel", async (req, res) => {
           .input("price", sql.Decimal(18, 2), item.PricePerUnit)
           .input("catId", sql.UniqueIdentifier, item.CategoryId)
           .input("catName", sql.NVarChar(255), item.CategoryName)
-          .input("groupName", sql.NVarChar(255), item.DishGroupName).query(`
+          .input("groupName", sql.NVarChar(255), item.DishGroupName)
+          .input("startDate", sql.Date, finalStartDate).query(`
             INSERT INTO SettlementItemDetail (
               SettlementID, DishId, DishName,SongName, Qty, Price, Status, OrderDateTime,
-              CategoryId, CategoryName, SubCategoryName
+              CategoryId, CategoryName, SubCategoryName, start_date
             ) VALUES (
               @sid, @dishId, @dishName,  @songName,@qty, @price, 'VOIDED', GETDATE(),
-              @catId, @catName, @groupName
+              @catId, @catName, @groupName, @startDate
             )
           `);
       }
@@ -1350,7 +1357,8 @@ router.post("/cancel", async (req, res) => {
         )
         .input("userId", sql.UniqueIdentifier, toGuidOrNull(userId))
         .input("subTotal", sql.Money, subTotal)
-        .input("voidQty", sql.Int, voidQty).query(`
+        .input("voidQty", sql.Int, voidQty)
+        .input("startDate", sql.Date, finalStartDate).query(`
           -- Insert into SettlementTotalSales (Zeroed)
           INSERT INTO SettlementTotalSales (SettlementID, PayMode, SysAmount, ManualAmount, AmountDiff, ReceiptCount)
           VALUES (@sid, 'VOID', 0, 0, 0, @voidQty);
@@ -1368,12 +1376,12 @@ router.post("/cancel", async (req, res) => {
             BusinessUnitId, RestaurantBillId, OrderId, BillNumber, OrderDateTime, TimeBilled, 
             TotalLineItemAmount, TotalTax, DiscountAmount, TotalAmount, StatusCode, 
             CreatedBy, CreatedOn, InvoiceDate, ServiceCharge, RoundedBy, TotalAmountLessFreight,
-            PaymentTermCode
+            PaymentTermCode, start_date
           ) VALUES (
             @bizId, @sid, @sid, @oid, GETDATE(), GETDATE(),
             @subTotal, 0, 0, 0, 4,
             @userId, GETDATE(), CAST(GETDATE() AS DATE), 0, 0, @subTotal,
-            0
+            0, @startDate
           );
         `);
 
