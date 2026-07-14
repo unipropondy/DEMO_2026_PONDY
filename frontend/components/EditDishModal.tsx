@@ -75,6 +75,7 @@ export default function EditDishModal({
     updateCartItemFull(item.lineItemId, {
       note: finalNote,
       discount: finalDiscount,
+      discountAmount: finalDiscount,
       qty: finalQty,
       isTakeaway: finalTakeaway,
     });
