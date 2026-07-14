@@ -355,7 +355,7 @@ router.get("/modifiers/:dishId", async (req, res) => {
     const result = await pool.request().input("dishId", req.params.dishId)
       .query(`
         WITH DishModifiersCTE AS (
-          -- 1. Direct Dish Modifiers
+          -- Direct Dish Modifiers from Modifier Tab
           SELECT dm.DishId, dm.ModifierId AS ModifierID, m.ModifierCode, m.ModifierName, 
                  CASE WHEN m.isPriceAffect = 1 AND m.isDishPrice = 1 THEN ISNULL(m.DishCost, 0) ELSE 0 END AS Price,
                  ISNULL(m.isOpenModifier, 0) AS isOpenModifier,
@@ -363,36 +363,6 @@ router.get("/modifiers/:dishId", async (req, res) => {
           FROM DishModifier dm 
           INNER JOIN ModifierMaster m ON dm.ModifierId = m.ModifierId
           WHERE dm.DishId = @dishId
-
-          UNION
-
-          -- 2. Dish Group Modifiers
-          SELECT @dishId AS DishId, dgm.ModifierId AS ModifierID, m.ModifierCode, m.ModifierName, 
-                 CASE WHEN m.isPriceAffect = 1 AND m.isDishPrice = 1 THEN ISNULL(m.DishCost, 0) ELSE 0 END AS Price,
-                 ISNULL(m.isOpenModifier, 0) AS isOpenModifier,
-                 ISNULL(m.SortCode, 0) AS SortCode
-          FROM DishMaster d
-          INNER JOIN DishGroupModifier dgm ON d.DishGroupId = dgm.DishGroupId
-          INNER JOIN ModifierMaster m ON dgm.ModifierId = m.ModifierId
-          WHERE d.DishId = @dishId
-
-          UNION
-
-          -- 3. Category Modifiers
-          SELECT @dishId AS DishId, cm.ModifierId AS ModifierID, m.ModifierCode, m.ModifierName, 
-                 CASE WHEN m.isPriceAffect = 1 AND m.isDishPrice = 1 THEN ISNULL(m.DishCost, 0) ELSE 0 END AS Price,
-                 ISNULL(m.isOpenModifier, 0) AS isOpenModifier,
-                 ISNULL(m.SortCode, 0) AS SortCode
-          FROM DishMaster d
-          INNER JOIN DishGroupMaster dg ON d.DishGroupId = dg.DishGroupId
-          INNER JOIN CategoryModifier cm ON dg.CategoryId = cm.CategoryId
-          INNER JOIN ModifierMaster m ON cm.ModifierId = m.ModifierId
-          WHERE d.DishId = @dishId
-        ),
-        MappedGroups AS (
-          SELECT DishGroupId
-          FROM DishGroupMapping
-          WHERE DishId = @dishId
         )
         SELECT 
           dm.DishId,
@@ -410,12 +380,8 @@ router.get("/modifiers/:dishId", async (req, res) => {
         FROM DishModifiersCTE dm
         -- Join with DishGroupModifier to find the group(s) this modifier belongs to
         LEFT JOIN DishGroupModifier dgm ON dm.ModifierID = dgm.ModifierId
-        LEFT JOIN DishGroupMaster dg ON COALESCE(dgm.DishGroupId, (SELECT DishGroupId FROM DishMaster WHERE DishId = dm.DishId)) = dg.DishGroupId
+        LEFT JOIN DishGroupMaster dg ON COALESCE((SELECT TOP 1 DishGroupId FROM DishGroupMaster WHERE DishGroupId = dgm.DishGroupId), (SELECT DishGroupId FROM DishMaster WHERE DishId = dm.DishId)) = dg.DishGroupId
         LEFT JOIN DishModifierGroup dmg ON dmg.DishId = dm.DishId AND dmg.ModifierGroupId = dg.DishGroupId
-        WHERE (
-          NOT EXISTS (SELECT 1 FROM DishModifierGroup WHERE DishId = @dishId)
-          OR dmg.ModifierGroupId IS NOT NULL
-        )
         ORDER BY dm.SortCode ASC, dm.ModifierName ASC
       `);
     setCache(cacheKey, result.recordset);
