@@ -6,7 +6,7 @@ const { activeTransactions } = require("../utils/transactionHelper");
 router.get("/cancel-reasons", async (req, res) => {
   try {
     const pool = await poolPromise;
-    const result = await pool.request().query("SELECT CRCode, CRName FROM [dbo].[CancelRemarksMaster] WHERE IsActive = 1 ORDER BY CRName ASC");
+    const result = await pool.request().query("SELECT CRCode, CRName FROM [dbo].[CancelRemarksMaster] WHERE IsActive = 1 OR IsActive IS NULL ORDER BY CRName ASC");
     res.json(result.recordset || []);
   } catch (err) {
     res.status(500).json({ error: err.message });
