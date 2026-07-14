@@ -4199,7 +4199,7 @@ const styles = StyleSheet.create({
   moveTableCardSelectedSrc: {
     borderColor: Theme.primary,
     borderWidth: 2,
-    backgroundColor: "rgba(249, 115, 22, 0.12)",
+    backgroundColor: "#FFEFE2", // Solid light orange to fix Android elevation bug
     shadowColor: Theme.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
@@ -4209,7 +4209,7 @@ const styles = StyleSheet.create({
   moveTableCardSelectedDst: {
     borderColor: Theme.primary,
     borderWidth: 2.2,
-    backgroundColor: "rgba(249, 115, 22, 0.15)",
+    backgroundColor: "#FFF2E6", // Solid light orange to fix Android elevation bug
     shadowColor: Theme.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.28,
