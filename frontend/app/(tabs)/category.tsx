@@ -2318,7 +2318,7 @@ export default function Category() {
                     color={Theme.primary}
                   />
                 </View>
-                <Text style={styles.menuItemText}>Move Table</Text>
+                <Text style={styles.menuItemText}>Transfer Table</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -3443,7 +3443,7 @@ export default function Category() {
           {moveStep === "dest" && moveDestTable && (
             <View style={styles.moveConfirmBar}>
               <View style={styles.moveConfirmInfo}>
-                <Text style={styles.moveConfirmLabel}>Move</Text>
+                <Text style={styles.moveConfirmLabel}>Transfer</Text>
                 <View style={styles.moveConfirmRoute}>
                   <View style={styles.moveConfirmTableChip}>
                     <Ionicons
@@ -3495,10 +3495,10 @@ export default function Category() {
                 activeOpacity={0.8}
               >
                 {isMovingTable ? (
-                  <Text style={styles.moveConfirmBtnText}>Moving...</Text>
+                  <Text style={styles.moveConfirmBtnText}>Transferring...</Text>
                 ) : (
                   <>
-                    <Text style={styles.moveConfirmBtnText}>Move Now</Text>
+                    <Text style={styles.moveConfirmBtnText}>Transfer Now</Text>
                     <Ionicons name="arrow-forward" size={18} color="#fff" />
                   </>
                 )}
