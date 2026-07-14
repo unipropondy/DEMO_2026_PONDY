@@ -364,7 +364,7 @@ router.get("/modifiers/:dishId", async (req, res) => {
           INNER JOIN ModifierMaster m ON dm.ModifierId = m.ModifierId
           WHERE dm.DishId = @dishId
         )
-        SELECT 
+        SELECT DISTINCT
           dm.DishId,
           dm.ModifierID,
           dm.ModifierCode,
@@ -380,7 +380,10 @@ router.get("/modifiers/:dishId", async (req, res) => {
         FROM DishModifiersCTE dm
         -- Join with DishGroupModifier to find the group(s) this modifier belongs to
         LEFT JOIN DishGroupModifier dgm ON dm.ModifierID = dgm.ModifierId
-        LEFT JOIN DishGroupMaster dg ON COALESCE((SELECT TOP 1 DishGroupId FROM DishGroupMaster WHERE DishGroupId = dgm.DishGroupId), (SELECT DishGroupId FROM DishMaster WHERE DishId = dm.DishId)) = dg.DishGroupId
+        LEFT JOIN DishGroupMaster dg ON COALESCE(
+          (SELECT TOP 1 ModifierGroupId FROM DishModifierGroup WHERE DishId = dm.DishId AND ModifierGroupId = dgm.DishGroupId),
+          (SELECT DishGroupId FROM DishMaster WHERE DishId = dm.DishId)
+        ) = dg.DishGroupId
         LEFT JOIN DishModifierGroup dmg ON dmg.DishId = dm.DishId AND dmg.ModifierGroupId = dg.DishGroupId
         ORDER BY dm.SortCode ASC, dm.ModifierName ASC
       `);
@@ -400,42 +403,39 @@ router.get("/modifiers/group/:DishGroupId", async (req, res) => {
     const pool = await poolPromise;
     const result = await pool.request().input("DishGroupId", req.params.DishGroupId)
       .query(`
-        -- 1. Direct Dish Modifiers for dishes in the group
-        SELECT dm.DishId, dm.ModifierId AS ModifierID, m.ModifierCode, m.ModifierName, 
-               CASE WHEN m.isPriceAffect = 1 AND m.isDishPrice = 1 THEN ISNULL(m.DishCost, 0) ELSE 0 END AS Price,
-               ISNULL(m.isOpenModifier, 0) AS isOpenModifier,
-               ISNULL(m.SortCode, 0) AS SortCode
-        FROM DishModifier dm 
-        INNER JOIN ModifierMaster m ON dm.ModifierId = m.ModifierId
-        INNER JOIN DishMaster d ON dm.DishId = d.DishId
-        WHERE d.DishGroupId = @DishGroupId
-
-        UNION
-
-        -- 2. Dish Group Modifiers for dishes in the group
-        SELECT d.DishId, dgm.ModifierId AS ModifierID, m.ModifierCode, m.ModifierName, 
-               CASE WHEN m.isPriceAffect = 1 AND m.isDishPrice = 1 THEN ISNULL(m.DishCost, 0) ELSE 0 END AS Price,
-               ISNULL(m.isOpenModifier, 0) AS isOpenModifier,
-               ISNULL(m.SortCode, 0) AS SortCode
-        FROM DishMaster d
-        INNER JOIN DishGroupModifier dgm ON d.DishGroupId = dgm.DishGroupId
-        INNER JOIN ModifierMaster m ON dgm.ModifierId = m.ModifierId
-        WHERE d.DishGroupId = @DishGroupId
-
-        UNION
-
-        -- 3. Category Modifiers for dishes in the group
-        SELECT d.DishId, cm.ModifierId AS ModifierID, m.ModifierCode, m.ModifierName, 
-               CASE WHEN m.isPriceAffect = 1 AND m.isDishPrice = 1 THEN ISNULL(m.DishCost, 0) ELSE 0 END AS Price,
-               ISNULL(m.isOpenModifier, 0) AS isOpenModifier,
-               ISNULL(m.SortCode, 0) AS SortCode
-        FROM DishMaster d
-        INNER JOIN DishGroupMaster dg ON d.DishGroupId = dg.DishGroupId
-        INNER JOIN CategoryModifier cm ON dg.CategoryId = cm.CategoryId
-        INNER JOIN ModifierMaster m ON cm.ModifierId = m.ModifierId
-        WHERE d.DishGroupId = @DishGroupId
-        
-        ORDER BY SortCode ASC, ModifierName ASC`);
+        WITH GroupDishModifiersCTE AS (
+          -- Direct Dish Modifiers for dishes in this group
+          SELECT dm.DishId, dm.ModifierId AS ModifierID, m.ModifierCode, m.ModifierName, 
+                 CASE WHEN m.isPriceAffect = 1 AND m.isDishPrice = 1 THEN ISNULL(m.DishCost, 0) ELSE 0 END AS Price,
+                 ISNULL(m.isOpenModifier, 0) AS isOpenModifier,
+                 ISNULL(m.SortCode, 0) AS SortCode
+          FROM DishModifier dm 
+          INNER JOIN ModifierMaster m ON dm.ModifierId = m.ModifierId
+          INNER JOIN DishMaster d ON dm.DishId = d.DishId
+          WHERE d.DishGroupId = @DishGroupId
+        )
+        SELECT DISTINCT
+          dm.DishId,
+          dm.ModifierID,
+          dm.ModifierCode,
+          dm.ModifierName,
+          dm.Price,
+          dm.isOpenModifier,
+          dm.SortCode,
+          dg.DishGroupId AS ModifierGroupId,
+          dg.DishGroupName AS ModifierGroupName,
+          ISNULL(dmg.MinSelectionCount, 0) AS MinSelectionCount,
+          ISNULL(dmg.MaxSelectionCount, 0) AS MaxSelectionCount,
+          ISNULL(dmg.MultiselectAllow, 0) AS MultiselectAllow
+        FROM GroupDishModifiersCTE dm
+        -- Join with DishGroupModifier to find the group(s) this modifier belongs to
+        LEFT JOIN DishGroupModifier dgm ON dm.ModifierID = dgm.ModifierId
+        LEFT JOIN DishGroupMaster dg ON COALESCE(
+          (SELECT TOP 1 ModifierGroupId FROM DishModifierGroup WHERE DishId = dm.DishId AND ModifierGroupId = dgm.DishGroupId),
+          (SELECT DishGroupId FROM DishMaster WHERE DishId = dm.DishId)
+        ) = dg.DishGroupId
+        LEFT JOIN DishModifierGroup dmg ON dmg.DishId = dm.DishId AND dmg.ModifierGroupId = dg.DishGroupId
+        ORDER BY dm.SortCode ASC, dm.ModifierName ASC`);
     setCache(cacheKey, result.recordset);
     res.json(result.recordset);
   } catch (err) {
