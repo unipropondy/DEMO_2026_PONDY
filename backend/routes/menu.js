@@ -409,9 +409,13 @@ router.get("/modifiers/:dishId", async (req, res) => {
           ISNULL(dmg.MultiselectAllow, 0) AS MultiselectAllow
         FROM DishModifiersCTE dm
         -- Join with DishGroupModifier to find the group(s) this modifier belongs to
-        INNER JOIN DishGroupModifier dgm ON dm.ModifierID = dgm.ModifierId
-        INNER JOIN DishGroupMaster dg ON dgm.DishGroupId = dg.DishGroupId
-        INNER JOIN DishModifierGroup dmg ON dmg.DishId = dm.DishId AND dmg.ModifierGroupId = dg.DishGroupId
+        LEFT JOIN DishGroupModifier dgm ON dm.ModifierID = dgm.ModifierId
+        LEFT JOIN DishGroupMaster dg ON COALESCE(dgm.DishGroupId, (SELECT DishGroupId FROM DishMaster WHERE DishId = dm.DishId)) = dg.DishGroupId
+        LEFT JOIN DishModifierGroup dmg ON dmg.DishId = dm.DishId AND dmg.ModifierGroupId = dg.DishGroupId
+        WHERE (
+          NOT EXISTS (SELECT 1 FROM DishModifierGroup WHERE DishId = @dishId)
+          OR dmg.ModifierGroupId IS NOT NULL
+        )
         ORDER BY dm.SortCode ASC, dm.ModifierName ASC
       `);
     setCache(cacheKey, result.recordset);
