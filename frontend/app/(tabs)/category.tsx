@@ -70,10 +70,13 @@ const formatSectionGlobal = (sec: string) => {
   return sec.replace("_", " ").replace("-", " ").replace("SECTION", "Section");
 };
 
-const getStatusUI = (status: number) => {
+const getStatusUI = (status: number, diningSection?: number) => {
   const s = Number(status);
   switch (s) {
     case 1:
+      if (diningSection === 4) {
+        return { text: "PREPARING", color: "#22c55e", lightBg: "#F0FDF4" };
+      }
       return { text: "DINING", color: "#22c55e", lightBg: "#F0FDF4" };
     case 2:
       return { text: "CHECKOUT", color: "#fd7e14", lightBg: "#FFF7ED" };
@@ -143,11 +146,11 @@ const TableItemComponent = React.memo(
         Number(item.isOvertime) === 1 ||
         Number(item.isHoldOvertime) === 1);
 
-    let ui = getStatusUI(status);
+    let ui = getStatusUI(status, item.DiningSection);
 
     // Dynamic Overtime: If occupied (Dining/Hold) and flagged as overtime, override UI
     if ((status === 1 || status === 3) && isOvertime) {
-      ui = getStatusUI(4);
+      ui = getStatusUI(4, item.DiningSection);
     }
 
     // 🌹 QR PAID: entryStatus='q' + paymentStatus=1 → Rose card + "Paid" label
@@ -3308,7 +3311,7 @@ export default function Category() {
               const isSelectedSrc = item.id === moveSourceTable?.id;
               const isSelectedDst = item.id === moveDestTable?.id;
               const occupied = moveStep === "source";
-              const statusUi = getStatusUI(Number(item.Status));
+              const statusUi = getStatusUI(Number(item.Status), item.DiningSection);
 
               return (
                 <TouchableOpacity
@@ -4196,7 +4199,7 @@ const styles = StyleSheet.create({
   moveTableCardSelectedSrc: {
     borderColor: Theme.primary,
     borderWidth: 2,
-    backgroundColor: "rgba(249, 115, 22, 0.12)",
+    backgroundColor: "#FFEFE2", // Solid light orange to fix Android elevation bug
     shadowColor: Theme.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
@@ -4206,7 +4209,7 @@ const styles = StyleSheet.create({
   moveTableCardSelectedDst: {
     borderColor: Theme.primary,
     borderWidth: 2.2,
-    backgroundColor: "rgba(249, 115, 22, 0.15)",
+    backgroundColor: "#FFF2E6", // Solid light orange to fix Android elevation bug
     shadowColor: Theme.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.28,
