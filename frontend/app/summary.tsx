@@ -1830,40 +1830,105 @@ export default function SummaryScreen() {
                 )}
 
                 {/* 🏆 REWARD POINTS MEMBER DISPLAY */}
-                {rewardMember && (
-                  <TouchableOpacity
-                    onPress={() => setShowRewardModal(true)}
-                    style={{
-                      backgroundColor: "#FFF7ED",
-                      borderColor: "#F97316",
-                      borderWidth: 1,
-                      borderRadius: 10,
-                      padding: 12,
-                      marginBottom: 12,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between"
-                    }}
-                  >
-                    <View style={{ flex: 1, gap: 4 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        <Ionicons name="gift" size={16} color="#F97316" />
-                        <Text style={{ fontSize: 13, fontFamily: Fonts.black, color: Theme.textPrimary }}>
-                          {`Reward Member: ${rewardMember.Name}`}
-                        </Text>
+                {rewardMember && (() => {
+                  const symbol = settings?.currencySymbol || "$";
+                  const rewardCreditVal = parseFloat(rewardMember.RewardCredit) || 0;
+                  return (
+                    <View
+                      style={{
+                        backgroundColor: "#FFF7ED",
+                        borderColor: "#F97316",
+                        borderWidth: 1,
+                        borderRadius: 10,
+                        padding: 12,
+                        marginBottom: 12,
+                        gap: 4
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Ionicons name="gift" size={16} color="#F97316" />
+                          <Text style={{ fontSize: 13, fontFamily: Fonts.black, color: Theme.textPrimary }}>
+                            Reward Member: {rewardMember.Name}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <TouchableOpacity
+                            onPress={() => setShowRewardModal(true)}
+                            style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: "#FFEDD5" }}
+                          >
+                            <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: "#F97316" }}>Change</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => {
+                              // If the current discount was applied as a reward discount, clear it too
+                              if (discountInfo?.applied && discountInfo?.label?.startsWith("Reward:")) {
+                                const cleared = { applied: false, type: "fixed" as const, value: 0, label: "" };
+                                applyDiscount(cleared);
+                                const ctx = getOrderContext();
+                                if (ctx) updateOrderDiscount(ctx, cleared);
+                              }
+                              setRewardMember(null);
+                            }}
+                            style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: "#FEE2E2" }}
+                          >
+                            <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: "#DC2626" }}>Remove</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                      <View>
-                        <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.textSecondary, marginLeft: 22 }}>
-                          Phone: {rewardMember.Phone}
-                        </Text>
-                        <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.success, marginLeft: 22 }}>
-                          Available Credit Wallet: {currencySymbol}{(parseFloat(rewardMember.AvailableCredit) || 0).toFixed(2)}
-                        </Text>
-                      </View>
+
+                      <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.textSecondary, marginLeft: 22 }}>
+                        Phone: {rewardMember.Phone}
+                      </Text>
+
+                      <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: "#D97706", marginLeft: 22 }}>
+                        Reward Balance: {currencySymbol}{rewardCreditVal.toFixed(2)}
+                      </Text>
+
+                      {rewardCreditVal > 0 && (
+                        <TouchableOpacity
+                          style={{
+                            marginTop: 8,
+                            marginLeft: 22,
+                            backgroundColor: "#FFFBEB",
+                            borderColor: "#FDE68A",
+                            borderWidth: 1,
+                            borderRadius: 8,
+                            paddingVertical: 6,
+                            paddingHorizontal: 12,
+                            alignSelf: "flex-start",
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6
+                          }}
+                          onPress={() => {
+                            const discountData = {
+                              applied: true,
+                              type: "fixed" as const,
+                              value: rewardCreditVal,
+                              label: `Reward: ${rewardMember.Name}`,
+                            };
+                            applyDiscount(discountData);
+                            const currentContext = getOrderContext();
+                            if (currentContext) {
+                              updateOrderDiscount(currentContext, discountData);
+                            }
+                            showToast({
+                              type: "success",
+                              message: "Reward Applied",
+                              subtitle: `Redeemed ${symbol}${rewardCreditVal.toFixed(2)} reward credit as discount`
+                            });
+                          }}
+                        >
+                          <Ionicons name="pricetag" size={14} color="#D97706" />
+                          <Text style={{ fontFamily: Fonts.bold, fontSize: 12, color: "#D97706" }}>
+                            Redeem Reward Discount
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color="#F97316" />
-                  </TouchableOpacity>
-                )}
+                  );
+                })()}
 
                 <View
                   style={[
@@ -2812,9 +2877,14 @@ export default function SummaryScreen() {
                               Phone: {item.Phone}
                             </Text>
                           </View>
-                          <Text style={{ fontFamily: Fonts.black, fontSize: 14, color: Theme.success }}>
-                            ${(parseFloat(item.AvailableCredit) || 0).toFixed(2)} Credit
-                          </Text>
+                          <View style={{ alignItems: "flex-end" }}>
+                            <Text style={{ fontFamily: Fonts.black, fontSize: 14, color: "#D97706" }}>
+                              {currencySymbol}{(parseFloat(item.RewardCredit) || 0).toFixed(2)} Rewards
+                            </Text>
+                            <Text style={{ fontFamily: Fonts.medium, fontSize: 11, color: Theme.textSecondary, marginTop: 2 }}>
+                              Credit: {currencySymbol}{(parseFloat(item.AvailableCredit) || 0).toFixed(2)}
+                            </Text>
+                          </View>
                         </TouchableOpacity>
                       ))
                     )}
