@@ -1913,10 +1913,16 @@ export default function SummaryScreen() {
                             if (currentContext) {
                               updateOrderDiscount(currentContext, discountData);
                             }
+
+                            // Update local rewardMember state to reflect zero credit immediately in UI
+                            setRewardMember((prev: any) =>
+                              prev ? { ...prev, RewardCredit: 0 } : prev
+                            );
+
                             showToast({
                               type: "success",
                               message: "Reward Applied",
-                              subtitle: `Redeemed ${symbol}${rewardCreditVal.toFixed(2)} reward credit as discount`
+                              subtitle: `Redeemed ${currencySymbol}${rewardCreditVal.toFixed(2)} reward credit as discount`
                             });
                           }}
                         >

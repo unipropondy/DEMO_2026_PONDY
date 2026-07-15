@@ -2453,59 +2453,89 @@ router.post("/save", async (req, res) => {
       console.log(`[Loyalty Debug] Loyalty phone was empty or missing. Skipping trigger.`);
     }
 
-    // 🏆 POST-SAVE REWARD POINTS TRIGGER
-    // Award reward credit when a reward member is linked and payment is NOT by member credit
-    let rewardPointsEarned = 0;
-    let memberRewardBalance = 0;
-
-    if (rewardMemberId && totalAmount > 0) {
-      try {
-        const rewardPool = await poolPromise;
-
-        // 1. Fetch active reward rule
-        const ruleRes = await rewardPool.request().query(
-          `SELECT TOP 1 SpendAmount, CreditAmount FROM RewardMaster WHERE IsActive = 1 ORDER BY Id DESC`
-        );
-        if (ruleRes.recordset.length > 0) {
-          const rule = ruleRes.recordset[0];
-          const earned = (totalAmount / rule.SpendAmount) * rule.CreditAmount;
-          rewardPointsEarned = Math.round(earned * 10000) / 10000; // 4dp precision
-
-          if (rewardPointsEarned > 0) {
-            // 2. Add to MemberMaster.RewardCredit (which feeds into AvailableCredit)
-            await rewardPool.request()
-              .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(rewardMemberId))
-              .input("Points", sql.Decimal(18, 4), rewardPointsEarned)
-              .query(`UPDATE MemberMaster SET RewardCredit = ISNULL(RewardCredit, 0) + @Points WHERE MemberId = @MemberId`);
-
-            // 3. Log to RewardPointDetails audit table
-            await rewardPool.request()
-              .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(rewardMemberId))
-              .input("SettlementId", sql.UniqueIdentifier, toGuidOrNull(settlementId))
-              .input("BillNo", sql.NVarChar(50), finalBillNo || displayOrderId)
-              .input("BillAmount", sql.Decimal(18, 2), totalAmount)
-              .input("PointsEarned", sql.Decimal(18, 4), rewardPointsEarned)
-              .input("PayMode", sql.NVarChar(50), paymentMethod || "CASH")
-              .input("Remarks", sql.NVarChar(255), `Earned on bill ${finalBillNo || displayOrderId}`)
-              .query(`
-                INSERT INTO RewardPointDetails (MemberId, SettlementId, BillNo, BillAmount, PointsEarned, PointsUsed, TransType, PayMode, Remarks)
-                VALUES (@MemberId, @SettlementId, @BillNo, @BillAmount, @PointsEarned, 0, 'EARN', @PayMode, @Remarks)
-              `);
-
-            // 4. Fetch updated balance to return to frontend
-            const balRes = await rewardPool.request()
-              .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(rewardMemberId))
-              .query(`SELECT ISNULL(RewardCredit, 0) AS RewardCredit FROM MemberMaster WHERE MemberId = @MemberId`);
-            memberRewardBalance = balRes.recordset[0]?.RewardCredit || 0;
-
-            console.log(`[Rewards] ✅ Awarded ${rewardPointsEarned} credit to member ${rewardMemberId}. New balance: ${memberRewardBalance}`);
-          }
-        }
-      } catch (rewardErr) {
-        // Non-blocking — don't fail the sale
-        console.error(`[Rewards] ❌ Award failed (non-blocking):`, rewardErr.message);
-      }
-    }
+     // 🏆 POST-SAVE REWARD POINTS TRIGGER
+     // Award/Deduct reward credit when a reward member is linked and payment is NOT by member credit
+     let rewardPointsEarned = 0;
+     let memberRewardBalance = 0;
+ 
+     if (rewardMemberId && totalAmount > 0) {
+       try {
+         const rewardPool = await poolPromise;
+ 
+         // 1. Determine if a reward discount was redeemed in this sale
+         const discountRemarksVal = req.body.discountRemarks || "";
+         const isRewardRedemption = discountRemarksVal.startsWith("Reward:");
+         const redeemedAmount = isRewardRedemption ? parseFloat(req.body.orderDiscountAmount) || 0 : 0;
+ 
+         // 2. Fetch current RewardCredit for the member before modifications
+         const memberRes = await rewardPool.request()
+           .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(rewardMemberId))
+           .query(`SELECT ISNULL(RewardCredit, 0) AS RewardCredit FROM MemberMaster WHERE MemberId = @MemberId`);
+ 
+         let currentCredit = 0;
+         if (memberRes.recordset.length > 0) {
+           currentCredit = parseFloat(memberRes.recordset[0].RewardCredit) || 0;
+         }
+ 
+         // 3. Calculate new balance: subtract redeemed, add earned
+         // Fetch active reward rule to calculate earning
+         const ruleRes = await rewardPool.request().query(
+           `SELECT TOP 1 SpendAmount, CreditAmount FROM RewardMaster WHERE IsActive = 1 ORDER BY Id DESC`
+         );
+         if (ruleRes.recordset.length > 0) {
+           const rule = ruleRes.recordset[0];
+           const earned = (totalAmount / rule.SpendAmount) * rule.CreditAmount;
+           rewardPointsEarned = Math.round(earned * 10000) / 10000; // 4dp precision
+         }
+ 
+         const deductAmount = Math.min(redeemedAmount, currentCredit);
+         const newCredit = Math.max(0, currentCredit - deductAmount + rewardPointsEarned);
+ 
+         // 4. Update RewardCredit in MemberMaster
+         await rewardPool.request()
+           .input("NewCredit", sql.Decimal(18, 4), newCredit)
+           .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(rewardMemberId))
+           .query(`UPDATE MemberMaster SET RewardCredit = @NewCredit, ModifiedDate = GETDATE() WHERE MemberId = @MemberId`);
+ 
+         // 5. Log the redemption to RewardPointDetails (if applicable)
+         if (deductAmount > 0) {
+           await rewardPool.request()
+             .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(rewardMemberId))
+             .input("SettlementId", sql.UniqueIdentifier, toGuidOrNull(settlementId))
+             .input("BillNo", sql.NVarChar(50), finalBillNo || displayOrderId)
+             .input("BillAmount", sql.Decimal(18, 2), totalAmount)
+             .input("PointsUsed", sql.Decimal(18, 4), deductAmount)
+             .input("PayMode", sql.NVarChar(50), paymentMethod || "CASH")
+             .input("Remarks", sql.NVarChar(255), `Redeemed as discount on bill ${finalBillNo || displayOrderId}`)
+             .query(`
+               INSERT INTO RewardPointDetails (MemberId, SettlementId, BillNo, BillAmount, PointsEarned, PointsUsed, TransType, PayMode, Remarks)
+               VALUES (@MemberId, @SettlementId, @BillNo, @BillAmount, 0, @PointsUsed, 'REDEEM', @PayMode, @Remarks)
+             `);
+         }
+ 
+         // 6. Log the earning to RewardPointDetails (if applicable)
+         if (rewardPointsEarned > 0) {
+           await rewardPool.request()
+             .input("MemberId", sql.UniqueIdentifier, toGuidOrNull(rewardMemberId))
+             .input("SettlementId", sql.UniqueIdentifier, toGuidOrNull(settlementId))
+             .input("BillNo", sql.NVarChar(50), finalBillNo || displayOrderId)
+             .input("BillAmount", sql.Decimal(18, 2), totalAmount)
+             .input("PointsEarned", sql.Decimal(18, 4), rewardPointsEarned)
+             .input("PayMode", sql.NVarChar(50), paymentMethod || "CASH")
+             .input("Remarks", sql.NVarChar(255), `Earned on bill ${finalBillNo || displayOrderId}`)
+             .query(`
+               INSERT INTO RewardPointDetails (MemberId, SettlementId, BillNo, BillAmount, PointsEarned, PointsUsed, TransType, PayMode, Remarks)
+               VALUES (@MemberId, @SettlementId, @BillNo, @BillAmount, @PointsEarned, 0, 'EARN', @PayMode, @Remarks)
+             `);
+         }
+ 
+         memberRewardBalance = newCredit;
+         console.log(`[Rewards] ✅ Processed member ${rewardMemberId}. Redeemed: ${deductAmount}, Earned: ${rewardPointsEarned}. New balance: ${memberRewardBalance}`);
+       } catch (rewardErr) {
+         // Non-blocking — don't fail the sale
+         console.error(`[Rewards] ❌ Atomic process failed (non-blocking):`, rewardErr.message);
+       }
+     }
 
     res.json({
       success: true,

@@ -231,4 +231,83 @@ router.get("/calculate", async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// REWARD REDEMPTION
+// ─────────────────────────────────────────────
+
+/**
+ * POST /api/rewards/redeem
+ * Deduct the redeemed reward credit from MemberMaster and log to RewardPointDetails
+ * Body: { memberId, amount, billNo, billAmount }
+ */
+router.post("/redeem", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const { memberId, amount, billNo, billAmount } = req.body;
+
+    if (!memberId || !amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: "memberId and a positive amount are required" });
+    }
+
+    const redeemAmount = parseFloat(amount);
+
+    // Fetch current RewardCredit for the member
+    const memberRes = await pool.request()
+      .input("MemberId", sql.UniqueIdentifier, memberId)
+      .query(`
+        SELECT MemberId, Name, ISNULL(RewardCredit, 0) AS RewardCredit
+        FROM MemberMaster
+        WHERE MemberId = @MemberId
+      `);
+
+    if (memberRes.recordset.length === 0) {
+      return res.status(404).json({ error: "Member not found" });
+    }
+
+    const currentCredit = parseFloat(memberRes.recordset[0].RewardCredit) || 0;
+    const deductAmount = Math.min(redeemAmount, currentCredit); // Never go below 0
+    const newCredit = Math.max(0, currentCredit - deductAmount);
+
+    // Update RewardCredit in MemberMaster
+    await pool.request()
+      .input("NewCredit", sql.Decimal(18, 4), newCredit)
+      .input("MemberId", sql.UniqueIdentifier, memberId)
+      .query(`
+        UPDATE MemberMaster
+        SET RewardCredit = @NewCredit, ModifiedDate = GETDATE()
+        WHERE MemberId = @MemberId
+      `);
+
+    // Log the redemption to RewardPointDetails (if table exists)
+    try {
+      await pool.request()
+        .input("MemberId", sql.UniqueIdentifier, memberId)
+        .input("BillNo", sql.NVarChar(100), billNo || null)
+        .input("BillAmount", sql.Decimal(18, 4), parseFloat(billAmount) || 0)
+        .input("PointsUsed", sql.Decimal(18, 4), deductAmount)
+        .input("Remarks", sql.NVarChar(255), `Reward redeemed as discount on bill ${billNo || ""}`)
+        .query(`
+          INSERT INTO RewardPointDetails
+            (MemberId, BillNo, BillAmount, PointsEarned, PointsUsed, TransType, Remarks, CreatedOn)
+          VALUES
+            (@MemberId, @BillNo, @BillAmount, 0, @PointsUsed, 'REDEEM', @Remarks, GETDATE())
+        `);
+    } catch (logErr) {
+      // Non-fatal — just log, don't fail the whole request
+      console.warn("[Rewards] Could not write to RewardPointDetails:", logErr.message);
+    }
+
+    res.json({
+      success: true,
+      memberId,
+      redeemedAmount: deductAmount,
+      previousCredit: currentCredit,
+      newCredit,
+    });
+  } catch (err) {
+    console.error("[Rewards] redeem error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
