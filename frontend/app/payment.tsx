@@ -3614,7 +3614,7 @@ export default function PaymentScreen() {
                                       marginTop: 4,
                                     }}
                                   >
-                                    Limit:{" "}
+                                    Prepaid:{" "}
                                     {formatMoney(
                                       currencySymbol,
                                       item.CreditLimit || 0,
