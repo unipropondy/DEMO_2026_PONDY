@@ -48,6 +48,7 @@ type MemberType = {
   LowBalanceAlertSent?: boolean | number;
   Promocode?: string;
   Promoamount?: number;
+  AvailableCredit?: number;
 };
 
 const formatMoney = (amount: number) => {
@@ -456,7 +457,7 @@ export default function MembersScreen() {
     const creditLimit    = item.CreditLimit    || 0;
     const currentBalance = item.CurrentBalance || 0;
     const totalBalance   = item.Balance        || 0;
-    const availableCredit = creditLimit > 0 ? (creditLimit - currentBalance) : currentBalance;
+    const availableCredit = item.AvailableCredit !== undefined ? item.AvailableCredit : (creditLimit > 0 ? (creditLimit - currentBalance) : currentBalance);
     const isLowCredit    = availableCredit < 50;
     const alertSent      = item.LowBalanceAlertSent === true || item.LowBalanceAlertSent === 1;
 

@@ -59,6 +59,7 @@ router.post("/add", async (req, res) => {
         Phone: phone,
         CreditLimit: parseFloat(creditLimit) || 0,
         CurrentBalance: parseFloat(currentBalance) || 0,
+        AvailableCredit: (parseFloat(creditLimit) || 0) > 0 ? ((parseFloat(creditLimit) || 0) - (parseFloat(currentBalance) || 0)) : (parseFloat(currentBalance) || 0),
         IsActive: isActive !== undefined ? isActive : 1,
         Promocode: promocode || null,
         Promoamount: parseFloat(promoamount) || 0
@@ -130,7 +131,7 @@ router.get("/search", async (req, res) => {
     const result = await pool.request()
       .input("query", sql.NVarChar, `%${query || ""}%`)
       .query(`
-        SELECT MemberId, Name, Phone, CreditLimit, CurrentBalance, IsActive, Promocode, Promoamount 
+        SELECT MemberId, Name, Phone, CreditLimit, CurrentBalance, IsActive, Promocode, Promoamount, AvailableCredit
         FROM MemberMaster 
         WHERE (Name LIKE @query OR Phone LIKE @query)
         ORDER BY Name
@@ -232,7 +233,7 @@ router.get("/validate/:memberId", async (req, res) => {
     const result = await pool.request()
       .input("MemberId", sql.UniqueIdentifier, memberId)
       .query(`
-        SELECT MemberId, Name, Phone, CreditLimit, CurrentBalance, IsActive 
+        SELECT MemberId, Name, Phone, CreditLimit, CurrentBalance, IsActive, AvailableCredit
         FROM MemberMaster 
         WHERE MemberId = @MemberId
       `);
