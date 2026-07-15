@@ -410,34 +410,39 @@ export default function RewardMasterScreen() {
         onRequestClose={handleBack}
       >
         <View style={styles.pwOverlay}>
-          <View style={styles.pwModalContent}>
-            <View style={styles.pwHeader}>
-              <Text style={styles.pwTitle}>Admin Verification Required</Text>
-              <TouchableOpacity onPress={handleBack} style={styles.pwClose}>
-                <Ionicons name="close" size={20} color={Theme.textSecondary} />
-              </TouchableOpacity>
+          <View style={styles.pwModalContentContainer}>
+            <View style={styles.pwIconContainer}>
+              <FontAwesome5 name="lock" size={32} color="#FF6B00" />
             </View>
-            <View style={styles.pwBody}>
-              <Text style={styles.pwDesc}>Please enter admin password to unlock Reward Points Master configurations.</Text>
-              <TextInput
-                style={styles.pwInput}
-                secureTextEntry
-                placeholder="Enter password..."
-                value={passwordValue}
-                onChangeText={setPasswordValue}
-                onSubmitEditing={handlePasswordVerify}
-                autoFocus
-              />
-              <TouchableOpacity
-                style={styles.pwBtn}
+            <Text style={styles.pwHeaderTitleCentered}>🔒 Admin Verification</Text>
+            <Text style={styles.pwSubtitleCentered}>
+              Enter admin password to access Shop Settings
+            </Text>
+
+            <TextInput
+              style={styles.pwInputContainer}
+              secureTextEntry
+              placeholder="Enter Password"
+              placeholderTextColor="#9CA3AF"
+              value={passwordValue}
+              onChangeText={setPasswordValue}
+              onSubmitEditing={handlePasswordVerify}
+              autoFocus
+            />
+
+            <View style={styles.pwModalButtonsRow}>
+              <TouchableOpacity style={styles.pwCancelBtn} onPress={handleBack}>
+                <Text style={styles.pwCancelBtnText}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.pwVerifyBtn} 
                 onPress={handlePasswordVerify}
                 disabled={verifyingPassword}
-                activeOpacity={0.8}
               >
                 {verifyingPassword ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.pwBtnText}>Verify Password</Text>
+                  <Text style={styles.pwVerifyBtnText}>Verify</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -786,47 +791,87 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  pwTitle: {
-    fontSize: 16,
-    fontFamily: Fonts.bold,
+  pwModalContentContainer: {
+    width: 380,
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 32,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  pwIconContainer: {
+    marginBottom: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pwHeaderTitleCentered: {
+    fontSize: 20,
+    fontFamily: Fonts.black,
     color: Theme.textPrimary,
+    textAlign: "center",
+    marginBottom: 8,
   },
-  pwClose: {
-    padding: 4,
-  },
-  pwBody: {
-    gap: 16,
-  },
-  pwDesc: {
+  pwSubtitleCentered: {
     fontSize: 13,
-    fontFamily: Fonts.regular,
-    color: Theme.textSecondary,
-    lineHeight: 18,
+    fontFamily: Fonts.medium,
+    color: "#6B7280",
+    textAlign: "center",
+    marginBottom: 24,
   },
-  pwInput: {
-    height: 44,
-    borderWidth: 0,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 8,
-    paddingHorizontal: 12,
+  pwInputContainer: {
+    width: "100%",
+    height: 48,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    paddingHorizontal: 16,
     fontSize: 14,
-    fontFamily: Fonts.regular,
+    fontFamily: Fonts.medium,
     color: Theme.textPrimary,
+    backgroundColor: "#FAF7F2",
+    marginBottom: 24,
+    textAlign: "center",
     outlineWidth: 0,
   },
-  pwBtn: {
-    height: 44,
+  pwModalButtonsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    gap: 12,
+  },
+  pwCancelBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+  },
+  pwCancelBtnText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: "#6B7280",
+  },
+  pwVerifyBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
     backgroundColor: "#FF6B00",
-    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#FF6B00",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 3,
   },
-  pwBtnText: {
+  pwVerifyBtnText: {
     fontSize: 14,
     fontFamily: Fonts.bold,
     color: "#fff",
