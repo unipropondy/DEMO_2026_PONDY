@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Modal,
   useWindowDimensions
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -28,6 +29,11 @@ export default function RewardMasterScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 
+  // Admin access validation states
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+  const [passwordValue, setPasswordValue] = useState("");
+  const [verifyingPassword, setVerifyingPassword] = useState(false);
+
   // Rule configuration states
   const [spendAmount, setSpendAmount] = useState("100");
   const [creditAmount, setCreditAmount] = useState("1");
@@ -44,10 +50,12 @@ export default function RewardMasterScreen() {
   const [history, setHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // Fetch active rule on load
+  // Fetch active rule on load (after admin validation passes)
   useEffect(() => {
-    fetchActiveRule();
-  }, []);
+    if (isAdminUnlocked) {
+      fetchActiveRule();
+    }
+  }, [isAdminUnlocked]);
 
   const fetchActiveRule = async () => {
     try {
@@ -62,6 +70,31 @@ export default function RewardMasterScreen() {
     } catch (err: any) {
       console.error("Error fetching reward rule:", err);
       Alert.alert("Error", "Failed to load active reward configurations.");
+    }
+  };
+
+  const handlePasswordVerify = async () => {
+    if (!passwordValue) {
+      Alert.alert("Required", "Please enter password");
+      return;
+    }
+    setVerifyingPassword(true);
+    try {
+      const verifyRes = await fetch(`${API_URL}/api/auth/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: passwordValue }),
+      });
+      const verifyData = await verifyRes.json();
+      if (verifyData.success) {
+        setIsAdminUnlocked(true);
+      } else {
+        Alert.alert("Access Denied", "Incorrect admin password");
+      }
+    } catch (err) {
+      Alert.alert("Error", "Could not verify password. Check connection.");
+    } finally {
+      setVerifyingPassword(false);
     }
   };
 
@@ -127,17 +160,19 @@ export default function RewardMasterScreen() {
     }
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/menu/settlement" as any);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => {
-          if (router.canGoBack()) {
-            router.back();
-          } else {
-            router.replace("/menu/settlement" as any);
-          }
-        }}>
-          <Ionicons name="arrow-back" size={24} color={Theme.textSecondary} />
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
+          <Ionicons name="arrow-back" size={24} color={Theme.textPrimary} />
         </TouchableOpacity>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <FontAwesome5 name="gift" size={18} color="#FF6B00" style={{ marginRight: 8 }} />
@@ -233,7 +268,7 @@ export default function RewardMasterScreen() {
                     style={styles.searchInput}
                     value={searchText}
                     onChangeText={handleSearchMembers}
-                    placeholder="Search by name or phone..."
+                    placeholder="Search members..."
                   />
                   {isSearchingMembers && <ActivityIndicator size="small" color={Theme.primary} />}
                 </View>
@@ -366,6 +401,49 @@ export default function RewardMasterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Access Verification Modal */}
+      <Modal
+        visible={!isAdminUnlocked}
+        transparent
+        animationType="fade"
+        onRequestClose={handleBack}
+      >
+        <View style={styles.pwOverlay}>
+          <View style={styles.pwModalContent}>
+            <View style={styles.pwHeader}>
+              <Text style={styles.pwTitle}>Admin Verification Required</Text>
+              <TouchableOpacity onPress={handleBack} style={styles.pwClose}>
+                <Ionicons name="close" size={20} color={Theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.pwBody}>
+              <Text style={styles.pwDesc}>Please enter admin password to unlock Reward Points Master configurations.</Text>
+              <TextInput
+                style={styles.pwInput}
+                secureTextEntry
+                placeholder="Enter password..."
+                value={passwordValue}
+                onChangeText={setPasswordValue}
+                onSubmitEditing={handlePasswordVerify}
+                autoFocus
+              />
+              <TouchableOpacity
+                style={styles.pwBtn}
+                onPress={handlePasswordVerify}
+                disabled={verifyingPassword}
+                activeOpacity={0.8}
+              >
+                {verifyingPassword ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.pwBtnText}>Verify Password</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -373,7 +451,7 @@ export default function RewardMasterScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#FAF7F2",
   },
   header: {
     flexDirection: "row",
@@ -382,12 +460,17 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
-    backgroundColor: "#fff",
+    backgroundColor: "#FAF7F2",
     position: "relative",
   },
   backBtn: {
     position: "absolute",
     left: 16,
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
     zIndex: 10,
   },
   headerTitle: {
@@ -401,15 +484,15 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: "#fff",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 20,
     borderWidth: 1,
     borderColor: "#E5E7EB",
     shadowColor: "#172B4D",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.03,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
   },
   premiumCard: {
     borderTopWidth: 4,
@@ -679,5 +762,73 @@ const styles = StyleSheet.create({
   },
   pointsRedeemedText: {
     color: "#E02424",
-  }
+  },
+  pwOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pwModalContent: {
+    width: 380,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  pwHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  pwTitle: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    color: Theme.textPrimary,
+  },
+  pwClose: {
+    padding: 4,
+  },
+  pwBody: {
+    gap: 16,
+  },
+  pwDesc: {
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: Theme.textSecondary,
+    lineHeight: 18,
+  },
+  pwInput: {
+    height: 44,
+    borderWidth: 0,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: Theme.textPrimary,
+    outlineWidth: 0,
+  },
+  pwBtn: {
+    height: 44,
+    backgroundColor: "#FF6B00",
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#FF6B00",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  pwBtnText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
 });
