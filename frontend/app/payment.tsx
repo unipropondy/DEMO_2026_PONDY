@@ -2560,7 +2560,7 @@ export default function PaymentScreen() {
                                 </View>
                                 <View style={styles.creditStatCol}>
                                   <Text style={styles.creditStatLabel}>
-                                    Outstanding
+                                    Consumed
                                   </Text>
                                   <Text style={styles.creditStatValue}>
                                     {formatMoney(
@@ -3619,7 +3619,7 @@ export default function PaymentScreen() {
                                       currencySymbol,
                                       item.CreditLimit || 0,
                                     )}{" "}
-                                    | Outstanding:{" "}
+                                     | Consumed:{" "}
                                     {formatMoney(
                                       currencySymbol,
                                       item.CurrentBalance || 0,
