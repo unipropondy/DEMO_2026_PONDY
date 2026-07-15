@@ -412,6 +412,9 @@ export default function SummaryScreen() {
 
   const enableKOT = useGeneralSettingsStore((s: any) => s.settings.enableKOT);
   const enableCheckoutBill = useGeneralSettingsStore((s: any) => s.settings.enableCheckoutBill);
+  const showLoyalty = useGeneralSettingsStore((s: any) => s.settings.showLoyalty !== false);
+  const showRewardPoints = useGeneralSettingsStore((s: any) => s.settings.showRewardPoints !== false);
+  const showPromoCode = useGeneralSettingsStore((s: any) => s.settings.showPromoCode !== false);
 
   const currentContextId = useCartStore((s: any) => s.currentContextId);
   const cart = useCartStore((s: any) => (currentContextId ? s.carts[currentContextId] : undefined) || EMPTY_ARRAY);
@@ -1386,36 +1389,38 @@ export default function SummaryScreen() {
           </View>
 
           <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={[
-                styles.actionBtn,
-                {
-                  backgroundColor: Theme.successBg || "#dcfce7",
-                  borderColor: Theme.successBorder || "#bbf7d0",
-                  borderWidth: 1,
-                },
-                !isTablet &&
-                  isLandscape && { height: 32, paddingHorizontal: 8 },
-              ]}
-              onPress={() => setShowLoyaltyModal(true)}
-            >
-              <Ionicons
-                name="ribbon-outline"
-                size={!isTablet && isLandscape ? 16 : 18}
-                color={Theme.success || "#16a34a"}
-              />
-              {isLandscape && (
-                <Text
-                  style={[
-                    styles.actionBtnText,
-                    { color: Theme.success || "#16a34a" },
-                    !isTablet && isLandscape && { fontSize: 10 },
-                  ]}
-                >
-                  Loyalty
-                </Text>
-              )}
-            </TouchableOpacity>
+            {showLoyalty && (
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  {
+                    backgroundColor: Theme.successBg || "#dcfce7",
+                    borderColor: Theme.successBorder || "#bbf7d0",
+                    borderWidth: 1,
+                  },
+                  !isTablet &&
+                    isLandscape && { height: 32, paddingHorizontal: 8 },
+                ]}
+                onPress={() => setShowLoyaltyModal(true)}
+              >
+                <Ionicons
+                  name="ribbon-outline"
+                  size={!isTablet && isLandscape ? 16 : 18}
+                  color={Theme.success || "#16a34a"}
+                />
+                {isLandscape && (
+                  <Text
+                    style={[
+                      styles.actionBtnText,
+                      { color: Theme.success || "#16a34a" },
+                      !isTablet && isLandscape && { fontSize: 10 },
+                    ]}
+                  >
+                    Loyalty
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={[
@@ -1448,67 +1453,71 @@ export default function SummaryScreen() {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.actionBtn,
-                {
-                  backgroundColor: "#FFFBEB",
-                  borderColor: "#FEF3C7",
-                  borderWidth: 1,
-                },
-                !isTablet &&
-                  isLandscape && { height: 32, paddingHorizontal: 8 },
-              ]}
-              onPress={() => setShowRewardModal(true)}
-            >
-              <Ionicons
-                name="star-outline"
-                size={!isTablet && isLandscape ? 16 : 18}
-                color="#D97706"
-              />
-              {isLandscape && (
-                <Text
-                  style={[
-                    styles.actionBtnText,
-                    { color: "#D97706" },
-                    !isTablet && isLandscape && { fontSize: 10 },
-                  ]}
-                >
-                  Reward Points
-                </Text>
-              )}
-            </TouchableOpacity>
+            {showRewardPoints && (
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  {
+                    backgroundColor: "#FFFBEB",
+                    borderColor: "#FEF3C7",
+                    borderWidth: 1,
+                  },
+                  !isTablet &&
+                    isLandscape && { height: 32, paddingHorizontal: 8 },
+                ]}
+                onPress={() => setShowRewardModal(true)}
+              >
+                <Ionicons
+                  name="star-outline"
+                  size={!isTablet && isLandscape ? 16 : 18}
+                  color="#D97706"
+                />
+                {isLandscape && (
+                  <Text
+                    style={[
+                      styles.actionBtnText,
+                      { color: "#D97706" },
+                      !isTablet && isLandscape && { fontSize: 10 },
+                    ]}
+                  >
+                    Reward Points
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity
-              style={[
-                styles.actionBtn,
-                {
-                  backgroundColor: "#F5F3FF",
-                  borderColor: "#DDD6FE",
-                  borderWidth: 1,
-                },
-                !isTablet &&
-                  isLandscape && { height: 32, paddingHorizontal: 8 },
-              ]}
-              onPress={() => setShowPromoModal(true)}
-            >
-              <Ionicons
-                name="barcode-outline"
-                size={!isTablet && isLandscape ? 16 : 18}
-                color="#7C3AED"
-              />
-              {isLandscape && (
-                <Text
-                  style={[
-                    styles.actionBtnText,
-                    { color: "#7C3AED" },
-                    !isTablet && isLandscape && { fontSize: 10 },
-                  ]}
-                >
-                  Promo Code
-                </Text>
-              )}
-            </TouchableOpacity>
+            {showPromoCode && (
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  {
+                    backgroundColor: "#F5F3FF",
+                    borderColor: "#DDD6FE",
+                    borderWidth: 1,
+                  },
+                  !isTablet &&
+                    isLandscape && { height: 32, paddingHorizontal: 8 },
+                ]}
+                onPress={() => setShowPromoModal(true)}
+              >
+                <Ionicons
+                  name="barcode-outline"
+                  size={!isTablet && isLandscape ? 16 : 18}
+                  color="#7C3AED"
+                />
+                {isLandscape && (
+                  <Text
+                    style={[
+                      styles.actionBtnText,
+                      { color: "#7C3AED" },
+                      !isTablet && isLandscape && { fontSize: 10 },
+                    ]}
+                  >
+                    Promo Code
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={[

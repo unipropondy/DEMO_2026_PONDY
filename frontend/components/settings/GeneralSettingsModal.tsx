@@ -100,6 +100,9 @@ export default function GeneralSettingsModal({
   const [SVCIdentification, setSVCIdentification] = useState(settings.SVCIdentification !== undefined ? settings.SVCIdentification : true);
   const [enableKDSPrint, setEnableKDSPrint] = useState(settings.enableKDSPrint !== undefined ? settings.enableKDSPrint : true);
   const [enableCombo, setEnableCombo] = useState(settings.enableCombo !== undefined ? settings.enableCombo : true);
+  const [showLoyalty, setShowLoyalty] = useState(settings.showLoyalty !== undefined ? settings.showLoyalty : true);
+  const [showRewardPoints, setShowRewardPoints] = useState(settings.showRewardPoints !== undefined ? settings.showRewardPoints : true);
+  const [showPromoCode, setShowPromoCode] = useState(settings.showPromoCode !== undefined ? settings.showPromoCode : true);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordValue, setPasswordValue] = useState("");
@@ -185,6 +188,9 @@ export default function GeneralSettingsModal({
       setSVCIdentification(settings.SVCIdentification !== undefined ? settings.SVCIdentification : true);
       setEnableKDSPrint(settings.enableKDSPrint !== undefined ? settings.enableKDSPrint : true);
       setEnableCombo(settings.enableCombo !== undefined ? settings.enableCombo : true);
+      setShowLoyalty(settings.showLoyalty !== undefined ? settings.showLoyalty : true);
+      setShowRewardPoints(settings.showRewardPoints !== undefined ? settings.showRewardPoints : true);
+      setShowPromoCode(settings.showPromoCode !== undefined ? settings.showPromoCode : true);
       
       let initialCheckoutFlow = settings.enableCheckoutFlow;
       let initialDirectProcess = settings.enableDirectProcessToPay;
@@ -258,6 +264,9 @@ export default function GeneralSettingsModal({
       SVCIdentification,
       enableKDSPrint,
       enableCombo,
+      showLoyalty,
+      showRewardPoints,
+      showPromoCode,
     });
     
     setIsSaving(false);
@@ -463,6 +472,48 @@ export default function GeneralSettingsModal({
                 <Text style={styles.settingDesc}>Enable combo menu items and selections wizard.</Text>
               </View>
               <CustomSwitch value={enableCombo} onValueChange={setEnableCombo} />
+            </View>
+
+            {/* CARD 12: Show Loyalty Toggle */}
+            <View style={[styles.settingCard, showLoyalty && styles.settingCardActive]}>
+              <View style={styles.cardLeft}>
+                <View style={styles.cardHeaderRow}>
+                  <View style={[styles.iconWrapper, showLoyalty ? styles.iconWrapperActive : styles.iconWrapperInactive]}>
+                    <Ionicons name="ribbon-outline" size={16} color={showLoyalty ? Theme.primary : Theme.textSecondary} />
+                  </View>
+                  <Text style={styles.settingTitle}>Loyalty Feature</Text>
+                </View>
+                <Text style={styles.settingDesc}>Show the Loyalty button in the POS Summary screen.</Text>
+              </View>
+              <CustomSwitch value={showLoyalty} onValueChange={setShowLoyalty} />
+            </View>
+
+            {/* CARD 13: Show Reward Points Toggle */}
+            <View style={[styles.settingCard, showRewardPoints && styles.settingCardActive]}>
+              <View style={styles.cardLeft}>
+                <View style={styles.cardHeaderRow}>
+                  <View style={[styles.iconWrapper, showRewardPoints ? styles.iconWrapperActive : styles.iconWrapperInactive]}>
+                    <Ionicons name="gift-outline" size={16} color={showRewardPoints ? Theme.primary : Theme.textSecondary} />
+                  </View>
+                  <Text style={styles.settingTitle}>Reward Points Feature</Text>
+                </View>
+                <Text style={styles.settingDesc}>Show the Reward Points button in the POS Summary screen.</Text>
+              </View>
+              <CustomSwitch value={showRewardPoints} onValueChange={setShowRewardPoints} />
+            </View>
+
+            {/* CARD 14: Show Promo Code Toggle */}
+            <View style={[styles.settingCard, showPromoCode && styles.settingCardActive]}>
+              <View style={styles.cardLeft}>
+                <View style={styles.cardHeaderRow}>
+                  <View style={[styles.iconWrapper, showPromoCode ? styles.iconWrapperActive : styles.iconWrapperInactive]}>
+                    <Ionicons name="pricetag-outline" size={16} color={showPromoCode ? Theme.primary : Theme.textSecondary} />
+                  </View>
+                  <Text style={styles.settingTitle}>Promo Code Feature</Text>
+                </View>
+                <Text style={styles.settingDesc}>Show the Promo Code button in the POS Summary screen.</Text>
+              </View>
+              <CustomSwitch value={showPromoCode} onValueChange={setShowPromoCode} />
             </View>
           </ScrollView>
 
