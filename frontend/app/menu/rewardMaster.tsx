@@ -14,7 +14,7 @@ import {
   useWindowDimensions
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import axios from "axios";
 import { API_URL } from "@/constants/Config";
 import { useAuthStore } from "@/stores/authStore";
@@ -130,10 +130,19 @@ export default function RewardMasterScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace("/menu/settlement" as any);
+          }
+        }}>
           <Ionicons name="arrow-back" size={24} color={Theme.textSecondary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Reward Points Master</Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <FontAwesome5 name="gift" size={18} color="#FF6B00" style={{ marginRight: 8 }} />
+          <Text style={styles.headerTitle}>Reward Points Master</Text>
+        </View>
       </View>
 
       <KeyboardAvoidingView
@@ -143,44 +152,62 @@ export default function RewardMasterScreen() {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
           
           {/* Rule Configuration Section */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Reward Configuration Rule</Text>
-            <Text style={styles.cardSubtitle}>
-              Configure how much reward wallet cashback points members earn.
-            </Text>
+          <View style={[styles.card, styles.premiumCard]}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.iconCircle}>
+                <FontAwesome5 name="cog" size={18} color="#FF6B00" />
+              </View>
+              <View style={{ marginLeft: 12 }}>
+                <Text style={styles.cardTitle}>Reward Configuration Rule</Text>
+                <Text style={styles.cardSubtitle}>
+                  Configure how much reward wallet cashback points members earn.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
 
             <View style={styles.row}>
               <View style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.inputLabel}>Every spent amount ($)</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="numeric"
-                  value={spendAmount}
-                  onChangeText={setSpendAmount}
-                  placeholder="e.g. 100"
-                />
+                <View style={styles.inputWrapper}>
+                  <FontAwesome5 name="shopping-bag" size={14} color="#9CA3AF" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.premiumInput}
+                    keyboardType="numeric"
+                    value={spendAmount}
+                    onChangeText={setSpendAmount}
+                    placeholder="e.g. 100"
+                  />
+                </View>
               </View>
 
               <View style={[styles.inputGroup, { flex: 1, marginLeft: 15 }]}>
                 <Text style={styles.inputLabel}>Earns credit reward ($)</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="numeric"
-                  value={creditAmount}
-                  onChangeText={setCreditAmount}
-                  placeholder="e.g. 1.00"
-                />
+                <View style={styles.inputWrapper}>
+                  <FontAwesome5 name="gift" size={14} color="#9CA3AF" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.premiumInput}
+                    keyboardType="numeric"
+                    value={creditAmount}
+                    onChangeText={setCreditAmount}
+                    placeholder="e.g. 1.00"
+                  />
+                </View>
               </View>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Description / Notes</Text>
-              <TextInput
-                style={styles.input}
-                value={description}
-                onChangeText={setDescription}
-                placeholder="e.g. Standard 1% Loyalty Cashback Points"
-              />
+              <View style={styles.inputWrapper}>
+                <FontAwesome5 name="pen" size={14} color="#9CA3AF" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.premiumInput}
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="e.g. Standard 1% Loyalty Cashback Points"
+                />
+              </View>
             </View>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSaveRule} disabled={isSavingRule}>
@@ -193,7 +220,7 @@ export default function RewardMasterScreen() {
           </View>
 
           {/* Member Search & History Section */}
-          <View style={[styles.row, { marginTop: 20, alignItems: "flex-start" }]}>
+          <View style={[styles.row, { marginTop: 24, alignItems: "flex-start" }]}>
             
             {/* Left Column: Member Search */}
             <View style={{ flex: isTablet ? 1 : undefined, width: isTablet ? undefined : "100%" }}>
@@ -206,7 +233,7 @@ export default function RewardMasterScreen() {
                     style={styles.searchInput}
                     value={searchText}
                     onChangeText={handleSearchMembers}
-                    placeholder="Search by member name or phone..."
+                    placeholder="Search by name or phone..."
                   />
                   {isSearchingMembers && <ActivityIndicator size="small" color={Theme.primary} />}
                 </View>
@@ -223,9 +250,12 @@ export default function RewardMasterScreen() {
                       ]}
                       onPress={() => handleSelectMember(item)}
                     >
-                      <View>
+                      <View style={{ flex: 1 }}>
                         <Text style={styles.memberName}>{item.Name}</Text>
-                        <Text style={styles.memberPhone}>{item.Phone}</Text>
+                        <View style={styles.phoneRow}>
+                          <Ionicons name="call" size={12} color="#9CA3AF" style={{ marginRight: 4 }} />
+                          <Text style={styles.memberPhone}>{item.Phone}</Text>
+                        </View>
                       </View>
                       <View style={styles.badge}>
                         <Text style={styles.badgeText}>
@@ -235,9 +265,12 @@ export default function RewardMasterScreen() {
                     </TouchableOpacity>
                   )}
                   ListEmptyComponent={() => (
-                    <Text style={styles.emptyText}>
-                      {searchText ? "No matching members found." : "Search to check member reward points."}
-                    </Text>
+                    <View style={styles.emptyContainer}>
+                      <FontAwesome5 name="users" size={32} color="#D1D5DB" />
+                      <Text style={styles.emptyText}>
+                        {searchText ? "No matching members found." : "Search members to check wallets."}
+                      </Text>
+                    </View>
                   )}
                 />
               </View>
@@ -251,18 +284,22 @@ export default function RewardMasterScreen() {
                   {selectedMember ? (
                     <View>
                       <View style={styles.memberSummary}>
-                        <Text style={styles.summaryName}>{selectedMember.Name}</Text>
-                        <Text style={styles.summaryPhone}>{selectedMember.Phone}</Text>
-                        <View style={styles.walletRow}>
-                          <Text style={styles.walletLabel}>Reward Wallet Balance:</Text>
-                          <Text style={styles.walletValue}>
-                            ${(parseFloat(selectedMember.RewardCredit) || 0).toFixed(2)} Credits
-                          </Text>
+                        <View style={styles.summaryTopRow}>
+                          <View>
+                            <Text style={styles.summaryName}>{selectedMember.Name}</Text>
+                            <Text style={styles.summaryPhone}>{selectedMember.Phone}</Text>
+                          </View>
+                          <View style={styles.walletTotalContainer}>
+                            <Text style={styles.walletTotalLabel}>Points Balance</Text>
+                            <Text style={styles.walletTotalVal}>
+                              ${(parseFloat(selectedMember.RewardCredit) || 0).toFixed(2)}
+                            </Text>
+                          </View>
                         </View>
                       </View>
 
                       {isLoadingHistory ? (
-                        <ActivityIndicator size="large" color={Theme.primary} style={{ marginTop: 20 }} />
+                        <ActivityIndicator size="large" color={Theme.primary} style={{ marginTop: 24 }} />
                       ) : (
                         <FlatList
                           data={history}
@@ -271,33 +308,56 @@ export default function RewardMasterScreen() {
                           renderItem={({ item }) => {
                             const isRedeemed = item.TransType === "REDEEM" || parseFloat(item.PointsUsed) > 0;
                             return (
-                              <View style={styles.historyItem}>
-                                <View style={{ flex: 1 }}>
-                                  <Text style={styles.historyBill}>Bill: {item.BillNo || "N/A"}</Text>
-                                  <Text style={styles.historyRemarks}>{item.Remarks || (isRedeemed ? "Redeemed points" : "Earned points")}</Text>
+                              <View style={[
+                                styles.historyCard, 
+                                isRedeemed ? styles.historyCardRedeemed : styles.historyCardEarned
+                              ]}>
+                                <View style={styles.historyCardHeader}>
+                                  <View style={styles.billBadge}>
+                                    <Text style={styles.billBadgeText}>Bill: {item.BillNo || "N/A"}</Text>
+                                  </View>
                                   <Text style={styles.historyDate}>
-                                    {new Date(item.CreatedOn).toLocaleString()}
+                                    {new Date(item.CreatedOn).toLocaleDateString()} {new Date(item.CreatedOn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                   </Text>
                                 </View>
-                                <Text 
-                                  style={[
-                                    styles.historyPoints, 
-                                    isRedeemed ? { color: "#EA580C" } : { color: Theme.success }
-                                  ]}
-                                >
-                                  {isRedeemed ? "-" : "+"}${isRedeemed ? (parseFloat(item.PointsUsed) || 0).toFixed(2) : (parseFloat(item.PointsEarned) || 0).toFixed(2)}
-                                </Text>
+                                
+                                <View style={styles.historyCardBody}>
+                                  <View style={{ flex: 1, paddingRight: 10 }}>
+                                    <Text style={styles.historyRemarks}>{item.Remarks || (isRedeemed ? "Redeemed points" : "Earned points")}</Text>
+                                    <View style={styles.paymodeRow}>
+                                      <FontAwesome5 name="wallet" size={10} color="#9CA3AF" style={{ marginRight: 4 }} />
+                                      <Text style={styles.paymodeText}>Paymode: {item.PayMode || "CASH"}</Text>
+                                    </View>
+                                  </View>
+                                  
+                                  <View style={styles.pointsActionContainer}>
+                                    <Text 
+                                      style={[
+                                        styles.historyPointsVal, 
+                                        isRedeemed ? styles.pointsRedeemedText : styles.pointsEarnedText
+                                      ]}
+                                    >
+                                      {isRedeemed ? "-" : "+"}${isRedeemed ? (parseFloat(item.PointsUsed) || 0).toFixed(2) : (parseFloat(item.PointsEarned) || 0).toFixed(2)}
+                                    </Text>
+                                  </View>
+                                </View>
                               </View>
                             );
                           }}
                           ListEmptyComponent={() => (
-                            <Text style={styles.emptyText}>No transaction history logs found.</Text>
+                            <View style={styles.emptyContainer}>
+                              <FontAwesome5 name="history" size={28} color="#D1D5DB" />
+                              <Text style={styles.emptyText}>No transaction history logs found.</Text>
+                            </View>
                           )}
                         />
                       )}
                     </View>
                   ) : (
-                    <Text style={styles.emptyText}>Select a member to view reward history logs.</Text>
+                    <View style={styles.emptyContainer}>
+                      <FontAwesome5 name="hand-pointer" size={32} color="#D1D5DB" />
+                      <Text style={styles.emptyText}>Select a member to view reward history logs.</Text>
+                    </View>
                   )}
                 </View>
               </View>
@@ -318,18 +378,23 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
     backgroundColor: "#fff",
+    position: "relative",
   },
   backBtn: {
-    marginRight: 16,
+    position: "absolute",
+    left: 16,
+    zIndex: 10,
   },
   headerTitle: {
     fontSize: 18,
     fontFamily: Fonts.black,
     color: Theme.textPrimary,
+    textAlign: "center",
   },
   scrollContent: {
     padding: 16,
@@ -337,26 +402,46 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: "#fff",
     borderRadius: 12,
-    padding: 16,
+    padding: 20,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: "#172B4D",
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  premiumCard: {
+    borderTopWidth: 4,
+    borderTopColor: "#FF6B00",
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  iconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#FFF7ED",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginVertical: 16,
   },
   cardTitle: {
     fontSize: 16,
     fontFamily: Fonts.black,
     color: Theme.textPrimary,
-    marginBottom: 4,
   },
   cardSubtitle: {
     fontSize: 13,
     fontFamily: Fonts.medium,
     color: "#6B7280",
-    marginBottom: 16,
+    marginTop: 2,
   },
   row: {
     flexDirection: "row",
@@ -371,39 +456,52 @@ const styles = StyleSheet.create({
     color: Theme.textSecondary,
     marginBottom: 6,
   },
-  input: {
-    borderWidth: 1.5,
-    borderColor: "#E5E7EB",
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 0,
     borderRadius: 8,
+    backgroundColor: "#F3F4F6",
     paddingHorizontal: 12,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  premiumInput: {
+    flex: 1,
     paddingVertical: 10,
     fontSize: 14,
     fontFamily: Fonts.medium,
-    backgroundColor: "#F9FAFB",
     color: Theme.textPrimary,
+    outlineWidth: 0,
   },
   saveBtn: {
-    backgroundColor: Theme.primary,
+    backgroundColor: "#FF6B00",
     borderRadius: 8,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
+    shadowColor: "#FF6B00",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
   saveBtnText: {
     color: "#fff",
     fontSize: 14,
     fontFamily: Fonts.black,
+    letterSpacing: 0.3,
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#E5E7EB",
+    borderWidth: 0,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F3F4F6",
     marginBottom: 16,
     marginTop: 10,
   },
@@ -412,30 +510,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Fonts.medium,
     color: Theme.textPrimary,
+    outlineWidth: 0,
   },
   memberItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
+    borderRadius: 8,
+    marginVertical: 2,
   },
   memberItemSelected: {
     backgroundColor: "#FFF7ED",
-    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: "#FF6B00",
   },
   memberName: {
     fontSize: 14,
     fontFamily: Fonts.bold,
     color: Theme.textPrimary,
   },
+  phoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
   memberPhone: {
     fontSize: 12,
     fontFamily: Fonts.medium,
     color: "#6B7280",
-    marginTop: 2,
   },
   badge: {
     backgroundColor: "#EFF6FF",
@@ -448,18 +554,28 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     color: "#1D4ED8",
   },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 32,
+  },
   emptyText: {
     textAlign: "center",
     color: "#9CA3AF",
     fontSize: 13,
     fontFamily: Fonts.medium,
-    marginVertical: 20,
+    marginTop: 10,
   },
   memberSummary: {
-    padding: 12,
+    padding: 14,
     backgroundColor: "#F3F4F6",
     borderRadius: 8,
     marginBottom: 16,
+  },
+  summaryTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   summaryName: {
     fontSize: 15,
@@ -470,53 +586,98 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Fonts.medium,
     color: "#6B7280",
+    marginTop: 2,
   },
-  walletRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    paddingTop: 8,
+  walletTotalContainer: {
+    alignItems: "flex-end",
   },
-  walletLabel: {
-    fontSize: 13,
+  walletTotalLabel: {
+    fontSize: 11,
     fontFamily: Fonts.bold,
     color: Theme.textSecondary,
+    textTransform: "uppercase",
   },
-  walletValue: {
-    fontSize: 13,
+  walletTotalVal: {
+    fontSize: 18,
     fontFamily: Fonts.black,
     color: Theme.success,
+    marginTop: 2,
   },
-  historyItem: {
+  historyCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 10,
+  },
+  historyCardEarned: {
+    borderColor: "#DEF7EC",
+    backgroundColor: "#F3FAF7",
+    borderLeftWidth: 4,
+    borderLeftColor: "#31C48D",
+  },
+  historyCardRedeemed: {
+    borderColor: "#FDE8E8",
+    backgroundColor: "#FDF2F2",
+    borderLeftWidth: 4,
+    borderLeftColor: "#F98080",
+  },
+  historyCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    borderBottomColor: "rgba(0,0,0,0.03)",
+    paddingBottom: 6,
+    marginBottom: 6,
   },
-  historyBill: {
+  billBadge: {
+    backgroundColor: "rgba(0,0,0,0.05)",
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  billBadgeText: {
+    fontSize: 10,
+    fontFamily: Fonts.bold,
+    color: Theme.textPrimary,
+  },
+  historyCardBody: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  historyRemarks: {
     fontSize: 13,
     fontFamily: Fonts.bold,
     color: Theme.textPrimary,
   },
-  historyRemarks: {
-    fontSize: 12,
-    fontFamily: Fonts.medium,
-    color: "#6B7280",
-    marginTop: 2,
+  paymodeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
   },
-  historyDate: {
+  paymodeText: {
     fontSize: 11,
     fontFamily: Fonts.medium,
-    color: "#9CA3AF",
-    marginTop: 2,
+    color: "#6B7280",
   },
-  historyPoints: {
-    fontSize: 14,
+  historyDate: {
+    fontSize: 10,
+    fontFamily: Fonts.medium,
+    color: "#9CA3AF",
+  },
+  pointsActionContainer: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  historyPointsVal: {
+    fontSize: 15,
     fontFamily: Fonts.black,
-    color: Theme.success,
+  },
+  pointsEarnedText: {
+    color: "#0E9F6E",
+  },
+  pointsRedeemedText: {
+    color: "#E02424",
   }
 });
