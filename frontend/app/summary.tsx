@@ -1376,14 +1376,22 @@ export default function SummaryScreen() {
                     </Text>
                   </View>
                 )}
-                <Text
-                  style={[
-                    styles.orderSub,
-                    { marginLeft: isPhone && !isLandscape ? 0 : 8 },
-                  ]}
-                >
-                  #{displayOrderId || "NEW"}
-                </Text>
+                {isPhone && !isLandscape ? (
+                  <View style={{ width: "100%", marginTop: 4 }}>
+                    <Text style={styles.orderSub}>
+                      #{displayOrderId || "NEW"}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text
+                    style={[
+                      styles.orderSub,
+                      { marginLeft: 8 },
+                    ]}
+                  >
+                    #{displayOrderId || "NEW"}
+                  </Text>
+                )}
               </View>
             </View>
           </View>
