@@ -35,7 +35,6 @@ import {
 } from "../../utils/timezoneHelper";
 
 import StoreSettingsModal from "@/components/payment/StoreSettingsModal";
-import GeneralSettingsModal from "@/components/settings/GeneralSettingsModal";
 import { useActiveOrdersStore } from "@/stores/activeOrdersStore";
 import { useAuthStore } from "@/stores/authStore";
 import {
@@ -419,8 +418,6 @@ export default function Category() {
   const [loading, setLoading] = useState(true);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
-  const [isGeneralSettingsVisible, setIsGeneralSettingsVisible] =
-    useState(false);
   const [isSettingsExpanded, setIsSettingsExpanded] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -2903,7 +2900,7 @@ export default function Category() {
                           style={styles.subMenuItem}
                           onPress={() => {
                             setIsMenuVisible(false);
-                            setIsGeneralSettingsVisible(true);
+                            router.push("/general-settings" as any);
                           }}
                         >
                           <View
@@ -3804,10 +3801,6 @@ export default function Category() {
       />
 
       {/* General Settings Modal */}
-      <GeneralSettingsModal
-        visible={isGeneralSettingsVisible}
-        onClose={() => setIsGeneralSettingsVisible(false)}
-      />
 
       {/* Floating AI Chat Assistant Button */}
       {user?.role === "ADMIN" && (
