@@ -283,7 +283,6 @@ export default function GeneralSettingsModal({
         <Animated.View
           style={[
             styles.modalContent,
-            isTablet && { width: "50%", maxWidth: 440 },
             { transform: [{ scale: modalScale }] }
           ]}
         >
@@ -614,7 +613,9 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.bgCard,
     borderRadius: 20,
     width: "100%",
-    maxWidth: 400,
+    maxWidth: 500,
+    maxHeight: "90%",
+    flexShrink: 1,
     overflow: "hidden",
     shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 12 },
@@ -852,7 +853,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     width: "90%",
-    maxWidth: 320,
+    maxWidth: 340,
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
@@ -901,7 +902,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   confirmBtnCancelText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Fonts.semiBold,
     color: Theme.textSecondary,
   },
@@ -914,7 +915,7 @@ const styles = StyleSheet.create({
     ...Theme.shadowSm,
   },
   confirmBtnSaveText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Fonts.bold,
     color: "#FFFFFF",
   },
