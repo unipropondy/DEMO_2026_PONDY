@@ -12,6 +12,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -327,7 +328,7 @@ export default function GeneralSettingsScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-            <Ionicons name="arrow-back" size={24} color={Theme.text} />
+            <Ionicons name="arrow-back" size={24} color={Theme.textPrimary} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>General Settings</Text>
@@ -467,7 +468,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontFamily: Fonts.bold,
-    color: Theme.text,
+    color: Theme.textPrimary,
   },
   headerSubtitle: {
     fontSize: 12,
@@ -541,7 +542,7 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 14,
     fontFamily: Fonts.bold,
-    color: Theme.text,
+    color: Theme.textPrimary,
     flex: 1,
   },
   settingDesc: {
@@ -635,7 +636,7 @@ const styles = StyleSheet.create({
   pwTitle: {
     fontSize: 16,
     fontFamily: Fonts.bold,
-    color: Theme.text,
+    color: Theme.textPrimary,
   },
   pwClose: {
     padding: 4,
@@ -657,7 +658,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 14,
     fontFamily: Fonts.regular,
-    color: Theme.text,
+    color: Theme.textPrimary,
   },
   pwBtn: {
     height: 44,
