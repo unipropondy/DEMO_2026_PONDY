@@ -31,6 +31,17 @@ router.post("/add", async (req, res) => {
   try {
     const pool = await poolPromise;
     const { name, phone, email, creditLimit, currentBalance, balance, address, isActive, userId, promocode, promoamount } = req.body;
+    
+    // Duplicate Phone Check
+    if (phone && phone.trim()) {
+      const checkDup = await pool.request()
+        .input("Phone", sql.NVarChar, phone.trim())
+        .query("SELECT Name FROM MemberMaster WHERE Phone = @Phone AND IsActive = 1");
+      if (checkDup.recordset.length > 0) {
+        return res.status(400).json({ error: `Phone number is already assigned to member ${checkDup.recordset[0].Name}` });
+      }
+    }
+
     const result = await pool.request()
       .input("Name", sql.NVarChar, name)
       .input("Phone", sql.NVarChar, phone)
@@ -75,6 +86,18 @@ router.post("/update", async (req, res) => {
   try {
     const pool = await poolPromise;
     const { memberId, name, phone, email, creditLimit, currentBalance, balance, address, isActive, userId, promocode, promoamount } = req.body;
+    
+    // Duplicate Phone Check excluding current member
+    if (phone && phone.trim()) {
+      const checkDup = await pool.request()
+        .input("Phone", sql.NVarChar, phone.trim())
+        .input("Id", sql.UniqueIdentifier, memberId)
+        .query("SELECT Name FROM MemberMaster WHERE Phone = @Phone AND MemberId <> @Id AND IsActive = 1");
+      if (checkDup.recordset.length > 0) {
+        return res.status(400).json({ error: `Phone number is already assigned to member ${checkDup.recordset[0].Name}` });
+      }
+    }
+
     await pool.request()
       .input("Id", sql.UniqueIdentifier, memberId)
       .input("Name", sql.NVarChar, name)

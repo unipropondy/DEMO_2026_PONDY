@@ -240,7 +240,14 @@ export default function PaymentSuccess() {
             )}
 
             <View style={styles.row}>
-              <Text style={styles.label}>Total Amount</Text>
+              <View>
+                <Text style={styles.label}>Total Amount</Text>
+                {params.mobileNo ? (
+                  <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: Theme.textMuted, marginTop: 2 }}>
+                    Member Phone: {params.mobileNo}
+                  </Text>
+                ) : null}
+              </View>
               <Text style={styles.value}>{currencySymbol}{total}</Text>
             </View>
 
@@ -248,6 +255,20 @@ export default function PaymentSuccess() {
               <Text style={styles.label}>Amount Paid</Text>
               <Text style={styles.value}>{currencySymbol}{paid}</Text>
             </View>
+
+            {parseFloat(String(params.rewardPointsEarned || "0")) > 0 ? (
+              <View style={[styles.row, { paddingVertical: 4, paddingHorizontal: 8, backgroundColor: "#FFF7ED", borderRadius: 8 }]}>
+                <Text style={[styles.label, { color: "#F97316", fontFamily: Fonts.bold }]}>⭐ Points Earned</Text>
+                <Text style={[styles.value, { color: "#F97316" }]}>+${parseFloat(String(params.rewardPointsEarned)).toFixed(2)}</Text>
+              </View>
+            ) : null}
+
+            {parseFloat(String(params.memberRewardBalance || "0")) > 0 ? (
+              <View style={styles.row}>
+                <Text style={styles.label}>🎁 Total Reward Balance</Text>
+                <Text style={[styles.value, { color: Theme.success }]}>${parseFloat(String(params.memberRewardBalance)).toFixed(2)}</Text>
+              </View>
+            ) : null}
 
             <View style={[styles.row, styles.changeRow]}>
               <Text style={styles.label}>Change Due</Text>

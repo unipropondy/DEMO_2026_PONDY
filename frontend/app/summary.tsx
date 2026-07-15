@@ -156,6 +156,13 @@ export default function SummaryScreen() {
   const [loyaltySearchText, setLoyaltySearchText] = useState("");
   const [activeLoyaltyTab, setActiveLoyaltyTab] = useState<"search" | "register">("search");
   const [isRegisteringLoyalty, setIsRegisteringLoyalty] = useState(false);
+  
+  // 🏆 REWARD POINTS STATES
+  const [rewardMember, setRewardMember] = useState<any | null>(null);
+  const [showRewardModal, setShowRewardModal] = useState(false);
+  const [rewardSearchText, setRewardSearchText] = useState("");
+  const [rewardSearchResults, setRewardSearchResults] = useState<any[]>([]);
+  const [isSearchingRewards, setIsSearchingRewards] = useState(false);
 
   const tableState = context?.tableId
     ? useTableStatusStore.getState().tableMap[context.tableId.toLowerCase()]
@@ -233,6 +240,31 @@ export default function SummaryScreen() {
       }
     } catch (err) {
       console.error("Loyalty search error:", err);
+    }
+  };
+
+  // 🏆 REWARD POINTS MEMBER LOOKUP
+  const handleRewardSearch = async (text: string) => {
+    setRewardSearchText(text);
+    const clean = text.trim();
+    if (!clean) {
+      setRewardSearchResults([]);
+      return;
+    }
+    setIsSearchingRewards(true);
+    try {
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`${API_URL}/api/rewards/members/search?q=${encodeURIComponent(clean)}`, {
+        headers: token ? { "Authorization": `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setRewardSearchResults(data);
+      }
+    } catch (err) {
+      console.error("Reward member search error:", err);
+    } finally {
+      setIsSearchingRewards(false);
     }
   };
 
@@ -1796,6 +1828,46 @@ export default function SummaryScreen() {
                   </View>
                 )}
 
+                {/* 🏆 REWARD POINTS MEMBER DISPLAY */}
+                <TouchableOpacity
+                  onPress={() => setShowRewardModal(true)}
+                  style={{
+                    backgroundColor: rewardMember ? "#FFF7ED" : Theme.bgNav,
+                    borderColor: rewardMember ? "#F97316" : Theme.border,
+                    borderWidth: 1,
+                    borderRadius: 10,
+                    padding: 12,
+                    marginBottom: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Ionicons name="gift" size={16} color={rewardMember ? "#F97316" : Theme.textSecondary} />
+                      <Text style={{ fontSize: 13, fontFamily: Fonts.black, color: Theme.textPrimary }}>
+                        {rewardMember ? `Reward Member: ${rewardMember.Name}` : "Link Reward Member"}
+                      </Text>
+                    </View>
+                    {rewardMember ? (
+                      <View>
+                        <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.textSecondary, marginLeft: 22 }}>
+                          Phone: {rewardMember.Phone}
+                        </Text>
+                        <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.success, marginLeft: 22 }}>
+                          Available Credit Wallet: {currencySymbol}{(parseFloat(rewardMember.AvailableCredit) || 0).toFixed(2)}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: Theme.textMuted, marginLeft: 22 }}>
+                        Search by name or mobile number to assign rewards
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={Theme.textMuted} />
+                </TouchableOpacity>
+
                 <View
                   style={[
                     styles.summaryRow,
@@ -2230,6 +2302,7 @@ export default function SummaryScreen() {
                       params: {
                         mobileNo: loyaltyPhone ? `${selectedCountry.code} ${loyaltyPhone.trim()}` : "",
                         customerName: loyaltyName || "",
+                        rewardMemberId: rewardMember?.MemberId || "",
                       },
                     });
                   }}
@@ -2480,6 +2553,142 @@ export default function SummaryScreen() {
           setShowServerModal(false);
         }}
       />
+
+      {/* 🏆 REWARD POINTS MEMBER LOOKUP MODAL */}
+      <Modal
+        visible={showRewardModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRewardModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowRewardModal(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.modalContent, { maxWidth: 450, maxHeight: "85%" }]}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Reward Member Lookup</Text>
+                  <TouchableOpacity onPress={() => setShowRewardModal(false)}>
+                    <Ionicons name="close" size={24} color={Theme.textPrimary} />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.modalDesc}>
+                  Link a member number or name to award reward wallet points.
+                </Text>
+
+                <TextInput
+                  style={[
+                    styles.searchInput,
+                    {
+                      width: "100%",
+                      marginTop: 5,
+                      marginBottom: 15,
+                      backgroundColor: Theme.bgInput,
+                      borderWidth: 1,
+                      borderColor: Theme.border,
+                      borderRadius: 12,
+                      padding: 12,
+                      fontFamily: Fonts.medium,
+                      fontSize: 16,
+                      color: Theme.textPrimary,
+                    },
+                  ]}
+                  placeholder="Enter phone or customer name..."
+                  placeholderTextColor={Theme.textMuted}
+                  value={rewardSearchText}
+                  onChangeText={handleRewardSearch}
+                />
+
+                {isSearchingRewards ? (
+                  <ActivityIndicator size="small" color={Theme.primary} style={{ marginVertical: 20 }} />
+                ) : (
+                  <ScrollView style={{ maxHeight: 220, marginBottom: 20 }} showsVerticalScrollIndicator={true}>
+                    {rewardSearchResults.length === 0 ? (
+                      <Text style={{ textAlign: "center", color: Theme.textMuted, marginVertical: 15, fontFamily: Fonts.regular }}>
+                        {rewardSearchText ? "No matching members found" : "Type to search members"}
+                      </Text>
+                    ) : (
+                      rewardSearchResults.map((item) => (
+                        <TouchableOpacity
+                          key={item.MemberId}
+                          style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: 12,
+                            borderRadius: 12,
+                            backgroundColor: Theme.bgMuted,
+                            marginBottom: 8,
+                            borderWidth: 1,
+                            borderColor: Theme.border,
+                          }}
+                          onPress={() => {
+                            setRewardMember(item);
+                            setShowRewardModal(false);
+                            setRewardSearchText("");
+                            setRewardSearchResults([]);
+                          }}
+                        >
+                          <View style={{ flex: 1, marginRight: 10 }}>
+                            <Text style={{ fontFamily: Fonts.bold, fontSize: 15, color: Theme.textPrimary }}>
+                              {item.Name}
+                            </Text>
+                            <Text style={{ fontFamily: Fonts.medium, fontSize: 12, color: Theme.textSecondary, marginTop: 2 }}>
+                              Phone: {item.Phone}
+                            </Text>
+                          </View>
+                          <Text style={{ fontFamily: Fonts.black, fontSize: 14, color: Theme.success }}>
+                            ${(parseFloat(item.AvailableCredit) || 0).toFixed(2)} Credit
+                          </Text>
+                        </TouchableOpacity>
+                      ))
+                    )}
+                  </ScrollView>
+                )}
+
+                {rewardMember && (
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: Theme.dangerBg,
+                      padding: 12,
+                      borderRadius: 12,
+                      alignItems: "center",
+                      marginBottom: 15,
+                      borderWidth: 1,
+                      borderColor: Theme.dangerBorder
+                    }}
+                    onPress={() => {
+                      setRewardMember(null);
+                      setShowRewardModal(false);
+                    }}
+                  >
+                    <Text style={{ fontFamily: Fonts.bold, color: Theme.danger, fontSize: 14 }}>
+                      Unlink Current Member ({rewardMember.Name})
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <View style={{ flexDirection: "row", gap: 12, width: "100%" }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.mergeConfirmBtn,
+                      styles.mergeConfirmBtnCancel,
+                      { paddingVertical: 12, flex: 1 },
+                    ]}
+                    onPress={() => {
+                      setShowRewardModal(false);
+                      setRewardSearchText("");
+                      setRewardSearchResults([]);
+                    }}
+                  >
+                    <Text style={styles.mergeConfirmBtnCancelText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       {/* BILL OPTIONS MODAL */}
       <Modal transparent visible={showBillOptions} animationType="fade">

@@ -115,6 +115,7 @@ export default function PaymentScreen() {
   const memberId = params.memberId as string | undefined;
   const loyaltyPhone = params.mobileNo as string | undefined;
   const loyaltyName = params.customerName as string | undefined;
+  const rewardMemberId = params.rewardMemberId as string | undefined;
   const collectAmountRaw = params.collectAmount
     ? parseFloat(params.collectAmount as string)
     : undefined;
@@ -1332,6 +1333,7 @@ export default function PaymentScreen() {
       customerName: loyaltyName || tableState?.customerName || null,
       mobileNo: loyaltyPhone || null,
       pax: tableState?.pax || null,
+      rewardMemberId: rewardMemberId || null,
     };
 
     try {
@@ -1372,6 +1374,8 @@ export default function PaymentScreen() {
             takeawayCharge: currentTakeawayCharge.toFixed(2),
             isSplit: splitItems ? "true" : "false",
             waiterName: context?.serverName ?? "",
+            rewardPointsEarned: String(result.rewardPointsEarned || 0),
+            memberRewardBalance: String(result.memberRewardBalance || 0),
           },
         });
         // Snapshot context/splitItems before the delayed cleanup
