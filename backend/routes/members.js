@@ -349,12 +349,11 @@ router.get("/usage/:memberId", async (req, res) => {
           AND IsCancelled = 0 
         ORDER BY LastSettlementDate DESC
       `);
-
+      
     res.json({
-      success: true,
-      summary: summaryRes.recordset[0] || { TotalSpent: 0, TotalOrders: 0 },
-      items: itemsRes.recordset || [],
-      transactions: txsRes.recordset || []
+        summary: summaryRes.recordset[0],
+        items: itemsRes.recordset,
+        transactions: txsRes.recordset
     });
   } catch (err) {
     console.error("[MEMBERS USAGE ERROR]", err);
@@ -377,110 +376,160 @@ router.post("/pay", async (req, res) => {
       }
     }
 
-  if (!memberId) {
-    return res.status(400).json({ error: "memberId is required" });
-  }
-
-  const numericAmt = parseFloat(amount);
-  if (isNaN(numericAmt) || numericAmt <= 0) {
-    return res.status(400).json({ error: "Amount must be a positive number" });
-  }
-
-  if (!payments || !Array.isArray(payments) || payments.length === 0) {
-    return res.status(400).json({ error: "payments array is required and cannot be empty" });
-  }
-
-  // Validation
-  let sum = 0;
-  for (let i = 0; i < payments.length; i++) {
-    const p = payments[i];
-    const amt = parseFloat(p.amount);
-    if (isNaN(amt) || amt <= 0) {
-      return res.status(400).json({ error: `Payment row ${i + 1} has an invalid or negative amount.` });
-    }
-    if (!p.payModeId && !p.payMode) {
-      return res.status(400).json({ error: `Payment row ${i + 1} is missing payment mode.` });
-    }
-    sum += amt;
-  }
-
-  const diff = Math.abs(sum - numericAmt);
-  if (diff > 0.01) {
-    return res.status(400).json({ error: `Sum of payments (${sum.toFixed(2)}) must equal total amount (${numericAmt.toFixed(2)})` });
-  }
-
-  let memberPaymentId;
-  let paymentTransactionId;
-
-  await runInTransaction(async (transaction) => {
-    // 1. Verify member exists and is active
-    const memberCheck = await transaction.request()
-      .input("MemberId", sql.UniqueIdentifier, memberId)
-      .query("SELECT CreditLimit, CurrentBalance, IsActive FROM MemberMaster WITH (UPDLOCK) WHERE MemberId = @MemberId");
-    
-    if (memberCheck.recordset.length === 0) {
-      throw new Error("Member not found");
-    }
-    
-    const member = memberCheck.recordset[0];
-    if (!member.IsActive) {
-      throw new Error("Member is inactive");
+    if (!memberId) {
+      return res.status(400).json({ error: "memberId is required" });
     }
 
-    // 2. Generate a new MemberPaymentId
-    const payIdRes = await transaction.request().query("SELECT NEWID() as id");
-    memberPaymentId = payIdRes.recordset[0].id;
+    const numericAmt = parseFloat(amount);
+    if (isNaN(numericAmt) || numericAmt <= 0) {
+      return res.status(400).json({ error: "Amount must be a positive number" });
+    }
 
-    // 3. Process split payments using unified service
-    await processSplitPayments({
-      referenceType: "MEMBER",
-      referenceId: memberId,
-      payments,
-      transaction,
-      cashierId: userId ? String(userId).trim() : null
-    });
+    if (!payments || !Array.isArray(payments) || payments.length === 0) {
+      return res.status(400).json({ error: "payments array is required and cannot be empty" });
+    }
 
-    // 3.5. Write allocation credit rows to CustomerCreditTransactions
-    let remainingPayment = numericAmt;
+    // Validation
+    let sum = 0;
+    for (let i = 0; i < payments.length; i++) {
+      const p = payments[i];
+      const amt = parseFloat(p.amount);
+      if (isNaN(amt) || amt <= 0) {
+        return res.status(400).json({ error: `Payment row ${i + 1} has an invalid or negative amount.` });
+      }
+      if (!p.payModeId && !p.payMode) {
+        return res.status(400).json({ error: `Payment row ${i + 1} is missing payment mode.` });
+      }
+      sum += amt;
+    }
+
+    const diff = Math.abs(sum - numericAmt);
+    if (diff > 0.01) {
+      return res.status(400).json({ error: `Sum of payments (${sum.toFixed(2)}) must equal total amount (${numericAmt.toFixed(2)})` });
+    }
+
+    let memberPaymentId;
+    let paymentTransactionId;
     const payModeName = (payments && payments.length > 0) ? (payments[0].payMode || 'CASH') : 'CASH';
-    const referenceNo = (payments && payments.length > 0) ? (payments[0].referenceNo || paymentSessionId || '') : (paymentSessionId || '');
-    const mainRemarks = `${req.body.remarks || `Credit payment collection (${payModeName})`} [Session: ${paymentSessionId || ''}]`;
 
-    // 1. Write the primary PAYMENT transaction record
-    const payTxResult = await transaction.request()
-      .input("MemberId", sql.UniqueIdentifier, memberId)
-      .input("Amount", sql.Decimal(18, 2), numericAmt)
-      .input("PaymentMethod", sql.NVarChar(50), payModeName)
-      .input("ReferenceNo", sql.NVarChar(100), referenceNo)
-      .input("Remarks", sql.NVarChar(500), mainRemarks.substring(0, 500))
-      .input("CreatedBy", sql.UniqueIdentifier, toGuidOrNull(userId))
-      .query(`
-        INSERT INTO CustomerCreditTransactions (MemberId, TransactionType, BillAmount, PaidAmount, OutstandingAmount, PaymentMethod, ReferenceNo, Status, Remarks, CreatedBy)
-        OUTPUT INSERTED.TransactionId
-        VALUES (@MemberId, 'PAYMENT', 0, @Amount, -@Amount, @PaymentMethod, @ReferenceNo, 'CLOSED', @Remarks, @CreatedBy)
-      `);
-    
-    paymentTransactionId = payTxResult.recordset[0].TransactionId;
-    
-    if (req.body.allocations && Array.isArray(req.body.allocations) && req.body.allocations.length > 0) {
-      // --- MANUAL ALLOCATION ---
-      for (const alloc of req.body.allocations) {
-        const allocAmt = parseFloat(alloc.amount);
-        if (isNaN(allocAmt) || allocAmt <= 0) continue;
-        
-        const billCheck = await transaction.request()
-          .input("MemberId", sql.UniqueIdentifier, memberId)
-          .input("SettlementId", sql.UniqueIdentifier, toGuidOrNull(alloc.settlementId))
-          .query(`
-            SELECT TransactionId FROM CustomerCreditTransactions
-            WHERE MemberId = @MemberId AND SettlementId = @SettlementId AND TransactionType IN ('CREDIT_SALE', 'ADJUSTMENT')
-          `);
+    await runInTransaction(async (transaction) => {
+      // 1. Verify member exists and is active
+      const memberCheck = await transaction.request()
+        .input("MemberId", sql.UniqueIdentifier, memberId)
+        .query("SELECT CreditLimit, CurrentBalance, IsActive FROM MemberMaster WITH (UPDLOCK) WHERE MemberId = @MemberId");
+      
+      if (memberCheck.recordset.length === 0) {
+        throw new Error("Member not found");
+      }
+      
+      const member = memberCheck.recordset[0];
+      if (!member.IsActive) {
+        throw new Error("Member is inactive");
+      }
+
+      // 2. Generate a new MemberPaymentId
+      const payIdRes = await transaction.request().query("SELECT NEWID() as id");
+      memberPaymentId = payIdRes.recordset[0].id;
+
+      // 3. Process split payments using unified service
+      await processSplitPayments({
+        referenceType: "MEMBER",
+        referenceId: memberId,
+        payments,
+        transaction,
+        cashierId: userId ? String(userId).trim() : null
+      });
+
+      // 3.5. Write allocation credit rows to CustomerCreditTransactions
+      let remainingPayment = numericAmt;
+      const referenceNo = (payments && payments.length > 0) ? (payments[0].referenceNo || paymentSessionId || '') : (paymentSessionId || '');
+      const mainRemarks = `${req.body.remarks || `Credit payment collection (${payModeName})`} [Session: ${paymentSessionId || ''}]`;
+
+      // 1. Write the primary PAYMENT transaction record
+      const payTxResult = await transaction.request()
+        .input("MemberId", sql.UniqueIdentifier, memberId)
+        .input("Amount", sql.Decimal(18, 2), numericAmt)
+        .input("PaymentMethod", sql.NVarChar(50), payModeName)
+        .input("ReferenceNo", sql.NVarChar(100), referenceNo)
+        .input("Remarks", sql.NVarChar(500), mainRemarks.substring(0, 500))
+        .input("CreatedBy", sql.UniqueIdentifier, toGuidOrNull(userId))
+        .query(`
+          INSERT INTO CustomerCreditTransactions (MemberId, TransactionType, BillAmount, PaidAmount, OutstandingAmount, PaymentMethod, ReferenceNo, Status, Remarks, CreatedBy)
+          OUTPUT INSERTED.TransactionId
+          VALUES (@MemberId, 'PAYMENT', 0, @Amount, -@Amount, @PaymentMethod, @ReferenceNo, 'CLOSED', @Remarks, @CreatedBy)
+        `);
+      
+      paymentTransactionId = payTxResult.recordset[0].TransactionId;
+      
+      if (req.body.allocations && Array.isArray(req.body.allocations) && req.body.allocations.length > 0) {
+        // --- MANUAL ALLOCATION ---
+        for (const alloc of req.body.allocations) {
+          const allocAmt = parseFloat(alloc.amount);
+          if (isNaN(allocAmt) || allocAmt <= 0) continue;
           
-        if (billCheck.recordset.length > 0) {
-          const invoiceTransactionId = billCheck.recordset[0].TransactionId;
+          const billCheck = await transaction.request()
+            .input("MemberId", sql.UniqueIdentifier, memberId)
+            .input("SettlementId", sql.UniqueIdentifier, toGuidOrNull(alloc.settlementId))
+            .query(`
+              SELECT TransactionId FROM CustomerCreditTransactions
+              WHERE MemberId = @MemberId AND SettlementId = @SettlementId AND TransactionType IN ('CREDIT_SALE', 'ADJUSTMENT')
+            `);
+            
+          if (billCheck.recordset.length > 0) {
+            const invoiceTransactionId = billCheck.recordset[0].TransactionId;
+            
+            await transaction.request()
+              .input("TransactionId", sql.UniqueIdentifier, invoiceTransactionId)
+              .input("AllocAmt", sql.Decimal(18, 2), allocAmt)
+              .query(`
+                UPDATE CustomerCreditTransactions
+                SET 
+                  PaidAmount = PaidAmount + @AllocAmt,
+                  OutstandingAmount = OutstandingAmount - @AllocAmt,
+                  Status = CASE WHEN (OutstandingAmount - @AllocAmt) <= 0.01 THEN 'CLOSED' ELSE 'PARTIAL' END,
+                  UpdatedDate = GETDATE()
+                WHERE TransactionId = @TransactionId
+              `);
+
+            // Insert allocation record
+            await transaction.request()
+              .input("PaymentTransactionId", sql.UniqueIdentifier, paymentTransactionId)
+              .input("InvoiceTransactionId", sql.UniqueIdentifier, invoiceTransactionId)
+              .input("AllocAmt", sql.Decimal(18, 2), allocAmt)
+              .query(`
+                INSERT INTO CustomerCreditAllocations (PaymentTransactionId, InvoiceTransactionId, Amount)
+                VALUES (@PaymentTransactionId, @InvoiceTransactionId, @AllocAmt)
+              `);
+          }
+        }
+      } else {
+        // --- AUTO ALLOCATION (FIFO) ---
+        // Fetch outstanding bills ordered by date
+        const outstandingRes = await transaction.request()
+          .input("MemberId", sql.UniqueIdentifier, memberId)
+          .query(`
+            SELECT 
+              TransactionId,
+              SettlementId,
+              BillNo,
+              OutstandingAmount
+            FROM CustomerCreditTransactions
+            WHERE MemberId = @MemberId
+              AND TransactionType IN ('CREDIT_SALE', 'ADJUSTMENT')
+              AND Status IN ('OPEN', 'PARTIAL')
+            ORDER BY CreatedDate ASC
+          `);
+        
+        const outstandingBills = outstandingRes.recordset;
+        
+        for (const bill of outstandingBills) {
+          if (remainingPayment <= 0.005) break;
+          
+          const billDue = parseFloat(bill.OutstandingAmount) || 0;
+          const allocAmt = Math.min(remainingPayment, billDue);
           
           await transaction.request()
-            .input("TransactionId", sql.UniqueIdentifier, invoiceTransactionId)
+            .input("TransactionId", sql.UniqueIdentifier, bill.TransactionId)
             .input("AllocAmt", sql.Decimal(18, 2), allocAmt)
             .query(`
               UPDATE CustomerCreditTransactions
@@ -495,101 +544,77 @@ router.post("/pay", async (req, res) => {
           // Insert allocation record
           await transaction.request()
             .input("PaymentTransactionId", sql.UniqueIdentifier, paymentTransactionId)
-            .input("InvoiceTransactionId", sql.UniqueIdentifier, invoiceTransactionId)
+            .input("InvoiceTransactionId", sql.UniqueIdentifier, bill.TransactionId)
             .input("AllocAmt", sql.Decimal(18, 2), allocAmt)
             .query(`
               INSERT INTO CustomerCreditAllocations (PaymentTransactionId, InvoiceTransactionId, Amount)
               VALUES (@PaymentTransactionId, @InvoiceTransactionId, @AllocAmt)
             `);
+            
+          remainingPayment -= allocAmt;
         }
       }
-    } else {
-      // --- AUTO ALLOCATION (FIFO) ---
-      // Fetch outstanding bills ordered by date
-      const outstandingRes = await transaction.request()
+
+      // 4. Update member balance (subtract paid amount to clear/reduce credit balance)
+      await transaction.request()
         .input("MemberId", sql.UniqueIdentifier, memberId)
-        .query(`
-          SELECT 
-            TransactionId,
-            SettlementId,
-            BillNo,
-            OutstandingAmount
-          FROM CustomerCreditTransactions
-          WHERE MemberId = @MemberId
-            AND TransactionType IN ('CREDIT_SALE', 'ADJUSTMENT')
-            AND Status IN ('OPEN', 'PARTIAL')
-          ORDER BY CreatedDate ASC
-        `);
-      
-      const outstandingBills = outstandingRes.recordset;
-      
-      for (const bill of outstandingBills) {
-        if (remainingPayment <= 0.005) break;
-        
-        const billDue = parseFloat(bill.OutstandingAmount) || 0;
-        const allocAmt = Math.min(remainingPayment, billDue);
-        
-        await transaction.request()
-          .input("TransactionId", sql.UniqueIdentifier, bill.TransactionId)
-          .input("AllocAmt", sql.Decimal(18, 2), allocAmt)
-          .query(`
-            UPDATE CustomerCreditTransactions
-            SET 
-              PaidAmount = PaidAmount + @AllocAmt,
-              OutstandingAmount = OutstandingAmount - @AllocAmt,
-              Status = CASE WHEN (OutstandingAmount - @AllocAmt) <= 0.01 THEN 'CLOSED' ELSE 'PARTIAL' END,
-              UpdatedDate = GETDATE()
-            WHERE TransactionId = @TransactionId
-          `);
+        .input("Amount", sql.Decimal(18, 2), numericAmt)
+        .query("UPDATE MemberMaster SET CurrentBalance = CurrentBalance - @Amount WHERE MemberId = @MemberId");
+    }, { name: "MemberPayment", timeoutMs: 60000 });
 
-        // Insert allocation record
-        await transaction.request()
-          .input("PaymentTransactionId", sql.UniqueIdentifier, paymentTransactionId)
-          .input("InvoiceTransactionId", sql.UniqueIdentifier, bill.TransactionId)
-          .input("AllocAmt", sql.Decimal(18, 2), allocAmt)
-          .query(`
-            INSERT INTO CustomerCreditAllocations (PaymentTransactionId, InvoiceTransactionId, Amount)
-            VALUES (@PaymentTransactionId, @InvoiceTransactionId, @AllocAmt)
-          `);
-          
-        remainingPayment -= allocAmt;
+    // 🏆 LOYALTY POINTS EARNED ON LEDGER SETTLEMENT COLLECTION
+    setImmediate(async () => {
+      try {
+        // 1. Fetch active reward rule
+        const ruleRes = await pool.query(
+          `SELECT TOP 1 SpendAmount, CreditAmount FROM RewardMaster WHERE IsActive = 1 ORDER BY Id DESC`
+        );
+        if (ruleRes.recordset.length > 0) {
+          const rule = ruleRes.recordset[0];
+          const earned = (numericAmt / rule.SpendAmount) * rule.CreditAmount;
+          const rewardPointsEarned = Math.round(earned * 10000) / 10000; // 4dp precision
+
+          if (rewardPointsEarned > 0) {
+            // 2. Add to MemberMaster.RewardCredit
+            await pool.request()
+              .input("MemberId", sql.UniqueIdentifier, memberId)
+              .input("Points", sql.Decimal(18, 4), rewardPointsEarned)
+              .query(`UPDATE MemberMaster SET RewardCredit = ISNULL(RewardCredit, 0) + @Points WHERE MemberId = @MemberId`);
+
+            // 3. Log to RewardPointDetails audit table
+            await pool.request()
+              .input("MemberId", sql.UniqueIdentifier, memberId)
+              .input("PaymentTransactionId", sql.UniqueIdentifier, paymentTransactionId)
+              .input("BillAmount", sql.Decimal(18, 2), numericAmt)
+              .input("PointsEarned", sql.Decimal(18, 4), rewardPointsEarned)
+              .input("PayMode", sql.NVarChar(50), payModeName)
+              .input("Remarks", sql.NVarChar(255), `Earned on ledger payment settlement`)
+              .query(`
+                INSERT INTO RewardPointDetails (MemberId, SettlementId, BillNo, BillAmount, PointsEarned, PointsUsed, TransType, PayMode, Remarks)
+                VALUES (@MemberId, @PaymentTransactionId, 'SETTLEMENT', @BillAmount, @PointsEarned, 0, 'EARN', @PayMode, @Remarks)
+              `);
+
+            console.log(`[Rewards] ✅ Settlement points: awarded ${rewardPointsEarned} credit on outstanding payment of ${numericAmt} for member ${memberId}.`);
+          }
+        }
+      } catch (rewardErr) {
+        console.error(`[Rewards] ❌ Settlement points award failed (non-blocking):`, rewardErr.message);
       }
-    }
+    });
 
-    // 4. Update member balance (subtract paid amount to clear/reduce credit balance)
-    await transaction.request()
-      .input("MemberId", sql.UniqueIdentifier, memberId)
-      .input("Amount", sql.Decimal(18, 2), numericAmt)
-      .query("UPDATE MemberMaster SET CurrentBalance = CurrentBalance - @Amount WHERE MemberId = @MemberId");
-  }, { name: "MemberPayment", timeoutMs: 60000 });
-
-  setImmediate(async () => {
-    try {
-      await sendBalanceNotification(memberId, pool);
-    } catch (err) {
-      console.error("[WhatsApp] sendBalanceNotification error in pay setImmediate:", err.message);
-    }
-  });
-
-  res.json({ success: true, memberPaymentId, paymentTransactionId });
-
+    res.json({ success: true });
   } catch (err) {
-    console.error("[MEMBER PAYMENT ERROR]", err);
+    console.error("[MEMBER PAY ERROR]", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-
 // ─── POST /api/members/recharge ──────────────────────────────────────────────
-// Top-up a member's prepaid balance. Resets the low-balance alert flag so
-// another alert can fire the next time the balance drops below the threshold.
-// Does NOT write to CustomerCreditTransactions (members are not credit accounts).
 router.post("/recharge", async (req, res) => {
   try {
     const { memberId, amount } = req.body;
-
-    if (!memberId) return res.status(400).json({ error: "memberId is required" });
     const numericAmt = parseFloat(amount);
+    
     if (isNaN(numericAmt) || numericAmt <= 0) {
       return res.status(400).json({ error: "Amount must be a positive number" });
     }

@@ -266,22 +266,30 @@ export default function RewardMasterScreen() {
                       ) : (
                         <FlatList
                           data={history}
-                          keyExtractor={(item) => item.Id}
+                          keyExtractor={(item) => item.Id || String(Math.random())}
                           scrollEnabled={false}
-                          renderItem={({ item }) => (
-                            <View style={styles.historyItem}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.historyBill}>Bill: {item.BillNo || "N/A"}</Text>
-                                <Text style={styles.historyRemarks}>{item.Remarks || "Earned points"}</Text>
-                                <Text style={styles.historyDate}>
-                                  {new Date(item.CreatedOn).toLocaleString()}
+                          renderItem={({ item }) => {
+                            const isRedeemed = item.TransType === "REDEEM" || parseFloat(item.PointsUsed) > 0;
+                            return (
+                              <View style={styles.historyItem}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.historyBill}>Bill: {item.BillNo || "N/A"}</Text>
+                                  <Text style={styles.historyRemarks}>{item.Remarks || (isRedeemed ? "Redeemed points" : "Earned points")}</Text>
+                                  <Text style={styles.historyDate}>
+                                    {new Date(item.CreatedOn).toLocaleString()}
+                                  </Text>
+                                </View>
+                                <Text 
+                                  style={[
+                                    styles.historyPoints, 
+                                    isRedeemed ? { color: "#EA580C" } : { color: Theme.success }
+                                  ]}
+                                >
+                                  {isRedeemed ? "-" : "+"}${isRedeemed ? (parseFloat(item.PointsUsed) || 0).toFixed(2) : (parseFloat(item.PointsEarned) || 0).toFixed(2)}
                                 </Text>
                               </View>
-                              <Text style={styles.historyPoints}>
-                                +${(parseFloat(item.PointsEarned) || 0).toFixed(2)}
-                              </Text>
-                            </View>
-                          )}
+                            );
+                          }}
                           ListEmptyComponent={() => (
                             <Text style={styles.emptyText}>No transaction history logs found.</Text>
                           )}
