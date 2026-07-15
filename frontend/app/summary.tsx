@@ -1321,9 +1321,21 @@ export default function SummaryScreen() {
           style={[
             styles.headerBar,
             isPhone && isLandscape && { height: 50, marginBottom: 5 },
+            isPhone && !isLandscape && {
+              flexDirection: "column",
+              alignItems: "stretch",
+              minHeight: undefined,
+              gap: 8,
+              paddingBottom: 10,
+            },
           ]}
         >
-          <View style={styles.headerLeft}>
+          <View
+            style={[
+              styles.headerLeft,
+              isPhone && !isLandscape && { flex: undefined, width: "100%" },
+            ]}
+          >
             <Pressable
               style={styles.iconBtn}
               onPress={() =>
@@ -1396,7 +1408,17 @@ export default function SummaryScreen() {
             </View>
           </View>
 
-          <View style={styles.headerRight}>
+          <View
+            style={[
+              styles.headerRight,
+              isPhone && !isLandscape && {
+                width: "100%",
+                justifyContent: "flex-start",
+                flexWrap: "wrap",
+                gap: 8,
+              },
+            ]}
+          >
             {showLoyalty && (
               <TouchableOpacity
                 style={[
