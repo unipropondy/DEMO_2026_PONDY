@@ -1123,16 +1123,18 @@ export default function PaymentScreen() {
         setShowMemberModal(true);
         return;
       }
-      const isLimitExceeded =
-        (selectedMember.CurrentBalance || 0) + total >
-        (selectedMember.CreditLimit || 0);
+      const availableBalance =
+        selectedMember.AvailableCredit !== undefined
+          ? selectedMember.AvailableCredit
+          : (selectedMember.CreditLimit || 0) - (selectedMember.CurrentBalance || 0);
+      const isLimitExceeded = total > availableBalance;
       if (isLimitExceeded) {
         const isAdminOrManager =
           user?.role === "ADMIN" || user?.role === "MANAGER";
          if (isAdminOrManager) {
           Alert.alert(
             "Prepaid Amount Exceeded",
-            `Customer outstanding will be ${currencySymbol}${((selectedMember.CurrentBalance || 0) + total).toFixed(2)} which exceeds prepaid amount of ${currencySymbol}${(selectedMember.CreditLimit || 0).toFixed(2)}. Authorize this sale?`,
+            `Transaction total of ${currencySymbol}${total.toFixed(2)} exceeds available balance of ${currencySymbol}${availableBalance.toFixed(2)}. Authorize this sale?`,
             [
               { text: "Cancel", style: "cancel" },
               {
@@ -2526,75 +2528,86 @@ export default function PaymentScreen() {
                                 </TouchableOpacity>
                               </View>
 
-                              <View style={styles.creditCardStatsRow}>
-                                <View style={styles.creditStatCol}>
-                                  <Text style={styles.creditStatLabel}>
-                                    Available Balance
-                                  </Text>
-                                  <Text
-                                    style={[
-                                      styles.creditStatValue,
-                                      {
-                                        color:
-                                          (selectedMember.CreditLimit || 0) -
-                                            (selectedMember.CurrentBalance || 0) <
-                                            total
+                              {(() => {
+                                const selectedAvailCredit =
+                                  selectedMember.AvailableCredit !== undefined
+                                    ? selectedMember.AvailableCredit
+                                    : (selectedMember.CreditLimit || 0) -
+                                      (selectedMember.CurrentBalance || 0);
+                                const isSelectedLimitExceeded = total > selectedAvailCredit;
+                                return (
+                                <View style={styles.creditCardStatsRow}>
+                                  <View style={styles.creditStatCol}>
+                                    <Text style={styles.creditStatLabel}>
+                                      Available Balance
+                                    </Text>
+                                    <Text
+                                      style={[
+                                        styles.creditStatValue,
+                                        {
+                                          color: isSelectedLimitExceeded
                                             ? Theme.danger
                                             : Theme.success,
-                                      },
-                                    ]}
-                                  >
-                                    {formatMoney(
-                                      currencySymbol,
-                                      (selectedMember.CreditLimit || 0) -
-                                      (selectedMember.CurrentBalance || 0),
-                                    )}
-                                  </Text>
-                                </View>
-                                <View style={styles.creditStatCol}>
-                                  <Text style={styles.creditStatLabel}>
-                                    Prepaid Amount
-                                  </Text>
-                                  <Text style={styles.creditStatValue}>
-                                    {formatMoney(
-                                      currencySymbol,
-                                      selectedMember.CreditLimit || 0,
-                                    )}
-                                  </Text>
-                                </View>
-                                <View style={styles.creditStatCol}>
-                                  <Text style={styles.creditStatLabel}>
-                                    Consumed
-                                  </Text>
-                                  <Text style={styles.creditStatValue}>
-                                    {formatMoney(
-                                      currencySymbol,
-                                      selectedMember.CurrentBalance || 0,
-                                    )}
-                                  </Text>
-                                </View>
-                              </View>
-
-                              {(selectedMember.CurrentBalance || 0) + total >
-                                (selectedMember.CreditLimit || 0) && (
-                                  <View style={styles.limitExceededBanner}>
-                                    <Ionicons
-                                      name="alert-circle"
-                                      size={16}
-                                      color={Theme.danger}
-                                    />
-                                    <Text style={styles.limitExceededText}>
-                                      Transaction exceeds Prepaid Amount by{" "}
+                                        },
+                                      ]}
+                                    >
                                       {formatMoney(
                                         currencySymbol,
-                                        (selectedMember.CurrentBalance || 0) +
-                                        total -
-                                        (selectedMember.CreditLimit || 0),
+                                        selectedAvailCredit,
                                       )}
                                     </Text>
                                   </View>
-                                )}
-                            </View>
+                                  <View style={styles.creditStatCol}>
+                                    <Text style={styles.creditStatLabel}>
+                                      Prepaid Amount
+                                    </Text>
+                                    <Text style={styles.creditStatValue}>
+                                      {formatMoney(
+                                        currencySymbol,
+                                        selectedMember.CreditLimit || 0,
+                                      )}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.creditStatCol}>
+                                    <Text style={styles.creditStatLabel}>
+                                      Consumed
+                                    </Text>
+                                    <Text style={styles.creditStatValue}>
+                                      {formatMoney(
+                                        currencySymbol,
+                                        selectedMember.CurrentBalance || 0,
+                                      )}
+                                    </Text>
+                                  </View>
+                                </View>
+                              );
+                            })()}
+
+                            {(() => {
+                              const selectedAvailCredit =
+                                selectedMember.AvailableCredit !== undefined
+                                  ? selectedMember.AvailableCredit
+                                  : (selectedMember.CreditLimit || 0) -
+                                    (selectedMember.CurrentBalance || 0);
+                              const isSelectedLimitExceeded = total > selectedAvailCredit;
+                              return isSelectedLimitExceeded ? (
+                                <View style={styles.limitExceededBanner}>
+                                  <Ionicons
+                                    name="alert-circle"
+                                    size={16}
+                                    color={Theme.danger}
+                                  />
+                                  <Text style={styles.limitExceededText}>
+                                    Transaction exceeds Prepaid Amount by{" "}
+                                    {formatMoney(
+                                      currencySymbol,
+                                      total - selectedAvailCredit,
+                                    )}
+                                  </Text>
+                                </View>
+                              ) : null;
+                            })()}
+                          </View>
                           ) : (
                             <TouchableOpacity
                               style={styles.selectCreditPrompt}
@@ -3557,11 +3570,11 @@ export default function PaymentScreen() {
                             const isSelected =
                               selectedMember?.MemberId === item.MemberId;
                             const remainingCredit =
-                              (item.CreditLimit || 0) -
-                              (item.CurrentBalance || 0);
-                            const isLimitExceeded =
-                              (item.CurrentBalance || 0) + total >
-                              (item.CreditLimit || 0);
+                              item.AvailableCredit !== undefined
+                                ? item.AvailableCredit
+                                : (item.CreditLimit || 0) -
+                                  (item.CurrentBalance || 0);
+                            const isLimitExceeded = total > remainingCredit;
                             return (
                               <TouchableOpacity
                                 key={item.MemberId}

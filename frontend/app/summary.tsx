@@ -95,6 +95,7 @@ export default function SummaryScreen() {
   const activeOrder = context ? findActiveOrder(context) : undefined;
 
   const [showDiscount, setShowDiscount] = useState(false);
+  const [showDiscountTypeModal, setShowDiscountTypeModal] = useState(false);
   const [showGstModal, setShowGstModal] = useState(false);
   const [showItemDiscount, setShowItemDiscount] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -247,10 +248,6 @@ export default function SummaryScreen() {
   const handleRewardSearch = async (text: string) => {
     setRewardSearchText(text);
     const clean = text.trim();
-    if (!clean) {
-      setRewardSearchResults([]);
-      return;
-    }
     setIsSearchingRewards(true);
     try {
       const token = useAuthStore.getState().token;
@@ -267,6 +264,12 @@ export default function SummaryScreen() {
       setIsSearchingRewards(false);
     }
   };
+
+  useEffect(() => {
+    if (showRewardModal) {
+      handleRewardSearch("");
+    }
+  }, [showRewardModal]);
 
   const handleSearchTextChange = async (text: string) => {
     setLoyaltySearchText(text);
@@ -1425,7 +1428,7 @@ export default function SummaryScreen() {
                 !isTablet &&
                   isLandscape && { height: 32, paddingHorizontal: 8 },
               ]}
-              onPress={() => setShowDiscount(true)}
+              onPress={() => setShowDiscountTypeModal(true)}
             >
               <Ionicons
                 name="pricetag-outline"
@@ -1449,31 +1452,29 @@ export default function SummaryScreen() {
               style={[
                 styles.actionBtn,
                 {
-                  backgroundColor: Theme.primaryLight,
-                  borderColor: Theme.primaryBorder,
+                  backgroundColor: "#FFFBEB",
+                  borderColor: "#FEF3C7",
                   borderWidth: 1,
                 },
                 !isTablet &&
                   isLandscape && { height: 32, paddingHorizontal: 8 },
               ]}
-              onPress={() => {
-                setShowItemDiscount(true);
-              }}
+              onPress={() => setShowRewardModal(true)}
             >
               <Ionicons
-                name="pricetag"
+                name="star-outline"
                 size={!isTablet && isLandscape ? 16 : 18}
-                color={Theme.primary}
+                color="#D97706"
               />
               {isLandscape && (
                 <Text
                   style={[
                     styles.actionBtnText,
-                    { color: Theme.primary },
+                    { color: "#D97706" },
                     !isTablet && isLandscape && { fontSize: 10 },
                   ]}
                 >
-                  Item Discount
+                  Reward Points
                 </Text>
               )}
             </TouchableOpacity>
@@ -1829,28 +1830,28 @@ export default function SummaryScreen() {
                 )}
 
                 {/* 🏆 REWARD POINTS MEMBER DISPLAY */}
-                <TouchableOpacity
-                  onPress={() => setShowRewardModal(true)}
-                  style={{
-                    backgroundColor: rewardMember ? "#FFF7ED" : Theme.bgNav,
-                    borderColor: rewardMember ? "#F97316" : Theme.border,
-                    borderWidth: 1,
-                    borderRadius: 10,
-                    padding: 12,
-                    marginBottom: 12,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between"
-                  }}
-                >
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Ionicons name="gift" size={16} color={rewardMember ? "#F97316" : Theme.textSecondary} />
-                      <Text style={{ fontSize: 13, fontFamily: Fonts.black, color: Theme.textPrimary }}>
-                        {rewardMember ? `Reward Member: ${rewardMember.Name}` : "Link Reward Member"}
-                      </Text>
-                    </View>
-                    {rewardMember ? (
+                {rewardMember && (
+                  <TouchableOpacity
+                    onPress={() => setShowRewardModal(true)}
+                    style={{
+                      backgroundColor: "#FFF7ED",
+                      borderColor: "#F97316",
+                      borderWidth: 1,
+                      borderRadius: 10,
+                      padding: 12,
+                      marginBottom: 12,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between"
+                    }}
+                  >
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Ionicons name="gift" size={16} color="#F97316" />
+                        <Text style={{ fontSize: 13, fontFamily: Fonts.black, color: Theme.textPrimary }}>
+                          {`Reward Member: ${rewardMember.Name}`}
+                        </Text>
+                      </View>
                       <View>
                         <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: Theme.textSecondary, marginLeft: 22 }}>
                           Phone: {rewardMember.Phone}
@@ -1859,14 +1860,10 @@ export default function SummaryScreen() {
                           Available Credit Wallet: {currencySymbol}{(parseFloat(rewardMember.AvailableCredit) || 0).toFixed(2)}
                         </Text>
                       </View>
-                    ) : (
-                      <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: Theme.textMuted, marginLeft: 22 }}>
-                        Search by name or mobile number to assign rewards
-                      </Text>
-                    )}
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Theme.textMuted} />
-                </TouchableOpacity>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#F97316" />
+                  </TouchableOpacity>
+                )}
 
                 <View
                   style={[
@@ -2325,6 +2322,184 @@ export default function SummaryScreen() {
           </View>
         </View>
       </View>
+
+      {/* DISCOUNT TYPE SELECTION MODAL */}
+      <Modal
+        visible={showDiscountTypeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDiscountTypeModal(false)}
+      >
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(15, 23, 42, 0.4)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 16,
+          }}
+          activeOpacity={1}
+          onPress={() => setShowDiscountTypeModal(false)}
+        >
+          <View
+            style={[
+              {
+                backgroundColor: Theme.bgCard,
+                padding: 24,
+                borderRadius: 20,
+                width: "90%",
+                maxWidth: 400,
+                alignItems: "stretch",
+                borderWidth: 1,
+                borderColor: Theme.border,
+                ...Theme.shadowLg,
+              },
+            ]}
+          >
+            {/* Header */}
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 20,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View
+                  style={{
+                    backgroundColor: Theme.primaryLight,
+                    padding: 8,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Ionicons name="pricetags" size={18} color={Theme.primary} />
+                </View>
+                <Text
+                  style={{
+                    fontFamily: Fonts.bold,
+                    fontSize: 18,
+                    color: Theme.textPrimary,
+                  }}
+                >
+                  Select Discount Type
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowDiscountTypeModal(false)}
+                style={{ padding: 4 }}
+              >
+                <Ionicons name="close" size={20} color={Theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Options */}
+            <View style={{ gap: 12 }}>
+              {/* Option 1: Order Discount */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 16,
+                  backgroundColor: Theme.bgMuted || "#F8FAFC",
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: Theme.border,
+                  gap: 12,
+                }}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowDiscountTypeModal(false);
+                  setShowDiscount(true);
+                }}
+              >
+                <View
+                  style={{
+                    backgroundColor: "#EFF6FF",
+                    padding: 10,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Ionicons name="receipt-outline" size={22} color="#3B82F6" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: Fonts.bold,
+                      fontSize: 15,
+                      color: Theme.textPrimary,
+                    }}
+                  >
+                    Order Discount
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: Fonts.regular,
+                      fontSize: 12,
+                      color: Theme.textSecondary,
+                      marginTop: 2,
+                    }}
+                  >
+                    Apply discount to the entire bill
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Theme.textMuted} />
+              </TouchableOpacity>
+
+              {/* Option 2: Item Discount */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 16,
+                  backgroundColor: Theme.bgMuted || "#F8FAFC",
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: Theme.border,
+                  gap: 12,
+                }}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowDiscountTypeModal(false);
+                  setShowItemDiscount(true);
+                }}
+              >
+                <View
+                  style={{
+                    backgroundColor: "#FDF2F8",
+                    padding: 10,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Ionicons name="pricetag-outline" size={22} color="#EC4899" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: Fonts.bold,
+                      fontSize: 15,
+                      color: Theme.textPrimary,
+                    }}
+                  >
+                    Item Discount
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: Fonts.regular,
+                      fontSize: 12,
+                      color: Theme.textSecondary,
+                      marginTop: 2,
+                    }}
+                  >
+                    Apply discount to specific menu items
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Theme.textMuted} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <DiscountModal
         visible={showDiscount}
