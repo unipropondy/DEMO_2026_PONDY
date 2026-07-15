@@ -1128,10 +1128,10 @@ export default function PaymentScreen() {
       if (isLimitExceeded) {
         const isAdminOrManager =
           user?.role === "ADMIN" || user?.role === "MANAGER";
-        if (isAdminOrManager) {
+         if (isAdminOrManager) {
           Alert.alert(
-            "Credit Limit Exceeded",
-            `Customer outstanding will be ${currencySymbol}${((selectedMember.CurrentBalance || 0) + total).toFixed(2)} which exceeds limit of ${currencySymbol}${(selectedMember.CreditLimit || 0).toFixed(2)}. Authorize this credit sale?`,
+            "Prepaid Amount Exceeded",
+            `Customer outstanding will be ${currencySymbol}${((selectedMember.CurrentBalance || 0) + total).toFixed(2)} which exceeds prepaid amount of ${currencySymbol}${(selectedMember.CreditLimit || 0).toFixed(2)}. Authorize this sale?`,
             [
               { text: "Cancel", style: "cancel" },
               {
@@ -1143,7 +1143,7 @@ export default function PaymentScreen() {
         } else {
           showToast({
             type: "error",
-            message: "Credit Limit Exceeded",
+            message: "Prepaid Amount Exceeded",
             subtitle: "Manager approval required to override",
           });
         }
@@ -2525,7 +2525,7 @@ export default function PaymentScreen() {
                               <View style={styles.creditCardStatsRow}>
                                 <View style={styles.creditStatCol}>
                                   <Text style={styles.creditStatLabel}>
-                                    Available Credit
+                                    Available Balance
                                   </Text>
                                   <Text
                                     style={[
@@ -2549,7 +2549,7 @@ export default function PaymentScreen() {
                                 </View>
                                 <View style={styles.creditStatCol}>
                                   <Text style={styles.creditStatLabel}>
-                                    Credit Limit
+                                    Prepaid Amount
                                   </Text>
                                   <Text style={styles.creditStatValue}>
                                     {formatMoney(
@@ -2580,7 +2580,7 @@ export default function PaymentScreen() {
                                       color={Theme.danger}
                                     />
                                     <Text style={styles.limitExceededText}>
-                                      Transaction exceeds Credit Limit by{" "}
+                                      Transaction exceeds Prepaid Amount by{" "}
                                       {formatMoney(
                                         currencySymbol,
                                         (selectedMember.CurrentBalance || 0) +

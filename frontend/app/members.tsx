@@ -282,9 +282,9 @@ export default function MembersScreen() {
 
     let message = "";
     if (availableBalance < 50) {
-      message = `Hi ${member.Name},\n\nYour available credit is $${formattedAvailable}, which is below the minimum threshold of $50.\n\nPlease top up your account to continue enjoying uninterrupted service.\n\nThank you.`;
+      message = `Hi ${member.Name},\n\nYour available balance is $${formattedAvailable}, which is below the minimum threshold of $50.\n\nPlease top up your account to continue enjoying uninterrupted service.\n\nThank you.`;
     } else {
-      message = `Hi ${member.Name},\n\nYour current available credit is $${formattedAvailable}.\n\nCredit Limit: $${formattedCreditLimit}\nConsumed Amount: $${formattedConsumed}\n\nThank you for being a valued member.`;
+      message = `Hi ${member.Name},\n\nYour current available balance is $${formattedAvailable}.\n\nPrepaid Amount: $${formattedCreditLimit}\nConsumed Amount: $${formattedConsumed}\n\nThank you for being a valued member.`;
     }
 
     const url = `whatsapp://send?phone=${phoneWithCountry}&text=${encodeURIComponent(message)}`;
@@ -558,7 +558,7 @@ export default function MembersScreen() {
         {/* ── Prepaid Balance Card ── */}
         <View style={styles.financialSummaryBlock}>
           <View style={styles.financialCol}>
-            <Text style={styles.financialLabel}>CREDIT LIMIT</Text>
+            <Text style={styles.financialLabel}>PREPAID AMOUNT</Text>
             <Text style={[styles.financialVal, { color: Theme.success }]}>
               {formatMoney(creditLimit)}
             </Text>
@@ -570,7 +570,7 @@ export default function MembersScreen() {
             </Text>
           </View>
           <View style={styles.financialCol}>
-            <Text style={styles.financialLabel}>AVAILABLE CREDIT</Text>
+            <Text style={styles.financialLabel}>AVAILABLE BALANCE</Text>
             <Text style={[
               styles.financialVal,
               { color: isLowCredit ? Theme.danger : Theme.success }
@@ -709,7 +709,7 @@ export default function MembersScreen() {
                 </View>
                 <View style={styles.inputRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.inputLabel}>CREDIT LIMIT</Text>
+                    <Text style={styles.inputLabel}>PREPAID AMOUNT</Text>
                     <TextInput style={styles.sheetInput} keyboardType="numeric" value={formData.creditLimit} onChangeText={v => setFormData({ ...formData, creditLimit: v })} />
                   </View>
                   <View style={{ flex: 1 }}>
