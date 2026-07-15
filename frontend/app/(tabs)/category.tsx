@@ -2389,6 +2389,28 @@ export default function Category() {
                 <Text style={styles.menuItemText}>Loyalty</Text>
               </TouchableOpacity>
 
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuVisible(false);
+                  router.push("/menu/rewardMaster");
+                }}
+              >
+                <View
+                  style={[
+                    styles.menuIconContainer,
+                    { backgroundColor: Theme.primary + "10" },
+                  ]}
+                >
+                  <Ionicons
+                    name="gift-outline"
+                    size={18}
+                    color={Theme.primary}
+                  />
+                </View>
+                <Text style={styles.menuItemText}>Reward Points Master</Text>
+              </TouchableOpacity>
+
               {canAccessMembers() && (
                 <TouchableOpacity
                   style={styles.menuItem}

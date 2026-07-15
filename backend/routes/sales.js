@@ -1677,12 +1677,12 @@ router.post("/save", async (req, res) => {
           SettlementID, LastSettlementDate, LastDayEndDate, SubTotal, TotalTax, DiscountAmount, DiscountType, 
           BillNo, OrderType, TableNo, Section, MemberId, CashierID, BusinessUnitId, 
           SysAmount, ManualAmount, CreatedBy, CreatedOn, SER_NAME, MobileNo, 
-          VoidItemQty, VoidItemAmount, RoundedBy, ServiceCharge, GuestName, Pax, TakeawayCharge, start_date
+          VoidItemQty, VoidItemAmount, RoundedBy, ServiceCharge, GuestName, Pax, TotalPax, TakeawayCharge, start_date
         ) VALUES (
           @SettlementID, GETDATE(), GETDATE(), @SubTotal, @TotalTax, @DiscountAmount, @DiscountType, 
           @BillNo, @OrderType, @TableNo, @Section, @MemberId, @CashierID, @BusinessUnitId, 
           @SysAmount, @ManualAmount, @CreatedBy, GETDATE(), @SER_NAME, @MobileNo, 
-          @VoidItemQty, @VoidItemAmount, @RoundedBy, @ServiceCharge, @GuestName, @Pax, @TakeawayCharge, @startDate
+          @VoidItemQty, @VoidItemAmount, @RoundedBy, @ServiceCharge, @GuestName, @Pax, @Pax, @TakeawayCharge, @startDate
         );
 
         -- 2. Insert into RestaurantInvoice (Perfect Sync)

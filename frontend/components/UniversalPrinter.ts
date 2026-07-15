@@ -1933,7 +1933,7 @@ class UniversalPrinter {
       text += `[L]Reward Points Earned: +$${parseFloat(saleData.rewardPointsEarned).toFixed(2)}\n`;
     }
     if (parseFloat(saleData.memberRewardBalance) > 0) {
-      text += `[L]Available Reward Credit: $${parseFloat(saleData.memberRewardBalance).toFixed(2)}\n`;
+      text += `[L]Available Member Credit: $${parseFloat(saleData.memberRewardBalance).toFixed(2)}\n`;
       text += "[C]------------------------------------------------\n";
     }
 

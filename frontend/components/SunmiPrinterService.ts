@@ -629,6 +629,18 @@ class SunmiPrinterService {
         }
       }
 
+      // 🏆 Print member reward stats on Sunmi Receipt
+      if (saleData.mobileNo) {
+        await SunmiModule.printText(formatter.divider("-"));
+        await SunmiModule.printText(formatter.twoCols("Member Phone:", String(saleData.mobileNo)));
+        if (parseFloat(saleData.rewardPointsEarned) > 0) {
+          await SunmiModule.printText(formatter.twoCols("Points Earned:", `+$${parseFloat(saleData.rewardPointsEarned).toFixed(2)}`));
+        }
+        if (parseFloat(saleData.memberRewardBalance) > 0) {
+          await SunmiModule.printText(formatter.twoCols("Avail Member Credit:", `$${parseFloat(saleData.memberRewardBalance).toFixed(2)}`));
+        }
+      }
+
       await SunmiModule.lineWrap(1);
 
       // ============ FOOTER ============
