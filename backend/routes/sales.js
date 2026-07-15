@@ -2446,7 +2446,6 @@ router.post("/save", async (req, res) => {
 
     // 🏆 POST-SAVE REWARD POINTS TRIGGER
     // Award reward credit when a reward member is linked and payment is NOT by member credit
-    const rewardMemberId = req.body.rewardMemberId;
     let rewardPointsEarned = 0;
     let memberRewardBalance = 0;
 

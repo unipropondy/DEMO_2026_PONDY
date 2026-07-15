@@ -1517,7 +1517,6 @@ const loadDishes = async () => {
             {!isTablet && (
               <View style={{ marginLeft: 'auto', flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                 <TouchableOpacity
-                <TouchableOpacity
                   style={[styles.confirmBtn, { backgroundColor: Theme.primary, paddingVertical: 6, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
                   onPress={() => router.push("/menu/rewardMaster")}
                 >

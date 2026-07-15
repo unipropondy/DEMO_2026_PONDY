@@ -192,6 +192,9 @@ export default function PaymentSuccess() {
         subTotal: computedSubTotal,
         serviceCharge: parseFloat(serviceCharge) || 0,
         takeawayCharge: parseFloat(takeawayCharge) || 0,
+        mobileNo: params.mobileNo || "",
+        rewardPointsEarned: params.rewardPointsEarned || "0",
+        memberRewardBalance: params.memberRewardBalance || "0",
       };
 
       await UniversalPrinter.smartPrint(saleData, userId, {}, discountInfo);

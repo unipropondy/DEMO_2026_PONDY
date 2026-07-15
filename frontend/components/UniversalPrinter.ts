@@ -1653,6 +1653,10 @@ class UniversalPrinter {
     if (saleData.waiterName && saleData.waiterName !== "Staff") {
       text += `[L]Waiter: ${saleData.waiterName}\n`;
     }
+    // 🏆 Print Member Mobile Number on receipt
+    if (saleData.mobileNo) {
+      text += `[L]Member Phone: ${saleData.mobileNo}\n`;
+    }
     text += "[L]------------------------------------------------\n";
 
     // Items Header
@@ -1923,6 +1927,16 @@ class UniversalPrinter {
 
     text += `[R]<font size=\'big\'><B>TOTAL: ${symbol}${finalTotal.toFixed(2)}</B></font>\n`;
     text += "[C]================================================\n";
+
+    // 🏆 Print Reward point transaction stats
+    if (parseFloat(saleData.rewardPointsEarned) > 0) {
+      text += `[L]Reward Points Earned: +$${parseFloat(saleData.rewardPointsEarned).toFixed(2)}\n`;
+    }
+    if (parseFloat(saleData.memberRewardBalance) > 0) {
+      text += `[L]Available Reward Credit: $${parseFloat(saleData.memberRewardBalance).toFixed(2)}\n`;
+      text += "[C]------------------------------------------------\n";
+    }
+
     text += "[C]<B>THANK YOU! COME AGAIN!</B>\n";
     text += "[C]SMART-POS BY UNIPROSG\n\n\n\n";
 
