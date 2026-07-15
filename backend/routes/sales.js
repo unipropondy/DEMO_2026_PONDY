@@ -2458,7 +2458,7 @@ router.post("/save", async (req, res) => {
     let rewardPointsEarned = 0;
     let memberRewardBalance = 0;
 
-    if (rewardMemberId && !isMemberPayment && totalAmount > 0) {
+    if (rewardMemberId && totalAmount > 0) {
       try {
         const rewardPool = await poolPromise;
 
