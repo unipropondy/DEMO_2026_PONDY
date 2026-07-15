@@ -1543,12 +1543,19 @@ router.post("/save", async (req, res) => {
     displayOrderId = null;
     let dailySequence = 0;
 
+    let tablePax = null;
+    let tableCustomerName = null;
+    let orderPax = null;
+    let orderCustomerName = null;
+
     const cleanTableId = toGuidOrNull(tableId);
     if (cleanTableId) {
         const tableCheck = await transaction.request()
             .input("tid", sql.UniqueIdentifier, cleanTableId)
-            .query("SELECT CurrentOrderId FROM TableMaster WITH (UPDLOCK) WHERE TableId = @tid");
+            .query("SELECT CurrentOrderId, Pax, CustomerName FROM TableMaster WITH (UPDLOCK) WHERE TableId = @tid");
         displayOrderId = tableCheck.recordset[0]?.CurrentOrderId;
+        tablePax = tableCheck.recordset[0]?.Pax;
+        tableCustomerName = tableCheck.recordset[0]?.CustomerName;
         
         if (displayOrderId && displayOrderId.includes('-')) {
             dailySequence = parseInt(displayOrderId.split('-')[1]) || 0;
@@ -1602,12 +1609,14 @@ router.post("/save", async (req, res) => {
         voidAmount = voidRes.recordset[0]?.VAmt || 0;
         console.log(`[SAVE SALE] Voids captured from DB: Qty=${voidQty}, Amt=${voidAmount}`);
 
-        // 🚀 SYNC SYIELD: Fetch Master GUID OrderId for Relation Integrity
+        // 🚀 SYNC SYIELD: Fetch Master GUID OrderId, Pax, and CustomerName for Relation Integrity
         const guidRes = await transaction.request()
             .input("orderNo", sql.NVarChar(100), displayOrderId)
-            .query("SELECT TOP 1 OrderId FROM RestaurantOrderCur WITH (UPDLOCK) WHERE OrderNumber = @orderNo");
-        const guidOrderId = guidRes.recordset[0]?.OrderId || settlementId; 
-        console.log(`[SAVE SALE] Master Sync -> GUID OrderId: ${guidOrderId} (Source: ${guidRes.recordset[0]?.OrderId ? 'Current' : 'Fallback-Settlement'})`);
+            .query("SELECT TOP 1 OrderId, Pax, CustomerName FROM RestaurantOrderCur WITH (UPDLOCK) WHERE OrderNumber = @orderNo");
+        const guidOrderId = guidRes.recordset[0]?.OrderId || settlementId;
+        orderPax = guidRes.recordset[0]?.Pax;
+        orderCustomerName = guidRes.recordset[0]?.CustomerName;
+        console.log(`[SAVE SALE] Master Sync -> GUID OrderId: ${guidOrderId}, orderPax: ${orderPax}, orderCustomerName: ${orderCustomerName}`);
 
     // Split Bill unique bill/invoice suffix generator
     finalBillNo = displayOrderId;
@@ -1668,8 +1677,8 @@ router.post("/save", async (req, res) => {
       .input("TotalLineItemDiscountAmount", sql.Decimal(18, 2), itemDiscountAmount || 0)
       .input("MergeCount", sql.Numeric, mergeCount)
       .input("SplitCount", sql.Numeric, splitIndexValue)
-      .input("GuestName", sql.NVarChar(9), req.body.customerName ? req.body.customerName.trim().substring(0, 9) : null)
-      .input("Pax", sql.Int, req.body.pax ? parseInt(req.body.pax) : null)
+      .input("GuestName", sql.NVarChar(9), req.body.customerName ? req.body.customerName.trim().substring(0, 9) : (orderCustomerName || tableCustomerName || null))
+      .input("Pax", sql.Int, req.body.pax ? parseInt(req.body.pax) : (orderPax || tablePax || null))
       .input("startDate", sql.Date, formattedStartDate)
       .query(`
         -- 1. Insert into SettlementHeader
