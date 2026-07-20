@@ -5,7 +5,7 @@ const fs = require("fs");
 require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
 module.exports = {
-    appId: process.env.APP_ID || 'bin38m42efz4ta6f',
+    appId: process.env.APP_ID || '',
     
     syncApiUrl: process.env.YEAHPAY_SYNC_URL || 'https://business.yeahpay.sg/acceptance/acceptance-mis-pos/sync',
     asyncApiUrl: process.env.YEAHPAY_ASYNC_URL || 'https://business.yeahpay.sg/acceptance/acceptance-mis-pos/async',
