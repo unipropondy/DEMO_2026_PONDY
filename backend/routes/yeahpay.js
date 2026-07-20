@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const YeahPayService = require('../services/yeahpay.service');  // ✅ Class
 
-const FIXED_APP_ID = process.env.APP_ID || 'bin38m42efz4ta6f';
+const FIXED_APP_ID = process.env.APP_ID || '';
 
 // ✅ CREATE INSTANCE with config
 const yeahpayService = new YeahPayService();
