@@ -22,6 +22,7 @@ import { useWindowDimensions } from "react-native";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { ToastProvider } from "../components/Toast";
 import { CustomerDisplayManager } from "../components/CustomerDisplayManager";
+import { InstallAppModal } from "../components/InstallAppModal";
 import { usePOSReadyGate } from "../hooks/usePOSReadyGate";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -346,6 +347,8 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <ToastProvider>
+          {/* 📱 Web PWA Installation / Android APK Download Prompt */}
+          <InstallAppModal />
           {/* 🖥️ Customer Display: auto-projects onto Sunmi D3 secondary screen */}
           <CustomerDisplayManager isPOSReady={isPOSReady} />
           <Stack screenOptions={{ headerShown: false }}>
