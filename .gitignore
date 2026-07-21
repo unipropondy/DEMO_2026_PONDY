@@ -71,6 +71,12 @@ backend/error_log.txt
 UCS_PONDY/
 
 # =========================
+# Large Binary Files / APKs
+# =========================
+*.apk
+frontend/public/download/
+
+# =========================
 # Print Bridge Builds
 # =========================
 print-bridge/out/
