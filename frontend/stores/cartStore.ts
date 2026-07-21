@@ -439,11 +439,21 @@ export const useCartStore = create<CartState>()(
       /* ================= ADD ================= */
 
       addToCartGlobal: async (item) => {
-        const { fetchCartFromDB, carts, currentContextId } = get();
+        const { fetchCartFromDB, carts } = get();
         const orderContext = useOrderContextStore.getState().currentOrder;
         const tableId = orderContext?.tableId;
         
         if (!tableId) return "";
+
+        let currentContextId = get().currentContextId;
+        if (!currentContextId && orderContext) {
+          currentContextId = getContextId(orderContext);
+          if (currentContextId) {
+            set({ currentContextId });
+          }
+        }
+
+        if (!currentContextId) return "";
 
         const isTakeawayDefault = orderContext?.orderType === "TAKEAWAY";
         const targetLineItemId = fastId();
@@ -1314,8 +1324,11 @@ export const useCartStore = create<CartState>()(
             const currentOrder = useOrderContextStore.getState().currentOrder;
 
             // 1. If this table matches the currently open order
-            if (currentOrder?.tableId === tableId && resolvedContextId) {
-              // resolvedContextId is correct
+            if (currentOrder?.tableId === tableId) {
+              resolvedContextId = getContextId(currentOrder) || resolvedContextId;
+              if (resolvedContextId && !state.currentContextId) {
+                set({ currentContextId: resolvedContextId });
+              }
             } else {
               // 2. Try to find the context in ActiveOrders
               const { useActiveOrdersStore } = require("./activeOrdersStore");

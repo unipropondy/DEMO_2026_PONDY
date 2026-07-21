@@ -28,6 +28,7 @@ import { useAuthStore } from "../stores/authStore";
 import {
   CartItem,
   clearCart as clearCartStandalone,
+  getContextId,
   isItemSent,
   useCartStore,
 } from "../stores/cartStore";
@@ -1041,6 +1042,15 @@ export default React.memo(function CartSidebar({ width = 400 }: CartSidebarProps
       );
     });
   });
+
+  useEffect(() => {
+    if (orderContext) {
+      const ctxId = getContextId(orderContext);
+      if (ctxId && useCartStore.getState().currentContextId !== ctxId) {
+        useCartStore.getState().setCurrentContext(ctxId);
+      }
+    }
+  }, [orderContext]);
 
   useEffect(() => {
     if (orderContext?.tableId) {
