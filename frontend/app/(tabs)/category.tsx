@@ -4,6 +4,7 @@ import { API_URL } from "@/constants/Config";
 import { Fonts } from "@/constants/Fonts";
 import { Theme } from "@/constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -35,6 +36,9 @@ import {
 } from "../../utils/timezoneHelper";
 
 import StoreSettingsModal from "@/components/payment/StoreSettingsModal";
+import AvatarPickerModal from "@/components/AvatarPickerModal";
+import { getAvatarSource } from "@/constants/avatars";
+import { Image } from "expo-image";
 import { useActiveOrdersStore } from "@/stores/activeOrdersStore";
 import { useAuthStore } from "@/stores/authStore";
 import {
@@ -417,8 +421,14 @@ export default function Category() {
   const [allTables, setAllTables] = useState<TableItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isAvatarModalVisible, setIsAvatarModalVisible] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [isSettingsExpanded, setIsSettingsExpanded] = useState(false);
+  const [isTablesExpanded, setIsTablesExpanded] = useState(false);
+  const [isStaffExpanded, setIsStaffExpanded] = useState(false);
+  const [isCustomerExpanded, setIsCustomerExpanded] = useState(false);
+  const [isReportsExpanded, setIsReportsExpanded] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isQRModalVisible, setIsQRModalVisible] = useState(false);
@@ -666,6 +676,37 @@ export default function Category() {
       }
     }, []),
   );
+
+  useEffect(() => {
+    const loadAvatar = async () => {
+      if (user?.userId) {
+        try {
+          const savedAvatar = await AsyncStorage.getItem(`user_avatar_${user.userId}`);
+          setAvatarUrl(savedAvatar);
+        } catch (e) {
+          console.error("Failed to load user avatar:", e);
+        }
+      } else {
+        setAvatarUrl(null);
+      }
+    };
+    loadAvatar();
+  }, [user?.userId]);
+
+  const handleSelectAvatar = async (url: string | null) => {
+    setAvatarUrl(url);
+    if (user?.userId) {
+      try {
+        if (url) {
+          await AsyncStorage.setItem(`user_avatar_${user.userId}`, url);
+        } else {
+          await AsyncStorage.removeItem(`user_avatar_${user.userId}`);
+        }
+      } catch (e) {
+        console.error("Failed to save user avatar:", e);
+      }
+    }
+  };
 
   useEffect(() => {
     // Initial load
@@ -2492,268 +2533,173 @@ export default function Category() {
           >
             {/* User Info Header */}
             {user && (
-              <View style={styles.menuUserSection}>
-                <View style={styles.menuAvatar}>
-                  <Ionicons name="person" size={20} color={Theme.primary} />
-                </View>
+              <LinearGradient
+                colors={[Theme.primary, "#E05A10"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.menuUserSectionGradient}
+              >
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setIsAvatarModalVisible(true)}
+                  style={[styles.menuAvatarPremium, { overflow: "hidden" }]}
+                >
+                  {avatarUrl ? (
+                    <Image
+                      source={getAvatarSource(avatarUrl)}
+                      style={{ width: "100%", height: "100%" }}
+                      placeholder={require("../../assets/images/logo_pos.png")}
+                    />
+                  ) : (
+                    <Ionicons name="person" size={20} color="#9CA3AF" />
+                  )}
+                </TouchableOpacity>
                 <View>
-                  <Text style={styles.menuUserName}>{user.fullName}</Text>
-                  <Text style={styles.menuUserRole}>{user.roleName}</Text>
+                  <Text style={styles.menuUserNamePremium}>{user.fullName}</Text>
+                  <Text style={styles.menuUserRolePremium}>{user.roleName}</Text>
                 </View>
-              </View>
+              </LinearGradient>
             )}
 
             <View style={styles.menuDivider} />
 
             {/* Menu Options */}
             <ScrollView showsVerticalScrollIndicator={false}>
-              {canAccessLockTables() && (
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setIsMenuVisible(false);
-                    router.push("/locked-tables");
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.menuIconContainer,
-                      { backgroundColor: Theme.warning + "10" },
-                    ]}
-                  >
-                    <Ionicons
-                      name="lock-closed-outline"
-                      size={18}
-                      color={Theme.warning}
-                    />
-                  </View>
-                  <Text style={styles.menuItemText}>Locked Tables</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* ── Move Table ── */}
+              {/* 1. Tables Dropdown */}
               <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setIsMenuVisible(false);
-                  // Auto-select source step; pre-pick source if only one occupied table exists
-                  const statusMap: Record<string, number> = {
-                    EMPTY: 0,
-                    SENT: 1,
-                    BILL_REQUESTED: 2,
-                    HOLD: 3,
-                    LOCKED: 5,
-                  };
-                  const occupied = allTables
-                    .map((t) => {
-                      const sd = useTableStatusStore.getState().tableMap[t.id];
-                      const freshStatus = sd ? statusMap[sd.status] : t.Status;
-                      return {
-                        ...t,
-                        Status:
-                          freshStatus !== undefined ? freshStatus : t.Status,
-                      };
-                    })
-                    .filter((t) => [1, 2, 3].includes(Number(t.Status)));
-
-                  if (occupied.length === 1) {
-                    setMoveSourceTable(occupied[0]);
-                    setMoveStep("dest");
-                    setMoveActiveSection(
-                      getSectionFromDiningSection(occupied[0].DiningSection),
-                    );
-                  } else {
-                    setMoveSourceTable(null);
-                    setMoveStep("source");
+                activeOpacity={0.7}
+                style={[
+                  styles.menuItem,
+                  isTablesExpanded && {
+                    backgroundColor: "#F3F4F6",
+                    borderBottomLeftRadius: 0,
+                    borderBottomRightRadius: 0,
+                    borderBottomWidth: 0,
+                  },
+                ]}
+                onPress={() => setIsTablesExpanded(!isTablesExpanded)}
+              >
+                <View
+                  style={[
+                    styles.menuIconContainer,
+                    { backgroundColor: Theme.primary + "10" },
+                  ]}
+                >
+                  <Ionicons
+                    name="grid-outline"
+                    size={18}
+                    color={Theme.primary}
+                  />
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1 }]}>
+                  Tables
+                </Text>
+                <Ionicons
+                  name={
+                    isTablesExpanded ? "chevron-down" : "chevron-forward"
                   }
-                  setMoveDestTable(null);
-                  setMoveSearchQuery("");
-                  setIsMoveTableVisible(true);
-                }}
-              >
-                <View
-                  style={[
-                    styles.menuIconContainer,
-                    { backgroundColor: Theme.primaryLight },
-                  ]}
-                >
-                  <Ionicons
-                    name="swap-horizontal-outline"
-                    size={18}
-                    color={Theme.primary}
-                  />
-                </View>
-                <Text style={styles.menuItemText}>Transfer Table</Text>
+                  size={18}
+                  color={Theme.textSecondary}
+                />
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setIsMenuVisible(false);
-                  router.push("/waiters");
-                }}
-              >
-                <View
-                  style={[
-                    styles.menuIconContainer,
-                    { backgroundColor: Theme.primary + "10" },
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name="account-group"
-                    size={18}
-                    color={Theme.primary}
-                  />
+              {isTablesExpanded && (
+                <View style={styles.subMenuContainer}>
+                  {canAccessLockTables() && (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.subMenuItem}
+                      onPress={() => {
+                        setIsMenuVisible(false);
+                        router.push("/locked-tables");
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.menuIconContainer,
+                          { backgroundColor: Theme.warning + "10" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="lock-closed-outline"
+                          size={18}
+                          color={Theme.warning}
+                        />
+                      </View>
+                      <Text style={styles.subMenuItemText}>Locked Tables</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.subMenuItem}
+                    onPress={() => {
+                      setIsMenuVisible(false);
+                      // Auto-select source step; pre-pick source if only one occupied table exists
+                      const statusMap: Record<string, number> = {
+                        EMPTY: 0,
+                        SENT: 1,
+                        BILL_REQUESTED: 2,
+                        HOLD: 3,
+                        LOCKED: 5,
+                      };
+                      const occupied = allTables
+                        .map((t) => {
+                          const sd = useTableStatusStore.getState().tableMap[t.id];
+                          const freshStatus = sd ? statusMap[sd.status] : t.Status;
+                          return {
+                            ...t,
+                            Status:
+                              freshStatus !== undefined ? freshStatus : t.Status,
+                          };
+                        })
+                        .filter((t) => [1, 2, 3].includes(Number(t.Status)));
+
+                      if (occupied.length === 1) {
+                        setMoveSourceTable(occupied[0]);
+                        setMoveStep("dest");
+                        setMoveActiveSection(
+                          getSectionFromDiningSection(occupied[0].DiningSection),
+                        );
+                      } else {
+                        setMoveSourceTable(null);
+                        setMoveStep("source");
+                      }
+                      setMoveDestTable(null);
+                      setMoveSearchQuery("");
+                      setIsMoveTableVisible(true);
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.menuIconContainer,
+                        { backgroundColor: Theme.primaryLight },
+                      ]}
+                    >
+                      <Ionicons
+                        name="swap-horizontal-outline"
+                        size={18}
+                        color={Theme.primary}
+                      />
+                    </View>
+                    <Text style={styles.subMenuItemText}>Transfer Table</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text style={styles.menuItemText}>Waiters</Text>
-              </TouchableOpacity>
-
-              {canAccessStaffAttendance() && (
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setIsMenuVisible(false);
-                    router.push("/StaffAttendance");
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.menuIconContainer,
-                      { backgroundColor: Theme.primary + "10" },
-                    ]}
-                  >
-                    <MaterialCommunityIcons
-                      name="calendar-clock"
-                      size={18}
-                      color={Theme.primary}
-                    />
-                  </View>
-                  <Text style={styles.menuItemText}>Staff Attendance</Text>
-                </TouchableOpacity>
               )}
 
+              {/* 2. Staff Dropdown */}
               <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setIsMenuVisible(false);
-                  router.push("/loyalty");
-                }}
-              >
-                <View
-                  style={[
-                    styles.menuIconContainer,
-                    { backgroundColor: Theme.primary + "10" },
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name="card-outline"
-                    size={18}
-                    color={Theme.primary}
-                  />
-                </View>
-                <Text style={styles.menuItemText}>Loyalty</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setIsMenuVisible(false);
-                  router.push("/menu/rewardMaster");
-                }}
-              >
-                <View
-                  style={[
-                    styles.menuIconContainer,
-                    { backgroundColor: Theme.primary + "10" },
-                  ]}
-                >
-                  <Ionicons
-                    name="gift-outline"
-                    size={18}
-                    color={Theme.primary}
-                  />
-                </View>
-                <Text style={styles.menuItemText}>Reward Points Master</Text>
-              </TouchableOpacity>
-
-              {canAccessMembers() && (
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setIsMenuVisible(false);
-                    router.push("/members");
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.menuIconContainer,
-                      { backgroundColor: Theme.info + "10" },
-                    ]}
-                  >
-                    <Ionicons
-                      name="people-outline"
-                      size={18}
-                      color={Theme.info}
-                    />
-                  </View>
-                  <Text style={styles.menuItemText}>Members</Text>
-                </TouchableOpacity>
-              )}
-
-              {canAccessMembers() && (
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setIsMenuVisible(false);
-                    router.push("/receivables");
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.menuIconContainer,
-                      { backgroundColor: Theme.primary + "10" },
-                    ]}
-                  >
-                    <Ionicons
-                      name="wallet-outline"
-                      size={18}
-                      color={Theme.primary}
-                    />
-                  </View>
-                  <Text style={styles.menuItemText}>Receivables</Text>
-                </TouchableOpacity>
-              )}
-
-              {canAccessSalesReport() && (
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setIsMenuVisible(false);
-                    router.push("/sales-report");
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.menuIconContainer,
-                      { backgroundColor: Theme.primary + "10" },
-                    ]}
-                  >
-                    <Ionicons
-                      name="bar-chart-outline"
-                      size={18}
-                      color={Theme.primary}
-                    />
-                  </View>
-                  <Text style={styles.menuItemText}>Sales Report</Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setIsMenuVisible(false);
-                  router.push("/customer-display" as any);
-                }}
+                activeOpacity={0.7}
+                style={[
+                  styles.menuItem,
+                  isStaffExpanded && {
+                    backgroundColor: "#F3F4F6",
+                    borderBottomLeftRadius: 0,
+                    borderBottomRightRadius: 0,
+                    borderBottomWidth: 0,
+                  },
+                ]}
+                onPress={() => setIsStaffExpanded(!isStaffExpanded)}
               >
                 <View
                   style={[
@@ -2762,15 +2708,217 @@ export default function Category() {
                   ]}
                 >
                   <Ionicons
-                    name="desktop-outline"
+                    name="people-outline"
                     size={18}
                     color={Theme.primary}
                   />
                 </View>
-                <Text style={styles.menuItemText}>Customer Display</Text>
+                <Text style={[styles.menuItemText, { flex: 1 }]}>
+                  Staff
+                </Text>
+                <Ionicons
+                  name={
+                    isStaffExpanded ? "chevron-down" : "chevron-forward"
+                  }
+                  size={18}
+                  color={Theme.textSecondary}
+                />
               </TouchableOpacity>
+
+              {isStaffExpanded && (
+                <View style={styles.subMenuContainer}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.subMenuItem}
+                    onPress={() => {
+                      setIsMenuVisible(false);
+                      router.push("/waiters");
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.menuIconContainer,
+                        { backgroundColor: Theme.primary + "10" },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="account-group"
+                        size={18}
+                        color={Theme.primary}
+                      />
+                    </View>
+                    <Text style={styles.subMenuItemText}>Waiters</Text>
+                  </TouchableOpacity>
+
+                  {canAccessStaffAttendance() && (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.subMenuItem}
+                      onPress={() => {
+                        setIsMenuVisible(false);
+                        router.push("/StaffAttendance");
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.menuIconContainer,
+                          { backgroundColor: Theme.primary + "10" },
+                        ]}
+                      >
+                        <MaterialCommunityIcons
+                          name="calendar-clock"
+                          size={18}
+                          color={Theme.primary}
+                        />
+                      </View>
+                      <Text style={styles.subMenuItemText}>Staff Attendance</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {/* 3. Customer Dropdown */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={[
+                  styles.menuItem,
+                  isCustomerExpanded && {
+                    backgroundColor: "#F3F4F6",
+                    borderBottomLeftRadius: 0,
+                    borderBottomRightRadius: 0,
+                    borderBottomWidth: 0,
+                  },
+                ]}
+                onPress={() => setIsCustomerExpanded(!isCustomerExpanded)}
+              >
+                <View
+                  style={[
+                    styles.menuIconContainer,
+                    { backgroundColor: Theme.primary + "10" },
+                  ]}
+                >
+                  <Ionicons
+                    name="person-add-outline"
+                    size={18}
+                    color={Theme.primary}
+                  />
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1 }]}>
+                  Customer
+                </Text>
+                <Ionicons
+                  name={
+                    isCustomerExpanded ? "chevron-down" : "chevron-forward"
+                  }
+                  size={18}
+                  color={Theme.textSecondary}
+                />
+              </TouchableOpacity>
+
+              {isCustomerExpanded && (
+                <View style={styles.subMenuContainer}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.subMenuItem}
+                    onPress={() => {
+                      setIsMenuVisible(false);
+                      router.push("/loyalty");
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.menuIconContainer,
+                        { backgroundColor: Theme.primary + "10" },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="card-outline"
+                        size={18}
+                        color={Theme.primary}
+                      />
+                    </View>
+                    <Text style={styles.subMenuItemText}>Loyalty</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.subMenuItem}
+                    onPress={() => {
+                      setIsMenuVisible(false);
+                      router.push("/menu/rewardMaster");
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.menuIconContainer,
+                        { backgroundColor: Theme.primary + "10" },
+                      ]}
+                    >
+                      <Ionicons
+                        name="gift-outline"
+                        size={18}
+                        color={Theme.primary}
+                      />
+                    </View>
+                    <Text style={styles.subMenuItemText}>Reward Points Master</Text>
+                  </TouchableOpacity>
+
+                  {canAccessMembers() && (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.subMenuItem}
+                      onPress={() => {
+                        setIsMenuVisible(false);
+                        router.push("/members");
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.menuIconContainer,
+                          { backgroundColor: Theme.info + "10" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="people-outline"
+                          size={18}
+                          color={Theme.info}
+                        />
+                      </View>
+                      <Text style={styles.subMenuItemText}>Members</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {canAccessMembers() && (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.subMenuItem}
+                      onPress={() => {
+                        setIsMenuVisible(false);
+                        router.push("/receivables");
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.menuIconContainer,
+                          { backgroundColor: Theme.primary + "10" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="wallet-outline"
+                          size={18}
+                          color={Theme.primary}
+                        />
+                      </View>
+                      <Text style={styles.subMenuItemText}>Receivables</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {/* 4. Settlement */}
               {canAccessDayEnd() && (
                 <TouchableOpacity
+                  activeOpacity={0.7}
                   style={styles.menuItem}
                   onPress={() => {
                     setIsMenuVisible(false);
@@ -2793,114 +2941,55 @@ export default function Category() {
                 </TouchableOpacity>
               )}
 
-              {/* Cash Drawer — visible to all roles, PIN gate is inside the screen */}
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setIsMenuVisible(false);
-                  router.push("/cash-drawer" as any);
-                }}
-              >
-                <View
-                  style={[
-                    styles.menuIconContainer,
-                    { backgroundColor: "#16A34A10" },
-                  ]}
-                >
-                  <Ionicons name="cash-outline" size={18} color="#16A34A" />
-                </View>
-                <Text style={styles.menuItemText}>Cash Drawer</Text>
-              </TouchableOpacity>
-
-              {canAccessDayEnd() && (
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setIsMenuVisible(false);
-                    router.push("/day-end");
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.menuIconContainer,
-                      { backgroundColor: Theme.warning + "10" },
-                    ]}
-                  >
-                    <MaterialCommunityIcons
-                      name="calendar-clock"
-                      size={18}
-                      color={Theme.warning}
-                    />
-                  </View>
-                  <Text style={styles.menuItemText}>Day End</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Settings Dropdown */}
-              {(canAccessStoreSettings() || canAccessReceiptSettings()) && (
+              {/* 5. Reports Dropdown */}
+              {(canAccessSalesReport() || canAccessDayEnd()) && (
                 <>
                   <TouchableOpacity
-                    style={styles.menuItem}
-                    onPress={() => setIsSettingsExpanded(!isSettingsExpanded)}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.menuItem,
+                      isReportsExpanded && {
+                        backgroundColor: "#F3F4F6",
+                        borderBottomLeftRadius: 0,
+                        borderBottomRightRadius: 0,
+                        borderBottomWidth: 0,
+                      },
+                    ]}
+                    onPress={() => setIsReportsExpanded(!isReportsExpanded)}
                   >
                     <View
                       style={[
                         styles.menuIconContainer,
-                        { backgroundColor: Theme.textSecondary + "10" },
+                        { backgroundColor: Theme.primary + "10" },
                       ]}
                     >
                       <Ionicons
-                        name="settings-outline"
+                        name="document-text-outline"
                         size={18}
-                        color={Theme.textSecondary}
+                        color={Theme.primary}
                       />
                     </View>
                     <Text style={[styles.menuItemText, { flex: 1 }]}>
-                      Settings
+                      Reports
                     </Text>
                     <Ionicons
                       name={
-                        isSettingsExpanded ? "chevron-down" : "chevron-forward"
+                        isReportsExpanded ? "chevron-down" : "chevron-forward"
                       }
                       size={18}
                       color={Theme.textSecondary}
                     />
                   </TouchableOpacity>
 
-                  {isSettingsExpanded && (
+                  {isReportsExpanded && (
                     <View style={styles.subMenuContainer}>
-                      {canAccessStoreSettings() && (
+                      {canAccessSalesReport() && (
                         <TouchableOpacity
+                          activeOpacity={0.7}
                           style={styles.subMenuItem}
                           onPress={() => {
                             setIsMenuVisible(false);
-                            setIsSettingsVisible(true);
-                          }}
-                        >
-                          <View
-                            style={[
-                              styles.menuIconContainer,
-                              { backgroundColor: Theme.textSecondary + "10" },
-                            ]}
-                          >
-                            <Ionicons
-                              name="storefront-outline"
-                              size={18}
-                              color={Theme.textSecondary}
-                            />
-                          </View>
-                          <Text style={styles.subMenuItemText}>
-                            Store Settings
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {canAccessStoreSettings() && (
-                        <TouchableOpacity
-                          style={styles.subMenuItem}
-                          onPress={() => {
-                            setIsMenuVisible(false);
-                            router.push("/general-settings" as any);
+                            router.push("/sales-report");
                           }}
                         >
                           <View
@@ -2910,72 +2999,234 @@ export default function Category() {
                             ]}
                           >
                             <Ionicons
-                              name="options-outline"
+                              name="bar-chart-outline"
                               size={18}
                               color={Theme.primary}
                             />
                           </View>
-                          <Text style={styles.subMenuItemText}>
-                            General Settings
-                          </Text>
+                          <Text style={styles.subMenuItemText}>Sales Report</Text>
                         </TouchableOpacity>
                       )}
 
-                      {canAccessReceiptSettings() && (
+                      {canAccessDayEnd() && (
                         <TouchableOpacity
+                          activeOpacity={0.7}
                           style={styles.subMenuItem}
                           onPress={() => {
                             setIsMenuVisible(false);
-                            router.push("/company-settings" as any);
+                            router.push("/day-end");
                           }}
                         >
                           <View
                             style={[
                               styles.menuIconContainer,
-                              { backgroundColor: Theme.primary + "10" },
+                              { backgroundColor: Theme.warning + "10" },
                             ]}
                           >
-                            <Ionicons
-                              name="receipt-outline"
+                            <MaterialCommunityIcons
+                              name="calendar-clock"
                               size={18}
-                              color={Theme.primary}
+                              color={Theme.warning}
                             />
                           </View>
-                          <Text style={styles.subMenuItemText}>
-                            Receipt Settings
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Terminal Settings */}
-                      {canAccessStoreSettings() && (
-                        <TouchableOpacity
-                          style={styles.subMenuItem}
-                          onPress={() => {
-                            setIsMenuVisible(false);
-                            router.push("/terminal-settings" as any);
-                          }}
-                        >
-                          <View
-                            style={[
-                              styles.menuIconContainer,
-                              { backgroundColor: Theme.primary + "10" },
-                            ]}
-                          >
-                            <Ionicons
-                              name="hardware-chip-outline"
-                              size={18}
-                              color={Theme.primary}
-                            />
-                          </View>
-                          <Text style={styles.subMenuItemText}>
-                            Terminal Management
-                          </Text>
+                          <Text style={styles.subMenuItemText}>Day End Report</Text>
                         </TouchableOpacity>
                       )}
                     </View>
                   )}
                 </>
+              )}
+
+              {/* 6. Settings Dropdown */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={[
+                  styles.menuItem,
+                  isSettingsExpanded && {
+                    backgroundColor: "#F3F4F6",
+                    borderBottomLeftRadius: 0,
+                    borderBottomRightRadius: 0,
+                    borderBottomWidth: 0,
+                  },
+                ]}
+                onPress={() => setIsSettingsExpanded(!isSettingsExpanded)}
+              >
+                <View
+                  style={[
+                    styles.menuIconContainer,
+                    { backgroundColor: Theme.textSecondary + "10" },
+                  ]}
+                >
+                  <Ionicons
+                    name="settings-outline"
+                    size={18}
+                    color={Theme.textSecondary}
+                  />
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1 }]}>
+                  Settings
+                </Text>
+                <Ionicons
+                  name={
+                    isSettingsExpanded ? "chevron-down" : "chevron-forward"
+                  }
+                  size={18}
+                  color={Theme.textSecondary}
+                />
+              </TouchableOpacity>
+
+              {isSettingsExpanded && (
+                <View style={styles.subMenuContainer}>
+                  {canAccessStoreSettings() && (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.subMenuItem}
+                      onPress={() => {
+                        setIsMenuVisible(false);
+                        setIsSettingsVisible(true);
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.menuIconContainer,
+                          { backgroundColor: Theme.textSecondary + "10" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="storefront-outline"
+                          size={18}
+                          color={Theme.textSecondary}
+                        />
+                      </View>
+                      <Text style={styles.subMenuItemText}>
+                        Store Settings
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {canAccessStoreSettings() && (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.subMenuItem}
+                      onPress={() => {
+                        setIsMenuVisible(false);
+                        router.push("/general-settings" as any);
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.menuIconContainer,
+                          { backgroundColor: Theme.primary + "10" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="options-outline"
+                          size={18}
+                          color={Theme.primary}
+                        />
+                      </View>
+                      <Text style={styles.subMenuItemText}>
+                        General Settings
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {canAccessReceiptSettings() && (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.subMenuItem}
+                      onPress={() => {
+                        setIsMenuVisible(false);
+                        router.push("/company-settings" as any);
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.menuIconContainer,
+                          { backgroundColor: Theme.primary + "10" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="receipt-outline"
+                          size={18}
+                          color={Theme.primary}
+                        />
+                      </View>
+                      <Text style={styles.subMenuItemText}>
+                        Receipt Settings
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {canAccessStoreSettings() && (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.subMenuItem}
+                      onPress={() => {
+                        setIsMenuVisible(false);
+                        router.push("/terminal-settings" as any);
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.menuIconContainer,
+                          { backgroundColor: Theme.primary + "10" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="hardware-chip-outline"
+                          size={18}
+                          color={Theme.primary}
+                        />
+                      </View>
+                      <Text style={styles.subMenuItemText}>
+                        Terminal Management
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.subMenuItem}
+                    onPress={() => {
+                      setIsMenuVisible(false);
+                      router.push("/cash-drawer" as any);
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.menuIconContainer,
+                        { backgroundColor: "#16A34A10" },
+                      ]}
+                    >
+                      <Ionicons name="cash-outline" size={18} color="#16A34A" />
+                    </View>
+                    <Text style={styles.subMenuItemText}>Cash Drawer</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.subMenuItem}
+                    onPress={() => {
+                      setIsMenuVisible(false);
+                      router.push("/customer-display" as any);
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.menuIconContainer,
+                        { backgroundColor: Theme.primary + "10" },
+                      ]}
+                    >
+                      <Ionicons
+                        name="desktop-outline"
+                        size={18}
+                        color={Theme.primary}
+                      />
+                    </View>
+                    <Text style={styles.subMenuItemText}>Customer Display</Text>
+                  </TouchableOpacity>
+                </View>
               )}
 
               {/* Legend in Menu for Mobile */}
@@ -2985,7 +3236,7 @@ export default function Category() {
                   <View style={{ padding: 12 }}>
                     <Text
                       style={[
-                        styles.menuUserRole,
+                        styles.menuUserRolePremium,
                         { marginBottom: 10, color: Theme.textPrimary },
                       ]}
                     >
@@ -3023,6 +3274,7 @@ export default function Category() {
               <View style={styles.menuDivider} />
 
               <TouchableOpacity
+                activeOpacity={0.7}
                 style={[styles.menuItem, styles.logoutMenuItem]}
                 onPress={() => {
                   setIsMenuVisible(false);
@@ -3050,6 +3302,14 @@ export default function Category() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Avatar Picker Modal */}
+      <AvatarPickerModal
+        visible={isAvatarModalVisible}
+        onClose={() => setIsAvatarModalVisible(false)}
+        onSelect={handleSelectAvatar}
+        currentAvatarUrl={avatarUrl}
+      />
 
       {/* 〰〰 Section Header Row (Hidden on Mobile Landscape) 〰〰 */}
       {(!isLandscape || isTablet) && (
@@ -4221,6 +4481,14 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 12,
   },
+  menuUserSectionGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+    borderRadius: 14,
+    margin: 4,
+  },
   menuAvatar: {
     width: 40,
     height: 40,
@@ -4229,16 +4497,39 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  menuAvatarPremium: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#FFF",
+    borderWidth: 2.5,
+    borderColor: "rgba(255, 255, 255, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    ...Theme.shadowMd,
+  },
   menuUserName: {
     fontSize: 15,
     fontFamily: Fonts.black,
     color: Theme.textPrimary,
+  },
+  menuUserNamePremium: {
+    fontSize: 16,
+    fontFamily: Fonts.black,
+    color: "#FFF",
   },
   menuUserRole: {
     fontSize: 11,
     fontFamily: Fonts.medium,
     color: Theme.textMuted,
     textTransform: "uppercase",
+  },
+  menuUserRolePremium: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+    color: "rgba(255, 255, 255, 0.8)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   menuDivider: {
     height: 1,
